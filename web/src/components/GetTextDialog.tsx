@@ -3,9 +3,9 @@ import { AlertTriangle, Bookmark as BookmarkIcon, Check, Copy, Download, FileTex
 import { api, type OcrStatus, type ResourceInput } from "../lib/api";
 import { openPdf, type PDFDocumentProxy } from "../lib/pdf";
 import { renderRegionPng } from "../lib/pageImage";
-import { extractPages, ocrTextToFormat, textlessPages, type TextFormat } from "../lib/pdfToMarkdown";
+import { extractPages, ocrTextToFormat, textlessPages, type PageClip, type TextFormat } from "../lib/pdfToMarkdown";
 import { notesForText } from "../lib/notesText";
-import { bookmarkPages, buildBookmarkTree, currentBookmarkId, flattenBookmarkTree, type BookmarkTreeNode } from "../lib/outline";
+import { bookmarkPages, buildBookmarkTree, currentBookmarkId, flattenBookmarkTree, type BookmarkSection, type BookmarkTreeNode } from "../lib/outline";
 import type { Annotation, Bookmark, DocumentRecord, NormRect, Resource } from "../lib/types";
 import { isTyping, matches, type ShortcutId } from "../lib/shortcuts";
 import { Markdown } from "./Markdown";
@@ -45,8 +45,24 @@ interface Props {
   onApplyOcr: (jobId: string, pages: number[]) => Promise<boolean>;
 }
 
-/** `label`: the bookmark the pages were chosen by, if any. */
-type Source = { kind: "pages"; pages: number[]; emptyPages: number[]; ocrJobId?: string; label?: string } | { kind: "region"; page: number; from: "ocr" | "text" };
+type Clip = Map<number, PageClip>;
+
+/** Pages to read. `label`: the bookmark they were chosen by; `clip`: where its section starts and ends on the first and last page. */
+interface Selection {
+  pages: number[];
+  label?: string;
+  clip?: Clip;
+}
+
+/** Only the part of the first and last page that belongs to a bookmark's section. */
+function sectionClip(r: BookmarkSection): Clip | undefined {
+  const m: Clip = new Map();
+  m.set(r.start, { from: r.startTop, fromTitle: r.startTitle });
+  if (r.endTitle) m.set(r.end, { ...m.get(r.end), to: r.endTop, toTitle: r.endTitle, dropIfNoTo: r.end !== r.start });
+  return m;
+}
+
+type Source = ({ kind: "pages"; emptyPages: number[]; ocrJobId?: string } & Selection) | { kind: "region"; page: number; from: "ocr" | "text" };
 
 /** How the text is built: format, ==highlight== marks, and the user's notes in between pages. */
 interface Build {
@@ -140,7 +156,7 @@ export function GetTextDialog({ request, doc, page, pageCount, getPdf, highlight
   /** A chapter's section includes the bookmarks nested inside it (runs to the next chapter). */
   const [withInside, setWithInside] = useState(true);
   const sections = useMemo(() => {
-    const m = new Map<string, { start: number; end: number }>();
+    const m = new Map<string, BookmarkSection>();
     for (const b of ordered) m.set(b.id, bookmarkPages(ordered, b.id, pageCount, withInside)!);
     return m;
   }, [ordered, pageCount, withInside]);
@@ -185,16 +201,18 @@ export function GetTextDialog({ request, doc, page, pageCount, getPdf, highlight
     return () => clearInterval(t);
   }, [working]);
 
-  const pagesToRead = useMemo(() => {
-    if (mode === "this") return [page];
-    if (mode === "all") return pagesBetween(1, pageCount);
-    if (mode === "bookmark") {
-      const r = bookmarkId ? sections.get(bookmarkId) : undefined;
-      return r ? pagesBetween(r.start, r.end) : [];
-    }
-    return pagesBetween(Math.min(from, to), Math.min(pageCount, Math.max(from, to)));
-  }, [mode, page, pageCount, from, to, bookmarkId, sections]);
-  const label = mode === "bookmark" ? chosenBookmark?.title : undefined;
+  /** A bookmark's section: its pages, trimmed to where it starts and where the next bookmark starts. */
+  const sectionOf = (id: string | null): Selection => {
+    const r = id ? sections.get(id) : undefined;
+    return r ? { pages: pagesBetween(r.start, r.end), label: ordered.find((b) => b.id === id)?.title, clip: sectionClip(r) } : { pages: [] };
+  };
+  const selection = useMemo((): Selection => {
+    if (mode === "this") return { pages: [page] };
+    if (mode === "all") return { pages: pagesBetween(1, pageCount) };
+    if (mode === "bookmark") return sectionOf(bookmarkId);
+    return { pages: pagesBetween(Math.min(from, to), Math.min(pageCount, Math.max(from, to))) };
+  }, [mode, page, pageCount, from, to, bookmarkId, sections]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pagesToRead = selection.pages;
 
   const show = (r: Result) => {
     setResult(r);
@@ -220,12 +238,12 @@ export function GetTextDialog({ request, doc, page, pageCount, getPdf, highlight
   }, [highlights]);
   const markedCount = (t: string) => Math.floor((t.match(/==(?=\S)[^\n]*?\S==/g) ?? []).length);
 
-  const extractFrom = async (pdf: PDFDocumentProxy, pages: number[], b: Build, signal?: AbortSignal, ocrPages?: number[]) => {
+  const extractFrom = async (pdf: PDFDocumentProxy, { pages, clip }: Selection, b: Build, signal?: AbortSignal, ocrPages?: number[]) => {
     const n = b.notes ? notesForText(notes, pages, pageCount, b.format) : null;
     const r = await extractPages(
       pdf,
       pages,
-      { format: b.format, pageMarkers: pageMarkers && pages.length > 1, dropRepeated, ocrPages, highlights: b.marks ? highlightMap : null, afterPage: n?.afterPage },
+      { format: b.format, pageMarkers: pageMarkers && pages.length > 1, dropRepeated, ocrPages, highlights: b.marks ? highlightMap : null, afterPage: n?.afterPage, clip },
       (d, t) => setWorking((w) => (w ? { ...w, done: d, total: t } : w)),
       signal,
     );
@@ -234,15 +252,16 @@ export function GetTextDialog({ request, doc, page, pageCount, getPdf, highlight
   const build: Build = { format, marks, notes: withNotes };
 
   /** Reads pages from the PDF's own text layer. */
-  const runText = async (pages: number[], label?: string) => {
+  const runText = async (sel: Selection) => {
+    const { pages } = sel;
     const pdf = getPdf();
     if (!pdf) return setError("The PDF is still loading. Try again in a moment.");
     const ac = (abortRef.current = new AbortController());
     setError(null);
     setWorking({ label: "Reading the PDF's text", done: 0, total: pages.length, startedAt: Date.now() });
     try {
-      const r = await extractFrom(pdf, pages, build, ac.signal);
-      show({ text: r.text, source: { kind: "pages", pages, emptyPages: r.emptyPages, label }, regenerate: async (b) => (await extractFrom(pdf, pages, b)).text });
+      const r = await extractFrom(pdf, sel, build, ac.signal);
+      show({ text: r.text, source: { kind: "pages", ...sel, pages: r.pages, emptyPages: r.emptyPages }, regenerate: async (b) => (await extractFrom(pdf, sel, b)).text });
     } catch (e) {
       fail(e);
     } finally {
@@ -251,7 +270,8 @@ export function GetTextDialog({ request, doc, page, pageCount, getPdf, highlight
   };
 
   /** OCRs `ocrPages` on a copy of the PDF, then reads `pages` from the OCRed copy. */
-  const runOcr = async (pages: number[], ocrPages: number[], label?: string) => {
+  const runOcr = async (sel: Selection, ocrPages: number[]) => {
+    const { pages } = sel;
     const ac = (abortRef.current = new AbortController());
     setError(null);
     setWorking({ label: `Recognising text (OCR) on ${ocrPages.length} page${ocrPages.length === 1 ? "" : "s"}`, done: 0, total: ocrPages.length, startedAt: Date.now() });
@@ -280,11 +300,11 @@ export function GetTextDialog({ request, doc, page, pageCount, getPdf, highlight
       void ocrPdfRef.current?.destroy();
       const task = (ocrPdfRef.current = openPdf(api.ocrJobFileUrl(job.id)));
       const pdf = await task.promise;
-      const r = await extractFrom(pdf, pages, build, ac.signal, scanned);
+      const r = await extractFrom(pdf, sel, build, ac.signal, scanned);
       show({
         text: r.text,
-        source: { kind: "pages", pages, emptyPages: r.emptyPages, ocrJobId: job.id, label },
-        regenerate: async (b) => (await extractFrom(pdf, pages, b, undefined, scanned)).text,
+        source: { kind: "pages", ...sel, pages: r.pages, emptyPages: r.emptyPages, ocrJobId: job.id },
+        regenerate: async (b) => (await extractFrom(pdf, sel, b, undefined, scanned)).text,
       });
     } catch (e) {
       if (jobId && ac.signal.aborted) jobsRef.current = jobsRef.current.filter((j) => j.id !== jobId);
@@ -337,10 +357,10 @@ export function GetTextDialog({ request, doc, page, pageCount, getPdf, highlight
   }, [request]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Starts reading the chosen pages (or `pick`, e.g. a bookmark double-clicked before its choice is shown). */
-  const start = (pick?: { pages: number[]; label?: string }) => {
-    const { pages, label: l } = pick ?? { pages: pagesToRead, label };
-    if (!pages.length) return setError(mode === "bookmark" ? "Choose a bookmark first." : "Choose some pages first.");
-    return method === "ocr" ? runOcr(pages, pages, l) : runText(pages, l);
+  const start = (pick?: Selection) => {
+    const sel = pick ?? selection;
+    if (!sel.pages.length) return setError(mode === "bookmark" ? "Choose a bookmark first." : "Choose some pages first.");
+    return method === "ocr" ? runOcr(sel, sel.pages) : runText(sel);
   };
 
   // A shortcut can open the dialog and start straight away. Started on a timer the effect's cleanup
@@ -611,7 +631,7 @@ export function GetTextDialog({ request, doc, page, pageCount, getPdf, highlight
               {src.ocrJobId ? ", and OCR found no text on them either (handwriting or a picture?)." : "."}
               {!src.ocrJobId &&
                 (ocrAvailable ? (
-                  <Button size="sm" variant="secondary" className="ml-2" onClick={() => void runOcr(src.pages, src.emptyPages, src.label)}>
+                  <Button size="sm" variant="secondary" className="ml-2" onClick={() => void runOcr(src, src.emptyPages)}>
                     <ScanText className="size-3.5" /> Run OCR on {src.emptyPages.length === 1 ? "it" : `these ${src.emptyPages.length}`}
                   </Button>
                 ) : (
@@ -741,10 +761,7 @@ export function GetTextDialog({ request, doc, page, pageCount, getPdf, highlight
               sections={sections}
               value={bookmarkId}
               onChange={setBookmarkId}
-              onStart={(id) => {
-                const r = sections.get(id);
-                if (r) void start({ pages: pagesBetween(r.start, r.end), label: ordered.find((b) => b.id === id)?.title });
-              }}
+              onStart={(id) => void start(sectionOf(id))}
               withInside={withInside}
               onWithInside={chosenBookmark?.children.length ? setWithInside : undefined}
             />
@@ -848,7 +865,7 @@ export function GetTextDialog({ request, doc, page, pageCount, getPdf, highlight
 function BookmarkPicker(p: {
   inputRef: React.RefObject<HTMLInputElement | null>;
   ordered: BookmarkTreeNode[];
-  sections: Map<string, { start: number; end: number }>;
+  sections: Map<string, BookmarkSection>;
   value: string | null;
   onChange: (id: string) => void;
   onStart: (id: string) => void;
@@ -894,7 +911,10 @@ function BookmarkPicker(p: {
         onKeyDown={(e) => {
           const step = { ArrowDown: 1, ArrowUp: -1, PageDown: 8, PageUp: -8 }[e.key];
           if (step) moveBy(step);
-          else if (e.key === "Enter" && p.value) p.onStart(p.value);
+          else if (e.key === "Enter") {
+            // Only a bookmark the list shows: with no match, Enter does nothing.
+            if (p.value && shown.some((b) => b.id === p.value)) p.onStart(p.value);
+          }
           else if (e.key === "Escape" && query) setQuery("");
           else return;
           e.preventDefault();

@@ -30,6 +30,8 @@ export interface ExtractOptions {
   highlights?: Map<number, NormRect[]> | null;
   /** Text to add after a page's own text (already in the output format), e.g. the notes for that page. */
   afterPage?: Map<number, string>;
+  /** Keep only part of some pages: used to start and end a bookmark's section at the bookmark's spot. */
+  clip?: Map<number, PageClip>;
 }
 
 /** Private-use characters bracketing highlighted text while lines and blocks are built. */
@@ -74,6 +76,53 @@ async function fileHighlights(page: Awaited<ReturnType<PDFDocumentProxy["getPage
     /* annotations unreadable: StudySpace's own highlights still count */
   }
   return out;
+}
+
+/**
+ * Part of a page to keep (0 = top, 1 = bottom, by each line's baseline): from the line that is the
+ * heading `fromTitle` (else from `from`) down, and above the heading `toTitle` (else above `to`, when
+ * it is lower than near the top). When neither is found and `dropIfNoTo` is set, nothing is kept.
+ */
+export interface PageClip {
+  from?: number | null;
+  fromTitle?: string | null;
+  to?: number | null;
+  toTitle?: string | null;
+  dropIfNoTo?: boolean;
+}
+
+/** Letters and digits only, lower case, for comparing a heading with a bookmark's title. */
+const squash = (s: string) => unmarked(s).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+
+/** The first line that is the heading for `title` (the whole title, or its start when it wraps). */
+function findHeading(lines: Line[], title: string): Line | undefined {
+  const t = squash(title);
+  if (t.length < 3) return undefined;
+  const isIt = (line: string, title: string) =>
+    line.length >= 3 && (line.startsWith(title) || (title.startsWith(line) && line.length >= Math.min(12, title.length)));
+  return [...lines]
+    .sort((a, b) => a.y - b.y)
+    .find((l) => {
+      const s = squash(l.text);
+      if (isIt(s, t)) return true;
+      // A heading whose number sits on a line of its own: compare without the title's number.
+      return /^\d/.test(t) && !/^\d/.test(s) && isIt(s, t.replace(/^\d+/, ""));
+    });
+}
+
+/** Keeps the part of a page's lines a clip asks for. */
+function clipLines(p: PageLines, c: PageClip): Line[] {
+  let top = -Infinity;
+  let bottom = Infinity;
+  const start = c.fromTitle ? findHeading(p.lines, c.fromTitle) : undefined;
+  if (start) top = start.y - 1;
+  else if (c.from != null) top = (c.from - 0.005) * p.height; // a bookmark often points at the top of its heading's letters
+  const end = c.toTitle ? findHeading(p.lines.filter((l) => l.y > top + 1), c.toTitle) : undefined;
+  if (end) bottom = end.y - 1;
+  else if (c.to != null && c.to > 0.15) bottom = c.to * p.height;
+  else if (c.dropIfNoTo) return [];
+  else if (c.to != null) bottom = c.to * p.height;
+  return p.lines.filter((l) => l.y >= top && l.y < bottom);
 }
 
 export interface ExtractResult {
@@ -353,6 +402,15 @@ export async function extractPages(
     onProgress?.(read.length, pages.length);
   }
   const emptyPages = read.filter((p) => !p.lines.length).map((p) => p.page);
+  const scanned = new Set(emptyPages);
+  /** Pages clipped to nothing (e.g. the next section starts at the top): left out altogether. */
+  const dropped = new Set<number>();
+  for (const p of read) {
+    const c = opts.clip?.get(p.page);
+    if (!c) continue;
+    p.lines = clipLines(p, c);
+    if (!p.lines.length && !scanned.has(p.page)) dropped.add(p.page);
+  }
 
   // Font sizes and running headers are judged on more than a handful of pages: one title slide on
   // its own has no "body text" to compare with. So add a spread of other pages for statistics.
@@ -377,8 +435,9 @@ export async function extractPages(
 
   const parts: string[] = [];
   for (const p of read) {
+    if (dropped.has(p.page)) continue;
     const marker = opts.format === "markdown" ? `*Page ${p.page}*` : `--- Page ${p.page} ---`;
-    let content = p.lines.length
+    let content = !scanned.has(p.page)
       ? render(toBlocks(p, headingLevel, !!opts.ocrPages?.includes(p.page)), opts.format)
       : opts.format === "markdown"
         ? `*[Page ${p.page} has no text layer: it is a scanned image. Use OCR to read it.]*`
@@ -388,7 +447,7 @@ export async function extractPages(
     if (opts.pageMarkers) parts.push(opts.format === "markdown" ? `${parts.length ? "---\n\n" : ""}${marker}\n\n${content}` : `${marker}\n\n${content}`);
     else parts.push(content);
   }
-  return { text: finishMarks(parts.filter((s) => s.trim()).join("\n\n")) + "\n", pages, emptyPages };
+  return { text: finishMarks(parts.filter((s) => s.trim()).join("\n\n")) + "\n", pages: pages.filter((n) => !dropped.has(n)), emptyPages };
 }
 
 /** Which of `pages` have no text of their own (scanned images). Fast: reads the text layer only. */

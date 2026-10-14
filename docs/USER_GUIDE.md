@@ -116,6 +116,7 @@ Bookmarks are the PDF's own table of contents (the "outline" or "bookmarks" pane
 - **Rename:** double-click it, press **`F2`**, or use the ✎ button.
 - **More** (the ⋯ button, or right-click): *Point to where I'm reading* (move it to the current spot), *Add a bookmark inside*, move up/down, indent/outdent, delete. Deleting a bookmark also deletes the ones inside it.
 - **Keyboard,** with a bookmark focused: **↑ / ↓** move between bookmarks, **→ / ←** open/close a chapter, **Enter** jumps, **`Alt+↑` / `Alt+↓`** move it, **`Alt+→`** nests it under the one above, **`Alt+←`** un-nests it, **Delete** deletes it.
+- **Get the text of a section:** press **`T`** on a focused bookmark (or **`O`** to OCR it), or use the ⋯ menu. You get the text from that bookmark up to where the next one starts (§9).
 - **Filter:** long lists get a *Filter bookmarks…* box.
 - **Undo:** every bookmark change can be undone with **`Ctrl+Z`**.
 
@@ -415,13 +416,14 @@ STUDYSPACE_OCR_LANG=eng+ben     # in .env, then restart StudySpace
 
 ### Keys: text or OCR in one press
 
-| | This page | Choose pages… | Whole PDF |
-| --- | --- | --- | --- |
-| **The PDF's own text** (instant) | `Shift+T` | `Shift+G` | `Shift+A` |
-| **OCR** (for scans) | `Shift+O` | `Shift+P` | `Shift+W` |
+| | This page | Choose pages… | Whole PDF | A bookmark's section… |
+| --- | --- | --- | --- | --- |
+| **The PDF's own text** (instant) | `Shift+T` | `Shift+G` | `Shift+A` | `Shift+E` |
+| **OCR** (for scans) | `Shift+O` | `Shift+P` | `Shift+W` | `Shift+U` |
 
 - *This page* and the PDF's text for *Whole PDF* start straight away.
 - *Choose pages…* opens the window with the **From** box ready. Type the first page, `Tab`, the last page, then `Enter`.
+- *A bookmark's section…* opens the window with the bookmark you're reading in already chosen: press `Enter`, or type to find another one first (see below).
 - *OCR the whole PDF* waits for `Enter`, since a big book takes a while.
 
 The same items are in **🔧 Page tools**, under *Get text* and *OCR*, with their keys shown.
@@ -435,15 +437,38 @@ With **Mark my highlights** on (the default), text you highlighted in the PDF co
 - A highlight that covers most of a word marks the whole word.
 - Region OCR (a box) has no marks; page text and page OCR do.
 
+### Including your notes
+
+Tick **Include my notes** (or press **`I`**, in the options or on the result) to put your notes into the text. Every kind counts: notes, summaries, AI explanations, previous-year questions and links.
+
+- A note for one page, or for a range of pages, goes right **after the last of its pages** that you're reading. For example, a note for pages 3–6 comes after page 5's text when you read pages 1–5.
+- Notes for the **whole PDF** go at the end, but only when you read the whole PDF.
+- In Markdown each note is a quote headed **My note: ‹title›** *(page 3)*, so it stands out from the book's text. In plain text it sits between `[My note: … (page 3)]` and `[end of note]`.
+- The result line says how many notes were included. The choice is remembered. It is off at first.
+
+### Text of a bookmark's section
+
+Read one chapter or section, from its bookmark up to where the next bookmark starts:
+
+1. Press **`Shift+E`** for the text (**`Shift+U`** for OCR). Or press **`4`** in the Get text window, or use **🔧 Page tools → A bookmark's section…**.
+2. The bookmark you're reading in is already chosen. To pick another, type part of its title in the find box; **↑ / ↓** move through the list and each one shows its pages.
+3. Press **`Enter`**, or double-click it.
+
+From the bookmarks list it is one key: focus a bookmark and press **`T`** (text) or **`O`** (OCR).
+
+- **A chapter includes its sections.** It runs to the next chapter. To read only up to its first section, untick *Include the bookmarks inside it*.
+- **It starts and ends mid-page.** The text starts at the bookmark's own heading and stops just before the next one's heading, even when these are halfway down a page. If a heading can't be found (some PDFs, or scans), the spot the bookmark points to is used instead.
+- *Save as note* titles the note after the bookmark, for example *"Tanenbaum — 1.3 COMPUTER HARDWARE REVIEW (pages 51–66)"*.
+
 ### Text of pages
 
 1. Open **🔧 Page tools → Get text → Choose pages…** (`Shift+G`), or use a key from the table above.
-2. Choose the pages: **This page**, **Pages** *from–to*, or **Whole PDF**.
+2. Choose the pages: **This page**, **Pages** *from–to*, **Whole PDF**, or **A bookmark's section** (see above).
 3. Choose **How**: *Use the PDF's text*, or *Run OCR*.
-4. Choose **Markdown** or **Plain text**. Optionally turn on **Page markers** and **Skip repeated headers/footers** (on by default; it drops running headers and page numbers), and choose whether to **Mark my highlights**.
+4. Choose **Markdown** or **Plain text**. Optionally turn on **Page markers** and **Skip repeated headers/footers** (on by default; it drops running headers and page numbers). Then choose whether to **Mark my highlights** and **Include my notes**.
 5. Click **Get text** (or **Run OCR**), or press **`Enter`**. A progress bar shows how far it is, and **Cancel** stops it.
 
-Every option has a key, shown beside it: **`1` / `2` / `3`** this page / pages / whole PDF, **`T` / `O`** PDF text / OCR, **`M`** Markdown ⇄ plain, **`H`** mark highlights, **`Enter`** start.
+Every option has a key, shown beside it: **`1` / `2` / `3` / `4`** this page / pages / whole PDF / a bookmark's section, **`T` / `O`** PDF text / OCR, **`M`** Markdown ⇄ plain, **`H`** mark highlights, **`I`** include notes, **`Enter`** start.
 
 If some of the pages turn out to be scanned images, the result says so, with a **Run OCR on these** button that reads just those pages.
 
@@ -459,13 +484,13 @@ Press **`V`** (or `Esc`) to go back to normal selection.
 
 ### The result window
 
-Keys: **`C`** copy · **`N`** save as note · **`D`** download · **`M`** Markdown ⇄ plain · **`H`** highlight marks on/off · **`V`** preview ⇄ raw · **`A`** add the OCR text layer (then `Enter` to confirm) · **`B`** back to the options · **`Esc`** close.
+Keys: **`C`** copy · **`N`** save as note · **`D`** download · **`M`** Markdown ⇄ plain · **`H`** highlight marks on/off · **`I`** notes in/out · **`V`** preview ⇄ raw · **`A`** add the OCR text layer (then `Enter` to confirm) · **`B`** back to the options · **`Esc`** close.
 
 - **Preview / Raw / edit:** see it rendered, or fix the text by hand before saving.
 - **Markdown / Plain text:** switch the format. This rebuilds the text, so do it before editing.
 - **Copy:** copies the text to the clipboard.
 - **Download .md / .txt:** saves a file, handy for whole textbooks.
-- **Save as note:** a note titled *"‹PDF› — page 4"* (or *pages 3–9*, or *whole PDF*), attached to those pages. Ctrl+Z removes it again.
+- **Save as note:** a note titled *"‹PDF› — page 4"* (or *pages 3–9*, *whole PDF*, or the bookmark's title), attached to those pages. Ctrl+Z removes it again.
   - Very long texts make slow notes. Above about 150,000 characters you get a warning, and above 1,000,000 a smaller page range is needed.
 - **Add this text to the PDF** (after page OCR only): writes the recognised text into the PDF as an invisible layer.
   - The pages look exactly the same.
@@ -639,6 +664,8 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `Shift+O` | OCR this page |
 | `Shift+P` | OCR chosen pages… |
 | `Shift+W` | OCR the whole PDF… (Enter starts it) |
+| `Shift+E` | Text of a bookmark's section, up to the next bookmark… (Enter: the one you're in) |
+| `Shift+U` | OCR a bookmark's section… (Enter: the one you're in) |
 
 **In the Get text window**
 
@@ -647,9 +674,11 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `1` | Pages: this page |
 | `2` | Pages: choose a range |
 | `3` | Pages: whole PDF |
+| `4` | Pages: a bookmark's section (type to find it, ↑ / ↓ to pick) |
 | `T` | Use the PDF's text |
 | `O` | Use OCR |
 | `H` | Mark my highlights as ==text== on / off |
+| `I` | Include my notes on / off (after the pages they're for) |
 | `M` | Markdown ⇄ plain text |
 | `Enter` | Start |
 | `C` | Copy the text |
@@ -691,6 +720,8 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `↑` / `↓` | Previous / next bookmark |
 | `→` / `←` | Open / close a chapter |
 | `Enter` | Jump to it |
+| `T` | Get the text of its section (up to the next bookmark) |
+| `O` | OCR its section |
 | `F2` | Rename |
 | `Del` | Delete (with the bookmarks inside) |
 | `Alt+↑` / `Alt+↓` | Move up / down |

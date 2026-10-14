@@ -120,7 +120,29 @@ export function flattenBookmarkTree(tree: BookmarkTreeNode[]): BookmarkTreeNode[
  * the bookmarks nested inside it don't end it, so a chapter runs on to the next chapter.
  * `ordered` is every bookmark in reading order (flattenBookmarkTree).
  */
-export function bookmarkPages(ordered: BookmarkTreeNode[], id: string, pageCount: number, withInside = true): { start: number; end: number } | null {
+export interface BookmarkSection {
+  start: number;
+  end: number;
+  /** The bookmark's title, to find its heading on the first page. */
+  startTitle: string;
+  /** Where the bookmark points on its first page (0 = top, 1 = bottom), if it says: used when the heading isn't found. */
+  startTop: number | null;
+  /**
+   * The next bookmark's title and spot, when it starts on the last page: the section ends at its
+   * heading there (or at its spot). If neither helps, that page belongs to the next bookmark.
+   */
+  endTitle: string | null;
+  endTop: number | null;
+}
+
+/**
+ * The pages a bookmark's section covers: from its spot to where the next bookmark after it starts.
+ * Bookmarks' spots on the page are often missing or wrong (some PDFs give every bookmark the same
+ * one), so the headings are looked for in the text first, see `PageClip` in pdfToMarkdown.ts.
+ * With `withInside`, the bookmarks nested inside it don't end it, so a chapter runs on to the next
+ * chapter. `ordered` is every bookmark in reading order (flattenBookmarkTree).
+ */
+export function bookmarkPages(ordered: BookmarkTreeNode[], id: string, pageCount: number, withInside = true): BookmarkSection | null {
   const i = ordered.findIndex((x) => x.id === id);
   if (i < 0) return null;
   const b = ordered[i];
@@ -131,15 +153,28 @@ export function bookmarkPages(ordered: BookmarkTreeNode[], id: string, pageCount
     for (let j = i + 1; j < ordered.length && ordered[j].depth > b.depth; j++) inside.add(ordered[j].id);
   }
   const top = b.top ?? 0;
-  let next: { page: number; top: number } | null = null;
+  let next: { page: number; top: number | null; title: string } | null = null;
   for (const [j, x] of ordered.entries()) {
     if (j === i || inside.has(x.id)) continue;
     const xTop = x.top ?? 0;
     // After this one: on a later page, lower on the same page, or at the same spot but later in the list.
     const after = x.page > b.page || (x.page === b.page && (xTop > top || (xTop === top && j > i)));
     if (!after) continue;
-    if (!next || x.page < next.page || (x.page === next.page && xTop < next.top)) next = { page: x.page, top: xTop };
+    if (!next || x.page < next.page || (x.page === next.page && xTop < (next.top ?? 0))) next = { page: x.page, top: x.top, title: x.title };
   }
-  const end = next ? (next.top > 0.15 ? next.page : next.page - 1) : pageCount;
-  return { start, end: Math.max(start, Math.min(pageCount, end)) };
+  const section: BookmarkSection = {
+    start,
+    end: pageCount,
+    startTitle: b.title,
+    startTop: b.top !== null && b.top > 0 && b.page === start ? b.top : null,
+    endTitle: null,
+    endTop: null,
+  };
+  if (next && next.page <= pageCount) {
+    // The next one's page may still hold the end of this section, above its heading.
+    section.end = Math.max(start, next.page);
+    section.endTitle = next.title;
+    section.endTop = next.top;
+  }
+  return section;
 }

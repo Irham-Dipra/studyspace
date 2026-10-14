@@ -326,7 +326,7 @@ docs/USER_GUIDE.md    detailed end-user instructions (sections 1–14)
 20. **Shortcuts for every feature, copy page as image, cut page in half** (user request).
     - **`web/src/lib/shortcuts.ts` is the single registry** (`SHORTCUTS` id → keys/label/group; `matches(e, id)`, `keyOf`, `withKey`, `formatCombo`, `isTyping`). Add new keys there.
       - The App's global handler, the toolbar (tools, `1`–`5` colours, `Shift+1`–`3` pen widths, `T` menu), the floating bars in PdfViewer (`1`–`5`, `N`, `Delete`), PageHalvesDialog and HelpDialog (generated, searchable) all use it.
-      - The user guide §12 tables were generated from it with a small tsx script; regenerate them if keys change.
+      - The user guide §12 tables are generated from it by `scripts/shortcut-tables.mts`; regenerate them if keys change.
       - `KeyHint`/`Kbd` in `ui.tsx` show keys beside features.
     - **Global handler rules:** nothing fires while typing or while any `[role=dialog]` is open; some keys (`,`, `Shift+D`, `Shift+L`, `[`, `]`, `L`, `/`) work without a PDF open.
     - **Page tools menu:** a two-column grouped menu with keys on the right. `T` opens it with the first item focused; ↑/↓/Home/End move; any other key closes it and runs its shortcut.
@@ -373,20 +373,29 @@ docs/USER_GUIDE.md    detailed end-user instructions (sections 1–14)
     - Toasts carry `data-snap-ignore`.
     - **Verified in Chromium:** a 600×320 snip of the scrolled PDF equals Playwright's own screenshot of the same region (mean difference 0.08/255); drag and Enter (1440×900) work; Esc cancels; takes about 2 s.
 
-24. **Notes and bookmark sections in Get text** (in progress, 2026-10-14; user: "add options to include the notes saved by me for the pages too. also add feature to get text/run ocr from a bookmark to the end of that bookmark").
+24. **Notes and bookmark sections in Get text** (2026-10-14; user: "add options to include the notes saved by me for the pages too. also add feature to get text/run ocr from a bookmark to the end of that bookmark").
     - **Include my notes** (`I` in the window; localStorage `ss-text-notes`, off by default):
       - `lib/notesText.ts` `notesForText` puts each page or range note (any kind) after the last page being read that it covers. Whole-PDF notes go at the end, only when the whole PDF is read.
       - In Markdown a note is a blockquote, `> **My note: title** *(page 3)*`; in plain text it is `[My note: title (page 3)] … [end of note]`.
-      - `extractPages` takes an `afterPage` map. The dialog's `regenerate` now takes a `Build` object `{format, marks, notes}`.
+      - `extractPages` takes an `afterPage` map. The dialog's `regenerate` takes a `Build` object `{format, marks, notes}`.
     - **A bookmark's section:**
-      - `TextPreset.mode` gains `"bookmark"`, plus an optional `bookmarkId` (the default is `currentBookmarkId`).
-      - `lib/outline.ts` `bookmarkPages(ordered, id, pageCount, withInside)` runs from the bookmark's page to the start of the earliest later bookmark. That bookmark's page is included when its `top` > 0.15. With `withInside` (the default), nested bookmarks are skipped, so a chapter runs to the next chapter.
-      - `BookmarkPicker` in `GetTextDialog.tsx`: a find box (`data-arrow-nav="off"`) where ↑/↓/PgUp/PgDn pick, Enter or a double-click starts, and a checkbox includes the nested bookmarks.
+      - `TextPreset.mode` gains `"bookmark"`, plus an optional `bookmarkId` (the default is `currentBookmarkId`). Selections are `{pages, label, clip}` (`Selection` in `GetTextDialog.tsx`).
+      - `lib/outline.ts` `bookmarkPages(ordered, id, pageCount, withInside)` → `BookmarkSection`. It runs from the bookmark's page to the page of the earliest later bookmark that is not nested inside it (with `withInside`, the default), and carries both titles and `top`s.
+      - **Trimming mid-page**, in `extractPages` `clip: Map<page, PageClip>` (`pdfToMarkdown.ts`):
+        - The heading is looked for by title first (`findHeading`: letters and digits only; a wrapped title or a number on its own line also match), and the stored `top` is the fallback.
+        - Bookmark tops are often wrong. Tanenbaum gives most entries 0.042 or 0.2962, and many are null.
+        - If the next heading isn't found on the last page and its `top` is null or ≤ 0.15, that page is dropped (`dropIfNoTo`).
+        - Pages clipped to nothing are left out of the text and of `ExtractResult.pages`, and the dialog shows those pages.
+      - `BookmarkPicker` in `GetTextDialog.tsx`: a find box (`data-arrow-nav="off"`) where ↑/↓/PgUp/PgDn pick and Enter or a double-click starts. Enter does nothing when the filter hides the chosen one. A checkbox includes the nested bookmarks.
       - Keys: `4` in the window; `Shift+E` / `Shift+U` globally; `T` / `O` on a bookmarks-list row; also in the row's ⋯ menu and in the Page tools menu.
-    - **Status:**
-      - Typecheck, tests and build pass. The section and note-placement logic was checked with a tsx script.
-      - **The browser test hasn't run to the end yet** (`pw/sect1.mjs` in the scratchpad was cut off).
-      - The user guide and README are not updated yet.
+    - **Verified in Chromium on scratch copies (Tanenbaum, 523 bookmarks):**
+      - `Shift+E` focuses the find box with the current section chosen.
+      - "computer hardware" + Enter gives pages 51–66: it starts at the "1.3 COMPUTER HARDWARE REVIEW" heading and ends with "…starts up a login program or GUI." on p66, just before 1.4.
+      - `I` adds two notes at the right pages.
+      - The saved note is titled after the bookmark, with scope range 51–66.
+      - PREFACE from the list with `T` gives pages 24–27; the empty p28 is dropped.
+      - `Shift+U` OCR of 1.2.1 starts at its heading even though its stored top is wrong.
+      - The PDF file is unchanged, with no page errors.
 
 Last verification (2026-10-13): 74 server tests pass, typecheck and build pass, and Playwright browser tests of the Page tools menu, page-number fields, replace + undo, open-by-default cards, the unsaved-work prompt, two-tab sync, display-math layout, heading colours get-text/OCR (with stub OCR binaries), bookmarks, and extract/split/merge/turn/move passed on scratch copies.
 
@@ -428,7 +437,7 @@ Last verification (2026-10-13): 74 server tests pass, typecheck and build pass, 
 
 ## 6. Next steps
 
-Open: finish item 24 (browser test, docs). The user hasn't yet answered the offer to detect a PDF moved while open and show a clearer error.
+Nothing open. The user hasn't yet answered the offer to detect a PDF moved while open and show a clearer error.
 
 Ideas the user hasn't asked for yet:
 
