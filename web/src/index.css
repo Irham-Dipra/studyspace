@@ -1,0 +1,248 @@
+@import "tailwindcss";
+@import "pdfjs-dist/web/pdf_viewer.css";
+/* Must be the same KaTeX version rehype-katex renders with (see web/package.json): class names
+   differ between versions, and a mismatch breaks \boxed, \overrightarrow, \widehat, \cancel, … */
+@import "katex/dist/katex.min.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --ss-canvas: #f6f7f9;
+  --ss-panel: #ffffff;
+  --ss-subtle: #f1f3f6;
+  --ss-hover: #e9ecf1;
+  --ss-line: #e2e5ea;
+  --ss-ink: #1b1f27;
+  --ss-ink-2: #4a5161;
+  --ss-ink-3: #8a91a0;
+  --ss-accent: #4f46e5;
+  --ss-accent-soft: #eef0ff;
+  --ss-accent-ink: #ffffff;
+  --ss-viewer: #e6e8ec;
+  --ss-danger: #dc2626;
+  --ss-warn: #b45309;
+  color-scheme: light;
+}
+
+.dark {
+  --ss-canvas: #0f1115;
+  --ss-panel: #161920;
+  --ss-subtle: #1d2129;
+  --ss-hover: #262b35;
+  --ss-line: #2a2f3a;
+  --ss-ink: #e6e8ec;
+  --ss-ink-2: #b4b9c4;
+  --ss-ink-3: #7c8392;
+  --ss-accent: #818cf8;
+  --ss-accent-soft: #23264a;
+  --ss-accent-ink: #0f1115;
+  --ss-viewer: #0b0d10;
+  --ss-danger: #f87171;
+  --ss-warn: #fbbf24;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-canvas: var(--ss-canvas);
+  --color-panel: var(--ss-panel);
+  --color-subtle: var(--ss-subtle);
+  --color-hover: var(--ss-hover);
+  --color-line: var(--ss-line);
+  --color-ink: var(--ss-ink);
+  --color-ink-2: var(--ss-ink-2);
+  --color-ink-3: var(--ss-ink-3);
+  --color-accent: var(--ss-accent);
+  --color-accent-soft: var(--ss-accent-soft);
+  --color-accent-ink: var(--ss-accent-ink);
+  --color-viewer: var(--ss-viewer);
+  --color-danger: var(--ss-danger);
+  --color-warn: var(--ss-warn);
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ss-canvas);
+  color: var(--ss-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* PDF pages: the text layer needs pdf.js scale variables on its parent. */
+.ss-page {
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+}
+.ss-page .textLayer {
+  z-index: 2;
+}
+.ss-page .textLayer ::selection {
+  background: rgb(79 70 229 / 0.3);
+}
+.ss-tool-draw .ss-page .textLayer {
+  pointer-events: none;
+}
+.dark .ss-page canvas {
+  /* Keep pages paper-white but slightly dimmed in dark mode. */
+  filter: brightness(0.92);
+}
+
+/* Scrollbars */
+.ss-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ss-line) transparent;
+}
+
+/* Markdown rendering for notes */
+.ss-md {
+  font-size: 0.875rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.ss-md > * + *,
+.ss-md li > * + * {
+  margin-top: 0.75em;
+}
+.ss-md h1,
+.ss-md h2,
+.ss-md h3,
+.ss-md h4 {
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 0.8em;
+}
+.ss-md h1 { font-size: 1.15em; }
+.ss-md h2 { font-size: 1.07em; }
+.ss-md h3, .ss-md h4 { font-size: 1em; }
+
+/* Default highlighter colours: the card title is pink, headings inside a note go orange → yellow →
+   green → blue by their level relative to the note, and the bold lead-in of a list item ("- **Term:**")
+   is violet, lighter in nested lists (see rehypeNoteStructure). */
+.ss-title-hl,
+.ss-md [data-level],
+.ss-md [data-lead] {
+  --hl: #f9a8d4;
+  background: color-mix(in srgb, var(--hl) 55%, transparent);
+  border-radius: 3px;
+  padding: 0.05em 0.3em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.ss-md [data-level] {
+  /* Still a block (own line, normal margins) but only as wide as its text, like a highlighter stroke. */
+  width: fit-content;
+  max-width: 100%;
+}
+.ss-md [data-level="1"] { --hl: #fdba74; }
+.ss-md [data-level="2"] { --hl: #fde047; }
+.ss-md [data-level="3"] { --hl: #86efac; }
+.ss-md [data-lead] { --hl: #c4b5fd; padding: 0.05em 0.25em; }
+.ss-md [data-lead="2"] { background: color-mix(in srgb, var(--hl) 35%, transparent); }
+.ss-md [data-level="4"],
+.ss-md [data-level="5"],
+.ss-md [data-level="6"] { --hl: #93c5fd; }
+.dark .ss-title-hl,
+.dark .ss-md [data-level],
+.dark .ss-md [data-lead="1"] {
+  background: color-mix(in srgb, var(--hl) 32%, transparent);
+}
+.dark .ss-md [data-lead="2"] {
+  background: color-mix(in srgb, var(--hl) 20%, transparent);
+}
+.ss-md ul { list-style: disc; padding-left: 1.25em; }
+.ss-md ol { list-style: decimal; padding-left: 1.25em; }
+.ss-md li + li { margin-top: 0.45em; }
+.ss-md li > ul, .ss-md li > ol { margin-top: 0.45em; }
+.ss-md a { color: var(--ss-accent); text-decoration: underline; text-underline-offset: 2px; }
+.ss-md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  background: var(--ss-subtle);
+  border-radius: 4px;
+  padding: 0.1em 0.3em;
+}
+.ss-md pre {
+  background: var(--ss-subtle);
+  border-radius: 6px;
+  padding: 0.6em 0.75em;
+  overflow-x: auto;
+}
+.ss-md pre code { background: none; padding: 0; }
+.ss-md blockquote {
+  border-left: 3px solid var(--ss-line);
+  padding-left: 0.75em;
+  color: var(--ss-ink-2);
+}
+.ss-md table { border-collapse: collapse; font-size: 0.9em; }
+.ss-md th, .ss-md td { border: 1px solid var(--ss-line); padding: 0.25em 0.5em; }
+.ss-md hr { border-color: var(--ss-line); margin-block: 1.1em; }
+.ss-md .katex-display {
+  /* Each equation on its own line with room around it. Formulas wider than the panel are scaled down
+     to fit (see Markdown.tsx) and only scroll sideways when they would get too small; the padding
+     keeps box borders (\boxed) and descenders from being clipped. */
+  margin: 0.9em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.35em 0.1em;
+}
+.ss-md .katex-display > .katex {
+  font-size: calc(1.15em * var(--ss-fit, 1));
+}
+/* Fractions get a little horizontal room so they don't touch the symbols beside them. */
+.ss-md .katex-display .mfrac {
+  padding-inline: 0.12em;
+}
+
+/* ==text== in notes: passages highlighted in the PDF, kept by "Get text" */
+.ss-pdf-hl {
+  background: color-mix(in srgb, #ffd54f 55%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.dark .ss-pdf-hl {
+  background: color-mix(in srgb, #ffd54f 30%, transparent);
+}
+
+/* Highlights inside notes */
+.ss-note-hl {
+  background: color-mix(in srgb, var(--hl) 45%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+  cursor: pointer;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.ss-note-hl:hover {
+  background: color-mix(in srgb, var(--hl) 65%, transparent);
+}
+.ss-note-hl[data-comment] {
+  border-bottom: 2px dotted color-mix(in srgb, var(--hl) 90%, black);
+}
+.ss-note-hl[data-comment][data-last]::after {
+  content: "💬";
+  font-size: 0.7em;
+  vertical-align: super;
+  margin-left: 1px;
+}
+.ss-note-hl.ss-active {
+  outline: 2px solid var(--ss-accent);
+  outline-offset: 1px;
+}
+
+@keyframes ss-flash {
+  0%, 100% { opacity: 0; }
+  30% { opacity: 1; }
+}
+.ss-flash {
+  animation: ss-flash 1.2s ease-in-out;
+}

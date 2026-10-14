@@ -1,0 +1,730 @@
+# StudySpace — User Guide
+
+This guide walks through every feature of StudySpace, step by step. Press **`?`** inside the app at any time for the keyboard-shortcut cheat sheet.
+
+---
+
+## 1. Starting the app
+
+1. Open a terminal and run:
+   ```bash
+   cd "/home/dipra/Study Helper"
+   npm run dev
+   ```
+2. Open **http://127.0.0.1:5173** in your browser.
+3. Leave the terminal open while you study. Press `Ctrl+C` in it to stop the app.
+
+> Prefer a single server without hot-reload? Run `npm start` and open **http://127.0.0.1:4317** instead.
+
+The first time you start, StudySpace adds the folder from your `.env` file (`/home/dipra/Buet/3-1`, skipping `Offllines`) and scans it. Your PDFs are read where they are. Nothing is copied or uploaded.
+
+---
+
+## 2. The screen at a glance
+
+```
+┌ Top bar: ☰ library · course › file · Search · 🌙 · ? · ⚙ · ☰ resources ─────────┐
+│ LIBRARY (left)  │  TOOLBAR: ↶ ↷ | tools | colours ... Save to PDF ⧉ 🗑 🔧 Page tools │ PAGE RESOURCES │
+│                 │                                                               │   (right)      │
+│                 │                    PDF VIEWER (center)                        │                │
+├─────────────────┴───────────────────────────────────────────────────────────────┴────────────────┤
+│ Page [24] / 156          ◀ Previous Page   Next Page ▶          − [100%] +   ↔  ⛶                 │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+| Area | What it does |
+| --- | --- |
+| **Library** (left) | All PDFs in your study folders, grouped by course folder. With a PDF open, the **Bookmarks** tab shows that PDF's bookmarks (§4). |
+| **Viewer** (center) | The open PDF, scrolled continuously page after page. |
+| **Page Resources** (right) | Notes and resources for the page you are looking at, plus whole-document items. |
+| **Status bar** (bottom) | Current page, previous/next buttons, zoom controls. |
+
+The two `☰` buttons in the top bar (or the **`[`** and **`]`** keys) hide and show the side panels. On a narrow window or phone the side panels slide in over the PDF instead.
+
+### Resizing the three columns
+
+- **Drag the divider line** between the library and the PDF, or between the PDF and the notes panel. The line turns blue and shows a small grip while you hover or drag. The PDF viewer takes whatever space is left.
+- **Double-click a divider** to reset that panel to its default width.
+- **Keyboard:** click a divider (or Tab to it), then use **← / →** to resize in small steps, or **Shift+← / →** for bigger steps.
+- Your widths are remembered the next time you open StudySpace.
+- A side panel can't be dragged so wide that the PDF gets narrower than about 360 px. To get the most reading space, hide a panel completely with `☰` or `[` / `]`.
+- After making the PDF column narrower or wider, press **`W`** to fit the page to the new width.
+
+---
+
+## 3. Library: finding and opening PDFs
+
+- **Open a PDF:** click a course folder to expand it, then click a file. The file you have open is highlighted.
+- **Filter:** type in *Filter files…* at the top of the library to narrow the tree instantly.
+- **Continue reading:** your recently opened PDFs are listed at the top with the page you were on. Click one to jump back in.
+- **Search everything:** press **`Ctrl+K`** (or click the search box), type part of a file name or of a note, use **↑/↓** to choose, and press **Enter**. Choosing a note opens its PDF on the note's page.
+- **Rescan (⟳):** click after you add, rename or move PDFs on disk. Renamed or moved files keep all their notes. StudySpace recognises them by content, not by name.
+- An orange dot next to a file means it has highlights that are not yet saved into the PDF file (see §7).
+- **Unsaved work when switching PDFs:** if the PDF you're leaving has unsaved work, StudySpace asks before opening another one in the same tab. That covers highlights not yet saved into the file and a note you're still writing. The choices are:
+  - **Save to PDF and open:** writes the highlights into the file, then opens the other PDF.
+  - **Open without saving:** the highlights stay in StudySpace (you can save them later), but **a half-written note is discarded**. In that case the button reads *Discard note and open*.
+  - **Stay here:** go back to what you were doing.
+
+  Closing or reloading the tab while a note is half written also makes the browser ask first.
+
+### Several PDFs at once (browser tabs)
+
+Open as many StudySpace tabs as you like, each with its own PDF.
+- **Ctrl+click** (or middle-click) a file in the library to open it in a new tab. Right-click → *Open link in new tab* works too, and so does copying the address of a tab.
+- **Tabs keep each other up to date.** If you add or edit a note or highlight in one tab, every other tab showing that PDF updates within a moment. If a tab changes the file itself (page edits, Save to PDF, or undoing them), the other tabs reload it and show *"… was changed in another tab"*.
+- **The same PDF in two tabs is safe.** A tab never overwrites changes made in another tab: it reloads first.
+- **Undo (Ctrl+Z) only covers changes made in that tab.** For page edits and Save to PDF, only the most recent change to a file can be undone. If another tab changed the file since, StudySpace says so instead of undoing.
+
+### Managing study folders (⚙ Settings)
+
+1. Click **⚙** in the top bar.
+2. Under **Add folder**, type a path or click **Browse**. Click into folders, then **Use this folder**.
+3. Optionally fill in **Exclude**, a comma-separated list of folder names to skip (e.g. `Offllines, Old`).
+4. Click **Add & scan**.
+
+For each existing folder you can rename its label, edit its excludes (then click **Save**), untick **Enabled** to hide it temporarily, or remove it. Removing a folder never deletes files, and its notes come back if you add it again.
+
+Settings also shows where the database lives and whether AI is configured.
+
+---
+
+## 4. Reading and navigating
+
+| Action | How |
+| --- | --- |
+| Next / previous page | Scroll, **→ / ←**, or *Next Page / Previous Page* in the status bar |
+| Jump to a page | Press **`G`** (or click the page box), type the number, press **Enter** |
+| First / last page | **Home / End** |
+| Zoom in / out | **`+` / `-`**, **`Ctrl +` / `Ctrl -`**, **Ctrl + mouse wheel**, or the − / + buttons |
+| Reset zoom to 100% | **`0`** (or `Ctrl 0`) |
+| Fit page width / whole page | **`W` / `F`**, or the ↔ / ⛶ buttons |
+| Pick an exact zoom | The zoom drop-down in the status bar |
+| Follow a link in the PDF | Click it. Table-of-contents links jump inside the PDF; web links open a new tab. |
+| Dark mode | 🌙 in the top bar |
+
+StudySpace always knows the **exact page you are looking at**: the page taking up most of the screen. The page box in the status bar and the **Page N** heading in the right panel update as you scroll.
+
+When you reopen a PDF, it returns to the page and zoom where you left off. The first time you open a PDF it is fitted to the window width.
+
+### Bookmarks
+
+Bookmarks are the PDF's own table of contents (the "outline" or "bookmarks" pane of other PDF readers). With a PDF open, click the **Bookmarks** tab at the top of the left column.
+
+- **Bookmarks the PDF already has** (most textbooks do) are shown there the first time you open it, nested by chapter and section, and you can edit them like your own.
+- **Jump:** click a bookmark. It takes you to the exact spot on the page, not just the page. The bookmark you are reading in is highlighted, and its chapter is opened automatically as you scroll.
+- **Add:** press **`B`** (or the bookmark-plus button) to bookmark the spot at the top of the view. Type a title and press **Enter**. If you select text in the PDF first, that text becomes the title. A new bookmark goes right after the one you are reading in, at the same level.
+- **Rename:** double-click it, press **`F2`**, or use the ✎ button.
+- **More** (the ⋯ button, or right-click): *Point to where I'm reading* (move it to the current spot), *Add a bookmark inside*, move up/down, indent/outdent, delete. Deleting a bookmark also deletes the ones inside it.
+- **Keyboard,** with a bookmark focused: **↑ / ↓** move between bookmarks, **→ / ←** open/close a chapter, **Enter** jumps, **`Alt+↑` / `Alt+↓`** move it, **`Alt+→`** nests it under the one above, **`Alt+←`** un-nests it, **Delete** deletes it.
+- **Filter:** long lists get a *Filter bookmarks…* box.
+- **Undo:** every bookmark change can be undone with **`Ctrl+Z`**.
+
+Bookmarks follow their pages when you insert, delete, replace or move pages (§8). A bookmark on a deleted page moves to the next page that is kept.
+
+**Saving into the file:** StudySpace keeps your bookmarks straight away. To write them into the **PDF file itself**, so other readers show them, press **Save to PDF** (§7). Until then the toolbar shows the orange *Save to PDF* button and the file has an orange dot in the library. Saving replaces the PDF's outline with your bookmark list; **`Ctrl+Z`** right after restores the file exactly. If another program changes the PDF and you have no unsaved bookmark changes, StudySpace reads its bookmarks again.
+
+---
+
+### Copy a page as an image, or cut it in half
+
+- **`Shift+C`** (or the ⧉ button in the toolbar, or 🔧 → *Copy page as image*) copies the page you're reading to the clipboard as a picture. Paste it with **Ctrl+V** into a chat, a document, slides or an image editor. Highlights already saved into the PDF are included.
+- **`Shift+H`** (🔧 → *Cut page in half…*) opens a window showing the page cut into two pictures. That's handy for slides printed two per page, or a scanned two-page spread.
+  - **Top / bottom** or **Left / right** (`D` switches). It starts with whichever suits the page's shape.
+  - **Move the cut:** **← / →** (with **Shift** for bigger steps), drag the *Cut at* slider, or click on the page. **`0`** puts it back in the middle.
+  - **`1`** copies the first half (top or left), **`2`** the second half.
+  - **`B`** copies **both**. Editors like Google Docs, Word or Notion then paste two separate pictures; other apps paste one picture with both halves one under the other.
+  - **`S`** saves both halves as PNG files (through the browser's download).
+  - **PgUp / PgDn** go to the previous / next page without closing the window.
+
+### Screenshot any part of the window
+
+Press **`Q`**, or click the ✂ crop button at the top right (also in 🔧 → *Screenshot part of window*). The window dims.
+
+1. **Click the top-left corner** of what you want, then **the bottom-right corner**. You can also drag a box. The box shows its size as you go.
+2. The screenshot is **copied to the clipboard** at once. Paste it anywhere with **Ctrl+V**: a chat, a document, a note in another app.
+
+- **`Enter`** before clicking takes the **whole window**. After the first corner, it finishes the box where the pointer is.
+- **`Esc`** drops a started box; a second `Esc` (or a right-click) cancels.
+- It works on everything you see: the PDF (scrolled as it is), notes with their math, menus, panels. Messages like this toast are left out.
+- No screen-sharing permission is asked: StudySpace draws its own window into the picture. Pictures from other programs or browser tabs are not possible.
+
+### Save pages as pictures
+
+**`Shift+S`** (or 🔧 → *Save pages as pictures…*) saves pages as image files through the browser's download.
+
+- **Pages:** **`1`** this page, **`2`** choose pages (type e.g. `3, 5-9`, then `Enter`), **`3`** the whole PDF.
+- **Format:** **`F`** switches PNG ⇄ JPEG. PNG is sharpest; JPEG is much smaller.
+- **Sharpness:** **`R`** cycles 100 / 150 / 200 / 300 dpi. 150 suits screens, 300 printing.
+- **`Enter`** saves. One page gives one picture; several pages give one `.zip` with a picture per page (`Title - p003.png`…). The window shows the rough size first.
+- **`C`** copies the picture instead (one page only).
+
+While you type the pages, the letter keys (`F`, `R`, `C`) still work, since page lists only use digits, `-` and `,`. Format and sharpness are remembered.
+
+## 5. Notes and resources (right panel)
+
+The right panel shows **only what belongs to the current page**, plus anything attached to the whole document. It updates as you scroll.
+
+Everything is in **one list**, grouped by type in this order:
+1. **My Notes**
+2. **Summaries**
+3. **AI Explanations**
+4. **Previous Year Questions** (PYQs)
+5. **External Links**
+6. **Highlights on this page**
+
+Empty groups are hidden. The number next to *Page resources* is how many items apply to the current page.
+
+**Every card is open when you open a PDF**, so you can read all your notes straight away. Each card shows its title and scope (e.g. *Page 4*, *Pages 20–30*, *Whole document*); a note without a title shows its first line instead.
+- Click **⌃ Close** right after the title, or click the title itself, to fold a card down to just its title.
+- Click **⌄ Expand** in the same place to open it again.
+- Closed cards stay closed while you move between pages. Opening another PDF starts with everything open again.
+- **Expand all / Close all** above the list opens or closes every card on the current page at once.
+
+### Adding a note or resource
+
+1. Scroll to the page the note is about.
+2. Click **+ Add note or resource** at the bottom of the panel, or press **`N`**.
+3. Choose the **type**:
+   - *Personal Note*
+   - *Summary*
+   - *Previous Year Question*
+   - *AI Explanation*
+   - *External Link*
+4. Add a title (optional) and the content. For an *External Link*, also paste the URL.
+5. Choose the **scope**:
+   - **This page**: shown only on that page.
+   - **Page range**: shown on every page from *From* to *To* (e.g. a PYQ covering pages 20–30).
+   - **Whole document**: shown on every page of the PDF (e.g. a course website link).
+6. Click **Add**, or press **Ctrl+Enter**. **Esc** cancels.
+
+**Formatting.** Content is written in Markdown:
+- `**bold**`, `*italic*`, `# Heading`, `- bullet`, `1. numbered`
+- `> quote`, `` `code` ``, tables
+
+**Math (LaTeX).** A formula has to be wrapped in math delimiters. Both styles work, so you can paste from ChatGPT or a LaTeX document as-is:
+
+| Where | Dollar style | LaTeX style |
+| --- | --- | --- |
+| Inside a sentence | `$3 \times 2 = 6$` | `\(3 \times 2 = 6\)` |
+| On its own line (centred) | `$$ \frac{a}{b} $$` | `\[ \frac{a}{b} \]` |
+
+- **`$$ … $$` and `\[ … \]` always give an equation on its own line**, at full size, even when written on a single line or in the middle of a sentence. Inside a list item, the equation stays in that item.
+- **Chains with several `=` signs** (like `a = b = c`) are shown one step per line, lined up on the `=`. If the left side is long, it gets its own line and the steps are indented under it.
+- **Equations wider than the notes panel are shrunk to fit.** Very long ones that would get too small scroll sideways instead. Making the right panel wider shows them larger.
+- Math works inside table cells too, including absolute values like `$|x|$`.
+- Commands without delimiters are plain text: `3 \times 2` shows the words `\times`, because nothing marks it as math.
+- To write a literal dollar sign (a price), type `\$5`.
+
+Use **Preview** to check how it looks.
+
+**Colour coding.** Every note gets highlighter colours automatically, so its structure stands out:
+- the **title** of the card is **pink**;
+- the top level of headings inside the note is **orange**, the next level **yellow**, then **green**, then **blue**;
+- the bold label at the start of a bullet or numbered point (`- **Term:** explanation`) is **violet**, lighter in nested lists. An italic label ending in a colon (`- *Example:* …`) counts too.
+
+The levels are relative to the note. If a note only uses `###` and `####`, those are orange and yellow. Your own highlights inside notes are drawn on top of these colours.
+
+### Editing, deleting, jumping
+
+- **Edit:** hover over a card and click ✏. You can change everything, including type and scope.
+- **Delete:** click 🗑 and confirm. **`Ctrl+Z`** brings it back.
+- A note from a range that started on another page shows its scope (e.g. *Pages 20–30*). Click that label to jump to the first page.
+
+### Highlighting and commenting inside your notes
+
+You can annotate the text of any opened note or resource, the same way you annotate the PDF:
+
+1. **Expand** the card so its content is visible.
+2. **Select some text** in it with the mouse. A small bar appears:
+   - click a **colour** to highlight the selection;
+   - click **Comment** to highlight it and type a comment straight away (**Ctrl+Enter** or **Save**);
+   - click **Copy** to copy the text.
+3. **Click an existing highlight** to recolour it, add or edit its comment, or **Remove** it.
+
+Highlights with a comment are underlined with a dotted line and marked 💬. Hover over one to read its comment. All comments are also listed under the note: click one to edit it.
+
+- Your note's text is **never changed** by highlighting: highlights are stored separately and attached to the words you selected. If you later edit the note, they stay on those words. If the words were edited away, the card says *"1 highlight no longer matches the edited text"*, with a **Remove** button.
+- Formulas can't be partly highlighted; select the words around them instead.
+- Highlights in notes are undone and redone with **Ctrl+Z / Ctrl+Shift+Z**, like everything else, and they are kept when you undo a page deletion that had removed their note.
+- **Esc** closes the bar without highlighting anything.
+
+---
+
+## 6. Highlighting, drawing and erasing
+
+The tools are at the top-left of the viewer. Each one also has a key.
+
+| Tool | Key | How to use |
+| --- | --- | --- |
+| **Select** | `V` | Select text with the mouse. A small menu appears: click a **colour** to highlight it, **Note** to start a note quoting it, or **Copy**. |
+| **Highlight text** | `H` | Every text selection is highlighted immediately in the chosen colour. |
+| **Highlight area** | `A` | Click the **top-left corner**, then the **bottom-right corner**: the whole box is highlighted. (Dragging a box works too. After the first click the box follows the mouse; `Esc` cancels it.) Use it on anything: a figure, an equation, a scanned page. |
+| **Pen** | `P` | Draw freehand. Choose a colour and thickness (fine / medium / bold) in the toolbar. |
+| **Eraser** | `E` | Click on a highlight or drawing to delete it, or hold the mouse button and drag across several. |
+| Back to Select | `Esc` | Also closes the floating highlight bar and clears the selection. |
+
+- **Dismiss the bar:** press **Esc** or click anywhere else; nothing is highlighted.
+- **Change or delete one highlight:** with the Select tool, click it. A small menu offers colours, **Note** (turn the highlighted text into a note) and **Delete**.
+- **Highlights on this page:** the bottom of the notes panel lists the text you highlighted on the current page. Click **Note** beside one to quote it into a new note.
+- Highlights and drawings are saved **immediately** in StudySpace's database. Every action can be undone with **`Ctrl+Z`**.
+
+---
+
+## 7. Saving highlights and bookmarks into the PDF file
+
+StudySpace's own view always shows your highlights and bookmarks. To make them part of the **PDF file itself**, so they appear in other PDF readers (Okular, Evince, Acrobat, browsers):
+
+1. When you have unsaved highlights or bookmark changes, the toolbar shows an orange **Save to PDF** button, and the file has an orange dot in the library.
+2. Click **Save to PDF**, or press **`Ctrl+S`**.
+3. The original file is updated with standard PDF highlight/ink annotations and its outline (bookmarks). The toolbar then shows *Saved in PDF*.
+
+You can keep editing afterwards: saving again replaces StudySpace's earlier marks instead of duplicating them. Marks made by other programs are never touched. **`Ctrl+Z`** right after saving restores the file exactly as it was before.
+
+---
+
+## 8. Page editing, and making new PDFs (extract, split, merge)
+
+Everything here is in the **🔧 Page tools** menu on the right of the toolbar (or press **`T`**). It has two columns:
+- **Edit this PDF:** insert, replace, turn, move, delete.
+- **Copy & text** and **New PDFs:** copy as image, cut in half, get text; extract, split, merge.
+
+Each item shows its key on the right. You can run it from the keyboard without opening the menu, or use **↑ / ↓** and **Enter** inside the open menu.
+
+Insert, delete, replace, turn and move change the **original PDF file**. Every one of them can be undone (§10). Extract, split and merge instead make **new PDF files** and leave the originals alone (see *Making new PDFs* at the end of this section).
+
+### Delete pages
+
+**Delete the page you are on:**
+1. Click the **🗑 page** button in the toolbar (next to 🔧), or press **`Shift+Delete`**.
+2. The dialog is filled in with the current page. Check what it says (see below), then click **Delete 1 page**.
+
+**Delete several pages:**
+1. Open **🔧 Page tools → Delete several pages…** (`Ctrl+Del`).
+2. Type the pages, e.g. `5`, `3, 8`, or `10-14, 20`.
+3. Click **Delete N pages**. You can't delete every page of a document.
+
+**What happens to your notes when page numbers shift.** Notes always stay with the *content* they were written for:
+- **Notes on later pages move up with their pages.** If you delete page 4, the note that was on page 7 is now on page 6, the same slide or paragraph, only renumbered.
+- **Page ranges shrink** to the pages that remain. A range 3–6 becomes 3–5 when page 4 is deleted.
+- **Highlights and drawings** on later pages move with their pages. Those on a deleted page are removed with it.
+- **Notes that belonged only to the deleted page(s) are never moved onto a different page.** The dialog lists them and asks:
+  - **Delete them together with the page** (default). Undo brings the page and the notes back.
+  - **Keep them as whole-document notes.** They stay and appear on every page of that PDF. You can later edit one and give it a new page.
+
+### Insert a blank page
+
+1. Open **🔧 Page tools → Insert blank page** (`I`). It goes after the page you're on.
+2. Adjust **Insert after page** (`0` puts it before the first page) and **How many**, then click **Insert**.
+
+The new page has the same size as its neighbour, so you can write on it with the pen or attach notes to it. Notes on later pages move down with their pages. A page-range note grows if you insert inside its range.
+
+### Insert pages from another PDF
+
+1. Open **🔧 Page tools → Insert pages from a PDF…** (`Shift+I`).
+2. Search for and click the **source PDF** in your library (for example a PYQ paper).
+3. Enter **From page / To page** of the source and **Insert after page** for this document.
+4. Click **Insert N pages**. The source PDF is not changed.
+
+### Replace a page with a page from another PDF
+
+Use this to swap a page for a better version, such as a clearer scan, a corrected slide, or the matching page from another section's notes.
+
+1. Go to the page you want to replace and open **🔧 Page tools → Replace this page…** (`R`).
+2. Check **Replace page** (it starts at the page you're on).
+3. Search for and click the **source PDF**. You can also pick the PDF you have open, marked *this PDF*, to copy one of its own pages over another.
+4. Enter the source page in **With page**.
+   - To replace several pages in a row, also fill in **To page**. For example, *Replace page 5* with pages *2 to 4* replaces pages 5, 6 and 7.
+5. Read **What happens**, then click **Replace page**. The source PDF is not changed.
+
+What happens to your notes and highlights:
+- **Page numbers don't change**, so notes and page ranges stay exactly where they were. A note on page 5 is still on page 5, now next to the new content.
+- **Highlights and drawings on the replaced page are removed.** They were made on the old page, so they wouldn't line up with the new one. To keep them anyway, tick **Keep my highlights/drawings** in the dialog.
+- **Ctrl+Z** brings back the old page and any removed highlights.
+
+### Turn pages (rotate)
+
+For sideways or upside-down scans and slides.
+
+1. Open **🔧 Page tools → Turn pages…** (`Shift+R`).
+2. Type the pages (it starts at the page you're on; *All pages* fills in the whole PDF).
+3. Pick **Right**, **Left** or **Upside down**, then click **Turn**.
+
+Highlights and drawings turn with their pages. **Ctrl+Z** turns them back.
+
+### Move pages (reorder)
+
+1. Open **🔧 Page tools → Move pages…** (`M`).
+2. Type the **Pages to move**, e.g. `11-12` or `3, 7`. They keep their order.
+3. Set **Put them after page**. `0`, or *To the start*, puts them first; *To the end* puts them last. The dialog shows the pages' new numbers.
+4. Click **Move**.
+
+Notes, highlights and bookmarks move with their pages. A page-range note whose pages are split apart is widened to cover them all. **Ctrl+Z** puts the pages back.
+
+### Making new PDFs: extract, split, merge
+
+These are under **🔧 Page tools → New PDFs**. They **never change the PDFs you take pages from** (unless you tick *Remove these pages* when extracting). The new files are saved inside one of your **library folders** and show up in the library straight away.
+
+- **Extract pages…** (`X`) copies chosen pages, e.g. `4-6` or `3, 8, 10-12`, into one new file. Its name is filled in for you, and you can change it.
+  - Tick **Remove these pages from this PDF afterwards** to *move* the pages out instead of copying them. That part is a normal page deletion of the original, so **Ctrl+Z** undoes it.
+- **Split this PDF…** (`S`) makes several files, and lists them before saving. Click a name to change it.
+  - **Every N pages:** equal parts; `1` makes one file per page.
+  - **Page ranges:** one file per range you type, e.g. `1-12, 13-30, 31-58`.
+  - **By chapters:** one file per bookmark (§4). You can also choose second-level bookmarks (sections), and put the pages before the first chapter in their own file. Each chapter's file gets that chapter's bookmarks.
+  - A split saves into a new sub-folder (*"<title> - split"*) unless you clear that box.
+- **Merge PDFs…** (`Shift+M`) joins several PDFs, in the order you set, into one.
+  - Start with the open PDF, and add others by searching your library.
+  - For each one you can give pages (empty means all of them), and reorder or remove it.
+  - The merged PDF gets a bookmark for each original, with that PDF's own bookmarks inside it.
+
+**Where they are saved:** pick a folder from **Save in folder** (it starts at the open PDF's folder). Optionally type a **new sub-folder** name to create one inside it. Only folders inside your library folders are offered. An existing file is **never overwritten**: a second *"Notes.pdf"* becomes *"Notes (2).pdf"*.
+
+**What comes along**, for the pages that are copied (each can be switched off):
+- **Notes and resources** on those pages, with the highlights and comments inside them. Page ranges are cut down to the copied pages. Whole-document notes stay only with the original.
+- **Highlights and drawings.** If the original's highlights weren't saved into its file yet, the new PDF shows *Save to PDF* too.
+- **Bookmarks**, written into the new PDF's outline.
+
+To get rid of a new PDF you don't want, delete the file in your file manager and press ↻ *Rescan* in the library.
+
+---
+
+## 9. Getting text from a PDF (Markdown or plain text), and OCR
+
+You can pull the text out of a page, a range of pages, the whole PDF, or just a box you draw on a page. The text then opens in a window where you can **copy** it, **save it as a note**, or **download** it as a `.md` / `.txt` file.
+
+### Two ways to read a PDF
+
+- **The PDF's own text:** instant and exact. Use it for PDFs made on a computer (slides, books, typed notes); most of your library is like this.
+- **OCR (optical character recognition):** reads the page as a picture. It's needed for **scanned** pages and photos of handwritten notes, which contain no text at all.
+
+**OCR never runs on its own, and your PDF isn't changed by it.** It works on a temporary copy. You decide afterwards whether to add the recognised text to the PDF.
+
+### Installing OCR (once)
+
+OCR uses the free programs OCRmyPDF and Tesseract. In a terminal:
+
+```
+sudo apt install ocrmypdf tesseract-ocr
+```
+
+There's no need to restart StudySpace. For other languages, also install the language pack and list the languages in `.env`. For Bangla + English, for example:
+
+```
+sudo apt install tesseract-ocr-ben
+STUDYSPACE_OCR_LANG=eng+ben     # in .env, then restart StudySpace
+```
+
+### Keys: text or OCR in one press
+
+| | This page | Choose pages… | Whole PDF |
+| --- | --- | --- | --- |
+| **The PDF's own text** (instant) | `Shift+T` | `Shift+G` | `Shift+A` |
+| **OCR** (for scans) | `Shift+O` | `Shift+P` | `Shift+W` |
+
+- *This page* and the PDF's text for *Whole PDF* start straight away.
+- *Choose pages…* opens the window with the **From** box ready. Type the first page, `Tab`, the last page, then `Enter`.
+- *OCR the whole PDF* waits for `Enter`, since a big book takes a while.
+
+The same items are in **🔧 Page tools**, under *Get text* and *OCR*, with their keys shown.
+
+### Marking your highlights in the text
+
+With **Mark my highlights** on (the default), text you highlighted in the PDF comes out wrapped as `==highlighted text==`. That covers text and area highlights made in StudySpace, plus highlights saved into the PDF by any other reader. In a note, StudySpace shows it **highlighted in yellow**; Obsidian and Typora show `==…==` as a highlight too.
+
+- Turn it off for clean text: untick it, or press **`H`** in the window. It works on the result too, and rebuilds the text with or without marks.
+- The result line says how many highlighted passages were marked.
+- A highlight that covers most of a word marks the whole word.
+- Region OCR (a box) has no marks; page text and page OCR do.
+
+### Text of pages
+
+1. Open **🔧 Page tools → Get text → Choose pages…** (`Shift+G`), or use a key from the table above.
+2. Choose the pages: **This page**, **Pages** *from–to*, or **Whole PDF**.
+3. Choose **How**: *Use the PDF's text*, or *Run OCR*.
+4. Choose **Markdown** or **Plain text**. Optionally turn on **Page markers** and **Skip repeated headers/footers** (on by default; it drops running headers and page numbers), and choose whether to **Mark my highlights**.
+5. Click **Get text** (or **Run OCR**), or press **`Enter`**. A progress bar shows how far it is, and **Cancel** stops it.
+
+Every option has a key, shown beside it: **`1` / `2` / `3`** this page / pages / whole PDF, **`T` / `O`** PDF text / OCR, **`M`** Markdown ⇄ plain, **`H`** mark highlights, **`Enter`** start.
+
+If some of the pages turn out to be scanned images, the result says so, with a **Run OCR on these** button that reads just those pages.
+
+In Markdown, slide titles and big headings become `#` headings, bullet points become lists, and lines are joined back into paragraphs. Saved as a note, it gets your usual note colours.
+
+### Text of a region (part of a page)
+
+1. Pick the **OCR region tool** in the toolbar (the scan icon), or press **`O`**.
+2. Click the top-left and then the bottom-right corner of the part you want (or drag a box): a diagram, a screenshot inside a slide, one paragraph of a scan.
+3. The text opens right away. If that part of the page also has real text, a link lets you switch between *OCR* and *the PDF's text*.
+
+Press **`V`** (or `Esc`) to go back to normal selection.
+
+### The result window
+
+Keys: **`C`** copy · **`N`** save as note · **`D`** download · **`M`** Markdown ⇄ plain · **`H`** highlight marks on/off · **`V`** preview ⇄ raw · **`A`** add the OCR text layer (then `Enter` to confirm) · **`B`** back to the options · **`Esc`** close.
+
+- **Preview / Raw / edit:** see it rendered, or fix the text by hand before saving.
+- **Markdown / Plain text:** switch the format. This rebuilds the text, so do it before editing.
+- **Copy:** copies the text to the clipboard.
+- **Download .md / .txt:** saves a file, handy for whole textbooks.
+- **Save as note:** a note titled *"‹PDF› — page 4"* (or *pages 3–9*, or *whole PDF*), attached to those pages. Ctrl+Z removes it again.
+  - Very long texts make slow notes. Above about 150,000 characters you get a warning, and above 1,000,000 a smaller page range is needed.
+- **Add this text to the PDF** (after page OCR only): writes the recognised text into the PDF as an invisible layer.
+  - The pages look exactly the same.
+  - Afterwards their text can be selected, highlighted, searched and copied, here and in any PDF reader.
+  - It asks you to confirm first, and **Ctrl+Z** removes the layer again.
+  - Text that was already in the PDF is kept as it is. OCR only reads what's inside the page images, so slides with pictures don't get their text twice.
+
+If you close the window without adding the text, the PDF stays exactly as it was.
+
+### Limits
+
+- **Handwriting:** OCR handles printed text well, but handwriting poorly. Expect gaps and mistakes on handwritten notes.
+- **Formulas:** formulas never come back as LaTeX. They come out as plain characters, and matrices and fractions get flattened.
+- **Layout:** pages with several columns or complex layouts may come out in an odd order. The region tool helps there. Scans with two book pages per sheet come out one book page after the other.
+- **Speed:** about 3–6 seconds per scanned page. A whole 150-page scanned book takes several minutes; the progress bar shows how far it is, and you can keep reading meanwhile.
+- **Scan stamps:** some scans carry a tiny stamp such as `45.jpg` or *Scanned with CamScanner* as their only text. StudySpace treats those pages as scans and leaves the stamp out of the text.
+
+---
+
+## 10. Undo and redo
+
+| Action | How |
+| --- | --- |
+| Undo | **`Ctrl+Z`**, or the **↶** button at the top-left of the toolbar |
+| Redo | **`Ctrl+Shift+Z`** or **`Ctrl+Y`**, or the **↷** button |
+
+Hover over ↶ / ↷ to see exactly what will be undone or redone, e.g. *"Undo: Delete page 4"*. After each step a short message confirms it.
+
+**What can be undone:**
+- adding, editing or deleting a note or resource
+- adding, recolouring or erasing highlights and drawings
+- adding, renaming, moving or deleting bookmarks
+- adding an OCR text layer to pages
+- deleting, inserting (blank or from another PDF), replacing, turning and moving pages: the previous version of the file is restored exactly, and every note, range and highlight returns to its original page
+- **Save to PDF**
+
+**Good to know:**
+- Each PDF has its own undo history, so switching files and coming back still lets you undo there. The history lasts until you close or reload the browser tab.
+- Undo works one step at a time, newest first.
+- Page edits keep the last **10** previous versions of each PDF (configurable with `STUDYSPACE_HISTORY_LIMIT` in `.env`). They are stored in `~/.local/share/studyspace/history/`.
+- If another program modifies the PDF after a StudySpace edit, that edit can no longer be undone. StudySpace says so instead of overwriting the other program's changes.
+- While you are typing in a text box, `Ctrl+Z` undoes your typing there, as usual.
+
+---
+
+## 11. AI explanations (optional)
+
+There are no AI buttons in the app for now; StudySpace works fully offline. You can still store explanations yourself: click **+ Add note or resource** and choose the *AI Explanation* or *Summary* type, for example to paste an answer from ChatGPT. Math pasted with `\( … \)` renders correctly (§5).
+
+The server keeps a ready-made hook for connecting an AI model later (see the README's *Adding an AI provider*).
+
+---
+
+## 12. All keyboard shortcuts
+
+**Moving between text boxes:** in any dialog or form, **`↓`** jumps to the next *empty* text box (or the next one, when all are filled), and **`↑`** goes back to the previous one. Inside a multi-line box, `↑`/`↓` move between lines as usual.
+
+Every feature has a key. You see it **beside the feature**: on the right of each item in the 🔧 **Page tools** menu, on buttons (for example *Add note or resource* `N`, the *Files* `L` and *Bookmarks* `Shift+B` tabs) and in every button's tooltip. Press **`?`** in the app for this list, with a search box (type e.g. "split" or "Shift+R").
+
+Shortcuts don't fire while you are typing in a text box. While a dialog is open, only that dialog's keys work. One-letter keys are case-insensitive; `Shift+…` keys need Shift.
+
+**General**
+
+| Keys | Action |
+| --- | --- |
+| `?` | Show this help |
+| `Ctrl+K` | Search files and notes |
+| `Ctrl+Z` | Undo (notes, highlights, bookmarks, page edits, Save to PDF) |
+| `Ctrl+Shift+Z` / `Ctrl+Y` | Redo |
+| `Ctrl+S` | Save highlights, drawings & bookmarks into the PDF |
+| `Shift+D` | Dark / light mode |
+| `,` | Settings (study folders) |
+| `Shift+L` | Rescan the library folders |
+
+**Panels**
+
+| Keys | Action |
+| --- | --- |
+| `[` | Show / hide the left panel (files, bookmarks) |
+| `]` | Show / hide the notes panel |
+| `L` | Show the library files |
+| `Shift+B` | Show this PDF's bookmarks |
+| `/` | Filter the files / bookmarks list |
+
+**Pages & zoom**
+
+| Keys | Action |
+| --- | --- |
+| `→` | Next page |
+| `←` | Previous page |
+| `Home` | First page |
+| `End` | Last page |
+| `G` | Go to page (type it, press Enter) |
+| `+` / `=` / `Ctrl+=` / `Ctrl++` | Zoom in |
+| `-` / `_` / `Ctrl+-` | Zoom out |
+| `0` / `Ctrl+0` | Zoom 100% |
+| `W` | Fit page width |
+| `F` | Fit whole page |
+| `Ctrl+Wheel` | Smooth zoom |
+
+**Tools**
+
+| Keys | Action |
+| --- | --- |
+| `V` | Select text |
+| `H` | Highlight text (just select it) |
+| `A` | Highlight an area: click two corners (or drag) |
+| `P` | Pen (draw freehand) |
+| `E` | Eraser (click or drag over marks) |
+| `O` | Get text from a region: click two corners (or drag) |
+| `Esc` | Cancel a box after its first corner |
+| `1–5` | Pick colour 1–5 (highlight, area & pen tools) |
+| `Shift+1–3` | Pen width: fine / medium / bold |
+| `Esc` | Back to Select; closes menus and bars |
+
+**Selected text & highlights**
+
+| Keys | Action |
+| --- | --- |
+| `1–5` | Highlight the selection / recolour the highlight (colour 1–5) |
+| `N` | Quote the selection / highlight into a new note |
+| `Ctrl+C` | Copy the selected text |
+| `Del` | Delete the clicked highlight or drawing |
+
+**Notes & bookmarks**
+
+| Keys | Action |
+| --- | --- |
+| `N` | New note for this page |
+| `C` | Close all / expand all notes |
+| `B` | Bookmark this spot (selected text becomes its title) |
+| `Ctrl+Click` | Open a library PDF in a new browser tab |
+
+**Page tools**
+
+| Keys | Action |
+| --- | --- |
+| `T` | Open the Page tools menu |
+| `I` | Insert a blank page after this one… |
+| `Shift+I` | Insert pages from another PDF… |
+| `R` | Replace this page… |
+| `Shift+R` | Turn (rotate) pages… |
+| `M` | Move pages… |
+| `Shift+Del` | Delete this page… |
+| `Ctrl+Del` | Delete several pages… |
+
+**New PDFs**
+
+| Keys | Action |
+| --- | --- |
+| `X` | Extract pages to a new PDF… |
+| `S` | Split this PDF… |
+| `Shift+M` | Merge PDFs… |
+
+**Images**
+
+| Keys | Action |
+| --- | --- |
+| `Q` | Screenshot any part of the window → clipboard: click two corners or drag (Enter: whole window, Esc: cancel) |
+| `Shift+C` | Copy this page as an image (paste it anywhere) |
+| `Shift+H` | Cut this page in half: copy the two halves… |
+| `Shift+S` | Save pages as pictures (PNG / JPEG; several pages in one .zip)… |
+
+**Get text & OCR**
+
+| Keys | Action |
+| --- | --- |
+| `Shift+T` | Text of this page |
+| `Shift+G` | Text of chosen pages… (or OCR them: press O in the window) |
+| `Shift+A` | Text of the whole PDF |
+| `Shift+O` | OCR this page |
+| `Shift+P` | OCR chosen pages… |
+| `Shift+W` | OCR the whole PDF… (Enter starts it) |
+
+**In the Get text window**
+
+| Keys | Action |
+| --- | --- |
+| `1` | Pages: this page |
+| `2` | Pages: choose a range |
+| `3` | Pages: whole PDF |
+| `T` | Use the PDF's text |
+| `O` | Use OCR |
+| `H` | Mark my highlights as ==text== on / off |
+| `M` | Markdown ⇄ plain text |
+| `Enter` | Start |
+| `C` | Copy the text |
+| `N` | Save as a note |
+| `D` | Download .md / .txt |
+| `V` | Preview ⇄ raw / edit |
+| `A` | Add the OCR text layer to the PDF (asks first; Enter confirms) |
+| `B` | Back to the options |
+
+**In the cut-in-half window**
+
+| Keys | Action |
+| --- | --- |
+| `1` | Copy the top / left half |
+| `2` | Copy the bottom / right half |
+| `B` | Copy both halves |
+| `S` | Save both as PNG files |
+| `D` | Cut across ⇄ down the middle |
+| `←` / `→` | Move the cut line (Shift: in bigger steps) |
+| `0` | Put the cut line back in the middle |
+| `PageUp` / `PageDown` | Previous / next page |
+
+**In the Save pictures window**
+
+| Keys | Action |
+| --- | --- |
+| `1` | This page |
+| `2` | Choose pages (type e.g. 3, 5-9) |
+| `3` | Whole PDF |
+| `F` | PNG ⇄ JPEG |
+| `R` | Sharpness: 100 → 150 → 200 → 300 dpi |
+| `C` | Copy the picture (one page only) |
+| `Enter` | Save |
+
+**In the bookmarks list**
+
+| Keys | Action |
+| --- | --- |
+| `↑` / `↓` | Previous / next bookmark |
+| `→` / `←` | Open / close a chapter |
+| `Enter` | Jump to it |
+| `F2` | Rename |
+| `Del` | Delete (with the bookmarks inside) |
+| `Alt+↑` / `Alt+↓` | Move up / down |
+| `Alt+→` / `Alt+←` | Nest under the one above / un-nest |
+
+**In dialogs & editors**
+
+| Keys | Action |
+| --- | --- |
+| `Enter` | Confirm a page dialog (in its first field) |
+| `Ctrl+Enter` | Save the note or comment you're writing |
+| `Esc` | Close the dialog / cancel editing |
+| `↓` / `↑` | Next empty text box / previous text box |
+
+---
+
+## 13. Where your data is, and how to recover
+
+| What | Where |
+| --- | --- |
+| Notes, resources, highlights, reading positions | `~/.local/share/studyspace/studyspace.db` |
+| Previous versions of PDFs you edited (for undo) | `~/.local/share/studyspace/history/<document-id>/` |
+| Your PDFs | Exactly where they were, e.g. `/home/dipra/Buet/3-1/…` |
+
+- **Back up your notes:** copy `~/.local/share/studyspace/` somewhere safe while the app is stopped.
+- **Recover an older version of a PDF by hand:** the newest files in `history/<document-id>/` are the versions before your most recent edits. Copy one back over the original while the app is stopped, then click **Rescan**.
+
+## 14. Troubleshooting
+
+| Message / problem | What to do |
+| --- | --- |
+| *"This PDF is encrypted"* | You can read, take notes and highlight (kept in StudySpace), but you can't save into the file or add/delete pages. |
+| *"The PDF file is read-only"* | Give yourself write permission on the file (`chmod u+w file.pdf`) to save into it or edit pages. |
+| *"The PDF changed on disk since it was opened"* | Another program changed the file. Click the file in the library again to reload it, then retry. |
+| A new or renamed file doesn't appear | Click **⟳ Rescan** in the library. |
+| A file shows no notes after moving it | Click **⟳ Rescan**. Moved files are matched by content and keep their notes. |
+| The page looks blurry while zooming | It re-renders sharply a moment after you stop zooming. |

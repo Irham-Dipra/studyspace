@@ -1,0 +1,231 @@
+/**
+ * Ordered, append-only schema migrations. Never edit a migration that has shipped;
+ * add a new one with the next version number instead.
+ */
+export interface Migration {
+  version: number;
+  name: string;
+  up: string;
+}
+
+export const migrations: Migration[] = [
+  {
+    version: 1,
+    name: "initial_schema",
+    up: `
+      CREATE TABLE directories (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        path            TEXT NOT NULL UNIQUE,
+        label           TEXT NOT NULL,
+        excludes        TEXT NOT NULL DEFAULT '[]',
+        enabled         INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+        created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        last_scanned_at TEXT
+      );
+
+      CREATE TABLE documents (
+        id                TEXT PRIMARY KEY,
+        directory_id      INTEGER REFERENCES directories(id) ON DELETE SET NULL,
+        path              TEXT NOT NULL UNIQUE,
+        rel_path          TEXT NOT NULL,
+        title             TEXT NOT NULL,
+        fingerprint       TEXT NOT NULL,
+        size              INTEGER NOT NULL,
+        mtime_ms          INTEGER NOT NULL,
+        page_count        INTEGER,
+        missing           INTEGER NOT NULL DEFAULT 0 CHECK (missing IN (0, 1)),
+        annotations_dirty INTEGER NOT NULL DEFAULT 0 CHECK (annotations_dirty IN (0, 1)),
+        created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        last_seen_at      TEXT
+      );
+      CREATE INDEX idx_documents_fingerprint ON documents(fingerprint);
+      CREATE INDEX idx_documents_directory ON documents(directory_id);
+
+      CREATE TABLE resources (
+        id          TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        type        TEXT NOT NULL CHECK (type IN ('note', 'ai_explanation', 'summary', 'pyq', 'link')),
+        scope       TEXT NOT NULL CHECK (scope IN ('page', 'range', 'document')),
+        title       TEXT NOT NULL DEFAULT '',
+        content     TEXT NOT NULL DEFAULT '',
+        url         TEXT,
+        created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      CREATE INDEX idx_resources_document ON resources(document_id);
+
+      CREATE TABLE resource_pages (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+        page_start  INTEGER NOT NULL CHECK (page_start >= 1),
+        page_end    INTEGER NOT NULL,
+        CHECK (page_end >= page_start)
+      );
+      CREATE INDEX idx_resource_pages_resource ON resource_pages(resource_id);
+      CREATE INDEX idx_resource_pages_range ON resource_pages(page_start, page_end);
+
+      CREATE TABLE reading_progress (
+        document_id TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
+        page        INTEGER NOT NULL DEFAULT 1,
+        zoom        REAL NOT NULL DEFAULT 1,
+        updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+
+      CREATE TABLE annotations (
+        id           TEXT PRIMARY KEY,
+        document_id  TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        page         INTEGER NOT NULL CHECK (page >= 1),
+        kind         TEXT NOT NULL CHECK (kind IN ('highlight', 'area', 'ink')),
+        color        TEXT NOT NULL,
+        opacity      REAL NOT NULL DEFAULT 0.4,
+        rects        TEXT NOT NULL DEFAULT '[]',
+        paths        TEXT NOT NULL DEFAULT '[]',
+        stroke_width REAL NOT NULL DEFAULT 0.003,
+        text         TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      CREATE INDEX idx_annotations_document_page ON annotations(document_id, page);
+    `,
+  },
+  {
+    version: 2,
+    name: "document_history",
+    up: `
+      -- One row per undoable file edit (page insert/delete, saving annotations into the PDF).
+      -- file_path holds the PDF as it was before the edit; snapshot holds the document's notes,
+      -- page associations, annotations and progress before the edit.
+      CREATE TABLE document_history (
+        id                TEXT PRIMARY KEY,
+        document_id       TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        kind              TEXT NOT NULL CHECK (kind IN ('insert', 'delete', 'save')),
+        label             TEXT NOT NULL,
+        params            TEXT NOT NULL DEFAULT '{}',
+        snapshot          TEXT NOT NULL,
+        file_path         TEXT NOT NULL,
+        page_count_before INTEGER NOT NULL,
+        fingerprint_after TEXT NOT NULL,
+        created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      CREATE INDEX idx_document_history_document ON document_history(document_id, created_at);
+    `,
+  },
+  {
+    version: 3,
+    name: "note_highlights",
+    up: `
+      -- Highlights (with optional comments) made on the rendered text of a note/resource.
+      -- Anchored by quote + surrounding context rather than character offsets, so they survive edits
+      -- to the note's Markdown and the note content itself is never modified.
+      CREATE TABLE note_highlights (
+        id          TEXT PRIMARY KEY,
+        resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+        color       TEXT NOT NULL,
+        quote       TEXT NOT NULL CHECK (length(quote) > 0),
+        prefix      TEXT NOT NULL DEFAULT '',
+        suffix      TEXT NOT NULL DEFAULT '',
+        comment     TEXT NOT NULL DEFAULT '',
+        created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      CREATE INDEX idx_note_highlights_resource ON note_highlights(resource_id);
+    `,
+  },
+  {
+    version: 4,
+    name: "history_replace_kind",
+    up: `
+      -- Allow 'replace' (swap pages for pages of another PDF) in the undo history. SQLite can't
+      -- alter a CHECK constraint, so the table is rebuilt; nothing references it.
+      CREATE TABLE document_history_new (
+        id                TEXT PRIMARY KEY,
+        document_id       TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        kind              TEXT NOT NULL CHECK (kind IN ('insert', 'delete', 'replace', 'save')),
+        label             TEXT NOT NULL,
+        params            TEXT NOT NULL DEFAULT '{}',
+        snapshot          TEXT NOT NULL,
+        file_path         TEXT NOT NULL,
+        page_count_before INTEGER NOT NULL,
+        fingerprint_after TEXT NOT NULL,
+        created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      INSERT INTO document_history_new SELECT id, document_id, kind, label, params, snapshot, file_path,
+        page_count_before, fingerprint_after, created_at FROM document_history;
+      DROP TABLE document_history;
+      ALTER TABLE document_history_new RENAME TO document_history;
+      CREATE INDEX idx_document_history_document ON document_history(document_id, created_at);
+    `,
+  },
+  {
+    version: 5,
+    name: "history_ocr_kind",
+    up: `
+      -- Allow 'ocr' (adding an OCR text layer to pages) in the undo history; rebuilt like v4.
+      CREATE TABLE document_history_new (
+        id                TEXT PRIMARY KEY,
+        document_id       TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        kind              TEXT NOT NULL CHECK (kind IN ('insert', 'delete', 'replace', 'ocr', 'save')),
+        label             TEXT NOT NULL,
+        params            TEXT NOT NULL DEFAULT '{}',
+        snapshot          TEXT NOT NULL,
+        file_path         TEXT NOT NULL,
+        page_count_before INTEGER NOT NULL,
+        fingerprint_after TEXT NOT NULL,
+        created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      INSERT INTO document_history_new SELECT id, document_id, kind, label, params, snapshot, file_path,
+        page_count_before, fingerprint_after, created_at FROM document_history;
+      DROP TABLE document_history;
+      ALTER TABLE document_history_new RENAME TO document_history;
+      CREATE INDEX idx_document_history_document ON document_history(document_id, created_at);
+    `,
+  },
+  {
+    version: 6,
+    name: "bookmarks",
+    up: `
+      -- PDF bookmarks (the outline / table of contents). Imported once from the PDF's own outline
+      -- (outline_imported), edited in StudySpace, and written back into the file on "Save to PDF".
+      -- top: position on the page, 0 = top edge (normalised display coordinates); NULL = page start.
+      CREATE TABLE bookmarks (
+        id          TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        parent_id   TEXT REFERENCES bookmarks(id) ON DELETE CASCADE,
+        position    REAL NOT NULL DEFAULT 0,
+        title       TEXT NOT NULL CHECK (length(title) > 0),
+        page        INTEGER NOT NULL CHECK (page >= 1),
+        top         REAL,
+        created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      CREATE INDEX idx_bookmarks_document ON bookmarks(document_id, parent_id, position);
+      ALTER TABLE documents ADD COLUMN bookmarks_dirty INTEGER NOT NULL DEFAULT 0 CHECK (bookmarks_dirty IN (0, 1));
+      ALTER TABLE documents ADD COLUMN outline_imported INTEGER NOT NULL DEFAULT 0 CHECK (outline_imported IN (0, 1));
+    `,
+  },
+  {
+    version: 7,
+    name: "history_rotate_move_kinds",
+    up: `
+      -- Allow 'rotate' (turning pages) and 'move' (reordering pages) in the undo history; rebuilt like v4.
+      CREATE TABLE document_history_new (
+        id                TEXT PRIMARY KEY,
+        document_id       TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        kind              TEXT NOT NULL CHECK (kind IN ('insert', 'delete', 'replace', 'ocr', 'save', 'rotate', 'move')),
+        label             TEXT NOT NULL,
+        params            TEXT NOT NULL DEFAULT '{}',
+        snapshot          TEXT NOT NULL,
+        file_path         TEXT NOT NULL,
+        page_count_before INTEGER NOT NULL,
+        fingerprint_after TEXT NOT NULL,
+        created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      INSERT INTO document_history_new SELECT id, document_id, kind, label, params, snapshot, file_path,
+        page_count_before, fingerprint_after, created_at FROM document_history;
+      DROP TABLE document_history;
+      ALTER TABLE document_history_new RENAME TO document_history;
+      CREATE INDEX idx_document_history_document ON document_history(document_id, created_at);
+    `,
+  },
+];
