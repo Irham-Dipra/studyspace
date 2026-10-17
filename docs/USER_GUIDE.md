@@ -214,7 +214,7 @@ Empty groups are hidden. The number next to *Page resources* is how many items a
 - **Equations wider than the notes panel are shrunk to fit.** Very long ones that would get too small scroll sideways instead. Making the right panel wider shows them larger.
 - Math works inside table cells too, including absolute values like `$|x|$`.
 - Commands without delimiters are plain text: `3 \times 2` shows the words `\times`, because nothing marks it as math.
-- To write a literal dollar sign (a price), type `\$5`.
+- Prices like `$100` show as plain text, even with two of them in one sentence. If one is still read as math, type `\$5`.
 
 Use **Preview** to check how it looks.
 

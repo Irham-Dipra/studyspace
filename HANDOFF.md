@@ -396,6 +396,10 @@ docs/USER_GUIDE.md    detailed end-user instructions (sections 1–14)
       - PREFACE from the list with `T` gives pages 24–27; the empty p28 is dropped.
       - `Shift+U` OCR of 1.2.1 starts at its heading even though its stored top is wrong.
       - The PDF file is unchanged, with no page errors.
+25. **Prices no longer turn into math** (2026-10-18; user: "the account a to b part is merged. fix it").
+    - Bug: "transferring $100 from A … deducting $100" paired the two `$` into one formula, so the words between ran together in italics.
+    - `lib/math.ts` `escapeCurrency` (first step of `normalizeMath`): a `$` followed by a digit becomes `\$` unless its closing `$` touches the formula (no space before it) and isn't followed by a digit (Pandoc's rule). `$5$`, `$2x + 3 = 5$`, `$ x $`, `$$…$$`, `\(…\)` and `\$` are unchanged.
+    - Verified: sample cases through `normalizeMath`, and remark-math parses the result as plain text plus `$x^2$` as math; typecheck passes.
 
 Last verification (2026-10-13): 74 server tests pass, typecheck and build pass, and Playwright browser tests of the Page tools menu, page-number fields, replace + undo, open-by-default cards, the unsaved-work prompt, two-tab sync, display-math layout, heading colours get-text/OCR (with stub OCR binaries), bookmarks, and extract/split/merge/turn/move passed on scratch copies.
 
@@ -419,6 +423,7 @@ Last verification (2026-10-13): 74 server tests pass, typecheck and build pass, 
 
 - KaTeX CSS and the renderer must be the same version.
 - `.katex-display` needs padding, or `\boxed` gets clipped.
+- Money like `$100 … $100` is escaped by `escapeCurrency` in `lib/math.ts`, or remark-math pairs the dollars.
 
 **Browser testing**
 

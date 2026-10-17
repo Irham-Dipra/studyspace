@@ -26,7 +26,59 @@ const isTableRow = (line: string) => /^\s*\|/.test(line);
 /** Wraps formula text in single-dollar inline math, making any `\$` safe inside it. */
 const inlineMath = (m: string) => `$${m.trim().replace(/\\\$/g, "\\char36 ")}$`;
 
+/**
+ * Escapes dollar signs used as money ("$100 from A … deducting $100") so remark-math doesn't pair
+ * them into one formula and print the prose between them as run-together italics.
+ * Follows Pandoc's rule: a closing `$` must touch the formula (no space before it) and not be
+ * followed by a digit. Only openers followed by a digit are checked, so `$ x $` stays math.
+ * Display math and `\( … \)` / `\[ … \]` are skipped.
+ */
+export function escapeCurrency(text: string): string {
+  const skip = /\$\$[\s\S]+?\$\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|\\\$/g;
+  const parts = text.split(new RegExp(`(${skip.source})`, "g"));
+  return parts.map((part, i) => (i % 2 === 1 ? part : escapeCurrencyIn(part))).join("");
+}
+
+function escapeCurrencyIn(text: string): string {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    const at = text.indexOf("$", i);
+    if (at === -1) break;
+    out += text.slice(i, at);
+    if (!/\d/.test(text[at + 1] ?? "")) {
+      // Not money: keep a well-formed `$…$` pair as it is.
+      const close = findClose(text, at);
+      const end = close === -1 ? at + 1 : close + 1;
+      out += text.slice(at, end);
+      i = end;
+      continue;
+    }
+    const close = findClose(text, at);
+    const ok = close !== -1 && !/\s/.test(text[close - 1]) && !/\d/.test(text[close + 1] ?? "");
+    if (ok) {
+      out += text.slice(at, close + 1);
+      i = close + 1;
+    } else {
+      out += "\\$";
+      i = at + 1;
+    }
+  }
+  return out + text.slice(i);
+}
+
+/** Next unescaped `$` in the same paragraph, or -1. */
+function findClose(text: string, open: number): number {
+  for (let j = open + 1; j < text.length; j++) {
+    if (text[j] === "\\") j++;
+    else if (text[j] === "$") return j;
+    else if (text[j] === "\n" && /^\n[ \t]*\n/.test(text.slice(j))) return -1;
+  }
+  return -1;
+}
+
 function convertText(text: string): string {
+  text = escapeCurrency(text);
   const lines = text.split("\n");
   // Inside table rows everything must stay on one line: use inline math (display style for \[ \] and $$ $$).
   const tableFixed = lines.map((line) =>

@@ -144,6 +144,7 @@ Everything below is done and verified in the browser on scratch copies.
 16. Get text: **include my notes** (`I`), and **a bookmark's section**.
     - Keys: `Shift+E` for text, `Shift+U` for OCR, `4` in the window, `T`/`O` on a bookmark.
     - The section runs from the bookmark's heading to the next bookmark's heading, even mid-page.
+17. Prices like `$100` in notes stay plain text instead of being paired into one formula. Checked with sample text and remark-math; not yet looked at in the browser.
 
 ## Change log
 
@@ -168,6 +169,10 @@ Everything below is done and verified in the browser on scratch copies.
       - PREFACE drops the empty p28;
       - the OCR of 1.2.1 starts at its heading;
       - the file is unchanged.
+- **2026-10-18: prices in notes (item 17, HANDOFF 25).**
+  - `web/src/lib/math.ts`: new `escapeCurrency`, run first in `normalizeMath`. A `$` before a digit is escaped unless it forms a tight `$…$` pair (Pandoc's rule).
+  - User guide §5 and HANDOFF updated.
+  - Verified: typecheck passes; sample cases (the user's bank-transfer note, `$5$`, `$x$`, `$$…$$`, `\(\$5\)`, tables) give the right output, and remark-math parses the fixed text as plain text.
 
 ## Open questions for the user
 
