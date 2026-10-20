@@ -83,6 +83,8 @@ export interface Resource {
   title: string;
   content: string;
   url: string | null;
+  /** Colours picked for single headings, labels or marks (lib/rehypeNoteStyles): key → "#rrggbb" | "none". */
+  styles: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 }

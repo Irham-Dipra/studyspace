@@ -268,6 +268,7 @@ function copyNotes(db: DB, fromDoc: string, toDoc: string, map: Map<number, numb
       title: r.title,
       content: r.content,
       url: r.url,
+      styles: r.styles,
     });
     for (const h of highlights.filter((x) => x.resourceId === r.id)) {
       createNoteHighlight(db, copy.id, { color: h.color, quote: h.quote, prefix: h.prefix, suffix: h.suffix, comment: h.comment });

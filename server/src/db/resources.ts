@@ -10,6 +10,7 @@ interface Row {
   title: string;
   content: string;
   url: string | null;
+  styles: string;
   created_at: string;
   updated_at: string;
   page_start: number | null;
@@ -27,9 +28,19 @@ function map(r: Row): Resource {
     title: r.title,
     content: r.content,
     url: r.url,
+    styles: parseStyles(r.styles),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+}
+
+function parseStyles(raw: string): Record<string, string> {
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
 }
 
 const SELECT = `
@@ -49,6 +60,7 @@ export interface ResourceInput {
   title?: string;
   content?: string;
   url?: string | null;
+  styles?: Record<string, string>;
 }
 
 /** Normalises scope/page fields: a page scope has start == end, a range has start <= end, document has none. */
@@ -95,7 +107,7 @@ export function createResource(db: DB, documentId: string, input: ResourceInput)
   const id = input.id ?? randomUUID();
   if (input.id && getResource(db, input.id)) throw new Error("A resource with this id already exists");
   transaction(db, () => {
-    db.prepare("INSERT INTO resources (id, document_id, type, scope, title, content, url) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+    db.prepare("INSERT INTO resources (id, document_id, type, scope, title, content, url, styles) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(
       id,
       documentId,
       input.type,
@@ -103,6 +115,7 @@ export function createResource(db: DB, documentId: string, input: ResourceInput)
       input.title ?? "",
       input.content ?? "",
       input.url ?? null,
+      JSON.stringify(input.styles ?? {}),
     );
     if (scope.scope !== "document") {
       db.prepare("INSERT INTO resource_pages (resource_id, page_start, page_end) VALUES (?, ?, ?)").run(
@@ -126,7 +139,7 @@ export function updateResource(db: DB, id: string, patch: Partial<ResourceInput>
   });
   transaction(db, () => {
     db.prepare(
-      `UPDATE resources SET type = ?, scope = ?, title = ?, content = ?, url = ?,
+      `UPDATE resources SET type = ?, scope = ?, title = ?, content = ?, url = ?, styles = ?,
          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
        WHERE id = ?`,
     ).run(
@@ -135,6 +148,7 @@ export function updateResource(db: DB, id: string, patch: Partial<ResourceInput>
       patch.title ?? cur.title,
       patch.content ?? cur.content,
       patch.url !== undefined ? patch.url : cur.url,
+      JSON.stringify(patch.styles ?? cur.styles),
       id,
     );
     if (scopeChanged) setResourcePages(db, id, scope.pageStart, scope.pageEnd);

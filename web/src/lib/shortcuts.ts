@@ -82,6 +82,9 @@ export const SHORTCUTS = {
   selNote: s("Selected text & highlights", "Quote the selection / highlight into a new note", "N"),
   selCopy: s("Selected text & highlights", "Copy the selected text", "Ctrl+C"),
   selDelete: s("Selected text & highlights", "Delete the clicked highlight or drawing", "Delete"),
+  styleColour: s("Selected text & highlights", "Recolour a clicked heading, label or ==mark== in a note (colour 1–9)", "1–9"),
+  styleNone: s("Selected text & highlights", "…give it no colour", "0"),
+  styleDefault: s("Selected text & highlights", "…give it back its default colour", "Delete"),
 
   // Notes & bookmarks
   newNote: s("Notes & bookmarks", "New note for this page", "N"),

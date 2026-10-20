@@ -23,6 +23,9 @@ export const NOTE_COLORS: NoteColor[] = [
   { id: "mark", label: "Marked text (==text==)", sample: "highlighted in the PDF", default: "#ffd54f" },
 ];
 
+/** The colours offered when recolouring one heading, label or mark in a note (keys 1–9). */
+export const STYLE_COLORS = ["#fde047", "#fdba74", "#fda4af", "#f9a8d4", "#c4b5fd", "#93c5fd", "#67e8f9", "#86efac", "#d4d4d8"];
+
 const KEY = "ss-note-colors";
 export const cssVar = (id: string) => `--ss-note-${id}`;
 

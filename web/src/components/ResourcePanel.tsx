@@ -48,6 +48,7 @@ interface Props {
   onCreateNoteHighlight: (resourceId: string, anchor: Anchor, color: string) => Promise<NoteHighlight | undefined>;
   onUpdateNoteHighlight: (id: string, patch: { color?: string; comment?: string }) => void;
   onDeleteNoteHighlights: (ids: string[]) => void;
+  onSetNoteStyle: (resourceId: string, key: string, color: string | null) => void;
   editorRequest: EditorRequest | null;
   onEditorRequestHandled: () => void;
   /** Whether a note/resource form holds unsaved text (so the app can warn before leaving the PDF). */
@@ -155,7 +156,17 @@ export function ResourcePanel(props: Props) {
             {/* The toggle flows inline right after the last word of the title, even when it wraps. */}
             <h4 className="break-words text-sm font-semibold leading-snug">
               <button className="text-left hover:text-accent" onClick={() => toggle(r.id)} aria-expanded={open}>
-                <span className="ss-title-hl">{title}</span>
+                <span
+                  className="ss-title-hl"
+                  style={r.styles.title ? (styleObject(r.styles.title) as React.CSSProperties) : undefined}
+                  onContextMenu={(e) => {
+                    // A click opens or closes the card, so the title's colour menu is on right-click.
+                    e.preventDefault();
+                    setPopover({ kind: "style", x: e.clientX, y: e.clientY, resourceId: r.id, key: "title" });
+                  }}
+                >
+                  {title}
+                </span>
               </button>
               {hasBody && (
                 <button
@@ -226,6 +237,7 @@ export function ResourcePanel(props: Props) {
                 resourceId={r.id}
                 content={r.content}
                 highlights={highlightsByResource.get(r.id) ?? NO_HIGHLIGHTS}
+                styles={r.styles}
                 onPopover={setPopover}
                 onRemoveHighlights={props.onDeleteNoteHighlights}
               />
@@ -360,6 +372,8 @@ export function ResourcePanel(props: Props) {
           onCreate={props.onCreateNoteHighlight}
           onUpdate={props.onUpdateNoteHighlight}
           onDelete={(id) => props.onDeleteNoteHighlights([id])}
+          styleOf={(id, key) => props.resources.find((x) => x.id === id)?.styles[key]}
+          onStyle={props.onSetNoteStyle}
         />
       )}
     </div>
@@ -367,6 +381,9 @@ export function ResourcePanel(props: Props) {
 }
 
 const NO_HIGHLIGHTS: NoteHighlight[] = [];
+
+/** `--hl` for a picked title colour, as the note elements get it from rehypeNoteStyles. */
+const styleObject = (color: string) => ({ "--hl": color === "none" ? "transparent" : color });
 
 /** First non-empty line of Markdown content, stripped of quote/heading markers, for untitled cards. */
 function firstLine(content: string): string {

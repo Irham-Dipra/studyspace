@@ -92,6 +92,7 @@ export interface ResourceInput {
   title?: string;
   content?: string;
   url?: string | null;
+  styles?: Record<string, string>;
 }
 
 /** A folder inside the library where new PDFs can be saved. */

@@ -264,7 +264,14 @@ Use **Preview** to check how it looks.
 
 The levels are relative to the note. If a note only uses `###` and `####`, those are orange and cyan. Your own highlights inside notes are drawn on top of these colours.
 
-**Changing these colours.** Open **⚙ Settings** (`,`) and scroll to **Note colours**. Each kind (note title, the four heading levels, bullet header, bullet label, and `==marked==` text) has a sample, a colour picker and a box for a hex code like `#ff8800`. Notes change as you pick. The ↺ button beside a colour puts its default back; **Reset all** resets every one. The colours are kept in this browser, so the phone keeps its own; other open tabs follow at once.
+**Recolouring one heading or label.** Click any heading, bullet label, bullet header or `==marked==` text in a note. A colour menu opens, like the one for your own highlights:
+- click a colour (or press **1–9**), or the rainbow circle for any colour;
+- **No colour** (**0**) takes its highlighter colour away;
+- **Default** (**Del**) gives back the usual colour.
+
+For the **note title**, right-click it (a plain click opens or closes the card). The colour is saved with the note, so the phone sees it too, and it stays when you edit the note's text. If you change the heading's own words, it goes back to the default colour. **Ctrl+Z** undoes a recolour. Selecting text in a heading still gives the highlight bar.
+
+**Changing these colours everywhere.** Open **⚙ Settings** (`,`) and scroll to **Note colours**. Each kind (note title, the four heading levels, bullet header, bullet label, and `==marked==` text) has a sample, a colour picker and a box for a hex code like `#ff8800`. Notes change as you pick. The ↺ button beside a colour puts its default back; **Reset all** resets every one. The colours are kept in this browser, so the phone keeps its own; other open tabs follow at once.
 
 ### Editing, deleting, jumping
 
@@ -658,6 +665,9 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `N` | Quote the selection / highlight into a new note |
 | `Ctrl+C` | Copy the selected text |
 | `Del` | Delete the clicked highlight or drawing |
+| `1–9` | Recolour a clicked heading, label or ==mark== in a note (colour 1–9) |
+| `0` | …give it no colour |
+| `Del` | …give it back its default colour |
 
 **Notes & bookmarks**
 

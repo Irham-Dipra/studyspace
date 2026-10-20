@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Copy, Highlighter, MessageSquare, MessageSquarePlus, Trash2, X } from "lucide-react";
+import { Ban, Copy, Highlighter, MessageSquare, MessageSquarePlus, Palette, RotateCcw, Trash2, X } from "lucide-react";
 import { selectionToAnchor } from "../lib/noteAnchors";
+import { STYLE_COLORS } from "../lib/noteColors";
 import { copyText } from "../lib/pageImage";
 import { belowSelection, useTouchSelection } from "../lib/touchSelection";
 import { isTyping, matches } from "../lib/shortcuts";
@@ -14,12 +15,15 @@ export type Anchor = Pick<NoteHighlight, "quote" | "prefix" | "suffix">;
 /** What the floating UI is showing: a bar for a fresh selection, or the menu of an existing highlight. */
 export type NotePopover =
   | { kind: "selection"; x: number; y: number; resourceId: string; anchor: Anchor }
-  | { kind: "highlight"; x: number; y: number; highlightId: string; editComment?: boolean };
+  | { kind: "highlight"; x: number; y: number; highlightId: string; editComment?: boolean }
+  /** A heading, label or mark with a default colour (key from rehypeNoteStyles, or "title"). */
+  | { kind: "style"; x: number; y: number; resourceId: string; key: string };
 
 interface BodyProps {
   resourceId: string;
   content: string;
   highlights: NoteHighlight[];
+  styles?: Record<string, string>;
   onPopover: (p: NotePopover | null) => void;
   onRemoveHighlights: (ids: string[]) => void;
 }
@@ -28,7 +32,7 @@ interface BodyProps {
  * Rendered note content that can be annotated: select text to highlight/comment, click a highlight
  * to change it. Also lists the comments and reports highlights whose text was edited away.
  */
-export function NoteBody({ resourceId, content, highlights, onPopover, onRemoveHighlights }: BodyProps) {
+export function NoteBody({ resourceId, content, highlights, styles, onPopover, onRemoveHighlights }: BodyProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [missing, setMissing] = useState<string[]>([]);
 
@@ -53,7 +57,12 @@ export function NoteBody({ resourceId, content, highlights, onPopover, onRemoveH
         if (anchor) return onPopover({ kind: "selection", x: clientX, y: clientY, resourceId, anchor });
       }
       const mark = target.closest<HTMLElement>("[data-hl]");
-      if (mark?.dataset.hl) onPopover({ kind: "highlight", x: clientX, y: clientY, highlightId: mark.dataset.hl });
+      if (mark?.dataset.hl) return onPopover({ kind: "highlight", x: clientX, y: clientY, highlightId: mark.dataset.hl });
+      // A click on a heading or label with a default colour offers to recolour it (not on its links).
+      const styled = target.closest<HTMLElement>("[data-sk]");
+      if (styled?.dataset.sk && !target.closest("a") && el?.contains(styled)) {
+        onPopover({ kind: "style", x: clientX, y: clientY, resourceId, key: styled.dataset.sk });
+      }
     }, 0);
   };
 
@@ -67,7 +76,7 @@ export function NoteBody({ resourceId, content, highlights, onPopover, onRemoveH
   return (
     <div className="mt-2">
       <div ref={ref} onMouseUp={onMouseUp} data-note={resourceId}>
-        <Markdown highlights={highlights}>{content}</Markdown>
+        <Markdown highlights={highlights} styles={styles}>{content}</Markdown>
       </div>
 
       {commented.length > 0 && (
@@ -116,13 +125,16 @@ interface PopoverProps {
   onDelete: (id: string) => void;
   /** Offers "Note": the selected text into a new note (documents; inside a note it isn't offered). */
   onQuote?: (text: string) => void;
+  /** The colour picked for a note's heading/label/mark, and changing it (null = back to the default). */
+  styleOf?: (resourceId: string, key: string) => string | undefined;
+  onStyle?: (resourceId: string, key: string, color: string | null) => void;
 }
 
 /**
  * Floating bar for a text selection inside a note (or an HTML / Markdown document), or the menu of an
  * existing highlight there.
  */
-export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwitch, onCreate, onUpdate, onDelete, onQuote }: PopoverProps) {
+export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwitch, onCreate, onUpdate, onDelete, onQuote, styleOf, onStyle }: PopoverProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const highlight = popover.kind === "highlight" ? highlights.find((h) => h.id === popover.highlightId) : undefined;
   const [comment, setComment] = useState(highlight?.comment ?? "");
@@ -132,6 +144,12 @@ export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwi
     setComment(highlight?.comment ?? "");
     setEditing(popover.kind === "highlight" && !!popover.editComment);
   }, [popover, highlight?.comment]);
+
+  const restyle = (color: string | null) => {
+    if (popover.kind !== "style") return;
+    onStyle?.(popover.resourceId, popover.key, color);
+    onClose();
+  };
 
   const highlightWith = async (color: string) => {
     if (popover.kind !== "selection") return;
@@ -144,6 +162,13 @@ export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwi
   const keysRef = useRef<(e: KeyboardEvent) => boolean>(() => false);
   keysRef.current = (e: KeyboardEvent) => {
     if (editing || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return false;
+    if (popover.kind === "style") {
+      const n = /^(?:Digit|Numpad)([0-9])$/.exec(e.code)?.[1];
+      const pick = n === "0" ? "none" : n ? STYLE_COLORS[Number(n) - 1] : matches(e, "styleDefault") ? null : undefined;
+      if (pick === undefined) return false;
+      restyle(pick);
+      return true;
+    }
     const digit = /^(?:Digit|Numpad)([1-5])$/.exec(e.code);
     const color = digit ? HIGHLIGHT_COLORS[Number(digit[1]) - 1] : undefined;
     if (popover.kind === "selection") {
@@ -196,8 +221,9 @@ export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwi
   }, [onClose]);
 
   if (popover.kind === "highlight" && !highlight) return null;
+  if (popover.kind === "style" && !onStyle) return null;
 
-  const style = { left: Math.max(8, Math.min(popover.x - 20, window.innerWidth - 300)), top: Math.min(popover.y + 14, window.innerHeight - (editing ? 200 : 60)) };
+  const style = { left: Math.max(8, Math.min(popover.x - 20, window.innerWidth - (popover.kind === "style" ? 348 : 300))), top: Math.min(popover.y + 14, window.innerHeight - (editing ? 200 : 60)) };
   const swatches = (active: string | null, pick: (c: string) => void) =>
     HIGHLIGHT_COLORS.map((c) => (
       <button
@@ -214,9 +240,11 @@ export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwi
   };
 
   return (
-    <div ref={boxRef} className="fixed z-50 w-max max-w-[300px] rounded-lg border border-line bg-panel p-1 shadow-lg" style={style} onMouseDown={(e) => e.target === e.currentTarget && e.preventDefault()}>
+    <div ref={boxRef} className={cx("fixed z-50 w-max rounded-lg", popover.kind === "style" ? "max-w-[340px]" : "max-w-[300px]", "border border-line bg-panel p-1 shadow-lg")} style={style} onMouseDown={(e) => e.target === e.currentTarget && e.preventDefault()}>
       <div className="flex flex-wrap items-center gap-1">
-        {popover.kind === "selection" ? (
+        {popover.kind === "style" ? (
+          <StyleMenu current={styleOf?.(popover.resourceId, popover.key)} onPick={restyle} />
+        ) : popover.kind === "selection" ? (
           <>
             <Highlighter className="mx-1 size-4 shrink-0 text-ink-3" />
             {swatches(null, (c) => void highlightWith(c))}
@@ -301,6 +329,46 @@ export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwi
         </div>
       )}
     </div>
+  );
+}
+
+function StyleMenu({ current, onPick }: { current?: string; onPick: (color: string | null) => void }) {
+  return (
+    <>
+      <Palette className="mx-1 size-4 shrink-0 text-ink-3" />
+      {STYLE_COLORS.map((c, i) => (
+        <button
+          key={c}
+          title={`Colour ${i + 1}`}
+          className={cx("size-6 shrink-0 rounded-full border transition hover:scale-110", current === c ? "border-ink ring-2 ring-accent/40" : "border-black/10")}
+          style={{ background: c }}
+          onClick={() => onPick(c)}
+        />
+      ))}
+      <CustomColor value={current && current !== "none" ? current : "#fde047"} onPick={onPick} />
+      <div className="mx-1 h-5 w-px shrink-0 bg-line" />
+      <PopButton icon={<Ban className="size-4" />} label="No colour" onClick={() => onPick("none")} />
+      {current && <PopButton icon={<RotateCcw className="size-4" />} label="Default" onClick={() => onPick(null)} />}
+    </>
+  );
+}
+
+/** Any colour. It applies on the picker's `change` (when it closes), not on every step of a drag. */
+function CustomColor({ value, onPick }: { value: string; onPick: (color: string) => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const pickRef = useRef(onPick);
+  pickRef.current = onPick;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onChange = () => pickRef.current(el.value);
+    el.addEventListener("change", onChange);
+    return () => el.removeEventListener("change", onChange);
+  }, []);
+  return (
+    <label title="Any colour" className="relative size-6 shrink-0 cursor-pointer overflow-hidden rounded-full border border-black/10 bg-[conic-gradient(#f87171,#fde047,#86efac,#67e8f9,#93c5fd,#c4b5fd,#f9a8d4,#f87171)] transition hover:scale-110">
+      <input ref={ref} type="color" defaultValue={value} className="absolute inset-0 size-full cursor-pointer opacity-0" aria-label="Any colour" />
+    </label>
   );
 }
 

@@ -259,4 +259,13 @@ export const migrations: Migration[] = [
       ALTER TABLE reading_progress ADD COLUMN top REAL;
     `,
   },
+  {
+    version: 9,
+    name: "resource_styles",
+    up: `
+      -- Colours the user picked for single headings, labels or marks of a note, replacing their
+      -- default highlighter colour: JSON {"<element key>": "#rrggbb" | "none"} (see web rehypeNoteStyles).
+      ALTER TABLE resources ADD COLUMN styles TEXT NOT NULL DEFAULT '{}';
+    `,
+  },
 ];

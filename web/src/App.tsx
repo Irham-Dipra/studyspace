@@ -549,6 +549,7 @@ export default function App() {
     title: r.title,
     content: r.content,
     url: r.url,
+    styles: r.styles,
   });
   const resourceWord = (t: ResourceInput["type"]) => (t === "note" ? "note" : "resource");
 
@@ -590,6 +591,30 @@ export default function App() {
         },
       });
     }
+  };
+
+  /** Colour one heading, label or mark of a note (`key` from rehypeNoteStyles); null = its default. */
+  const setNoteStyle = (id: string, key: string, color: string | null) => {
+    const before = resources.find((x) => x.id === id);
+    if (!doc || !before) return;
+    const docId = doc.id;
+    const styles = { ...before.styles };
+    if (color === null) delete styles[key];
+    else styles[key] = color;
+    api.updateResource(id, { styles }).then((r) => {
+      setResources((rs) => rs.map((x) => (x.id === id ? r : x)));
+      history.push(docId, {
+        label: "Change colour in note",
+        undo: async () => {
+          await api.updateResource(id, { styles: before.styles });
+          await reloadDocData(docId);
+        },
+        redo: async () => {
+          await api.updateResource(id, { styles });
+          await reloadDocData(docId);
+        },
+      });
+    }, toastError);
   };
 
   const deleteResource = async (id: string) => {
@@ -1445,6 +1470,7 @@ export default function App() {
       onCreateNoteHighlight={createNoteHighlight}
       onUpdateNoteHighlight={updateNoteHighlight}
       onDeleteNoteHighlights={deleteNoteHighlights}
+      onSetNoteStyle={setNoteStyle}
       editorRequest={editorRequest}
       onEditorRequestHandled={clearEditorRequest}
       onDraftChange={setNoteDraft}

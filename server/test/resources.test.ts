@@ -157,3 +157,24 @@ describe("highlights inside notes", () => {
     expect(list.find((x: { id: string }) => x.id === h.id)).toBeUndefined();
   });
 });
+
+describe("note colours", () => {
+  it("keeps colours picked for single elements, and leaves them alone on other edits", async () => {
+    const created = await request(ctx.app)
+      .post(`/api/documents/${docId}/resources`)
+      .send({ type: "note", scope: "document", content: "# A", styles: { "h:A": "#ff0000" } })
+      .expect(201);
+    expect(created.body.styles).toEqual({ "h:A": "#ff0000" });
+    const id = created.body.id;
+
+    const edited = await request(ctx.app).patch(`/api/resources/${id}`).send({ content: "# A\n\nmore" }).expect(200);
+    expect(edited.body.styles).toEqual({ "h:A": "#ff0000" });
+
+    const recoloured = await request(ctx.app).patch(`/api/resources/${id}`).send({ styles: { title: "none" } }).expect(200);
+    expect(recoloured.body.styles).toEqual({ title: "none" });
+
+    await request(ctx.app).patch(`/api/resources/${id}`).send({ styles: { "h:A": "red" } }).expect(400);
+    const plain = await request(ctx.app).post(`/api/documents/${docId}/resources`).send({ type: "note", scope: "document" }).expect(201);
+    expect(plain.body.styles).toEqual({});
+  });
+});

@@ -224,7 +224,8 @@ body {
 
 /* ==text== in notes: passages highlighted in the PDF, kept by "Get text" */
 .ss-pdf-hl {
-  background: color-mix(in srgb, var(--ss-note-mark) 55%, transparent);
+  --hl: var(--ss-note-mark);
+  background: color-mix(in srgb, var(--hl) 55%, transparent);
   color: inherit;
   border-radius: 2px;
   padding: 0 1px;
@@ -232,7 +233,7 @@ body {
   -webkit-box-decoration-break: clone;
 }
 .dark .ss-pdf-hl {
-  background: color-mix(in srgb, var(--ss-note-mark) 30%, transparent);
+  background: color-mix(in srgb, var(--hl) 30%, transparent);
 }
 
 /* Highlights inside notes */

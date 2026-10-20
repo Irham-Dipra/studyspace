@@ -6,6 +6,7 @@ import rehypeKatex from "rehype-katex";
 import { normalizeMath } from "../lib/math";
 import { rehypeNoteStructure } from "../lib/rehypeNoteStructure";
 import { rehypeNoteHighlights } from "../lib/rehypeNoteHighlights";
+import { rehypeNoteStyles, type NoteStyles } from "../lib/rehypeNoteStyles";
 import { rehypePdfMarks } from "../lib/rehypePdfMarks";
 import { rehypeBreaks } from "../lib/rehypeBreaks";
 import { repairTables } from "../lib/tableRepair";
@@ -46,6 +47,8 @@ interface Props {
   highlights?: TextAnchoredHighlight[];
   /** Notes get their headings and lead-ins coloured (rehypeNoteStructure); whole documents don't. */
   structure?: boolean;
+  /** Colours the user picked for single headings, labels or marks (rehypeNoteStyles); notes only. */
+  styles?: NoteStyles;
   /** Where a picture next to the file is loaded from (Markdown documents); notes have none. */
   assetUrl?: (src: string) => string;
 }
@@ -56,17 +59,17 @@ interface Props {
  * copied from Gemini, are mended first (repairTables). `highlights` are drawn as <mark>s over the
  * rendered text.
  */
-export const Markdown = memo(function Markdown({ children, highlights = NO_HIGHLIGHTS, structure = true, assetUrl }: Props) {
+export const Markdown = memo(function Markdown({ children, highlights = NO_HIGHLIGHTS, structure = true, styles, assetUrl }: Props) {
   const rehypePlugins = useMemo(
     () =>
       [
         rehypeBreaks,
         rehypePdfMarks,
         [rehypeKatex, { throwOnError: false, strict: "ignore" }],
-        ...(structure ? [rehypeNoteStructure] : []),
+        ...(structure ? [rehypeNoteStructure, [rehypeNoteStyles, { styles }]] : []),
         [rehypeNoteHighlights, { highlights }],
       ] as Parameters<typeof ReactMarkdown>[0]["rehypePlugins"],
-    [highlights, structure],
+    [highlights, structure, styles],
   );
   const components = useMemo<Parameters<typeof ReactMarkdown>[0]["components"]>(
     () => ({

@@ -3,7 +3,7 @@
 StudySpace is a local-first PDF study app: library on the left, PDF viewer in the middle, notes on the right.
 It reads the user's course PDFs in place from `/home/dipra/Buet/3-1` and works fully offline.
 
-Status as of **2026-10-21**. All work up to item 28 is committed. Other docs:
+Status as of **2026-10-21**. All work up to item 29 is committed. Other docs:
 - [HANDOFF.md](HANDOFF.md): the long version, with the detailed history of every feature and the problems already solved.
 - [README.md](README.md): setup, configuration, the HTTP API and the schema.
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md): every feature, explained for the user.
@@ -24,7 +24,7 @@ After **any** work in this project, before reporting back:
 export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"   # needed in every shell (Node 24 via nvm)
 npm run dev          # server http://127.0.0.1:4317, UI http://localhost:5173 (server: tsx watch)
 npm run typecheck    # server + web
-npm test             # server tests (vitest): 101 passing
+npm test             # server tests (vitest): 102 passing
 npm run build        # web/dist + server/dist; `npm start` serves the built app on 4317
                      # the dev server on 4317 also serves web/dist; the user works on 5173
 ```
@@ -72,7 +72,7 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. I
 | `auth.ts` | Who may use it: this computer always; other devices (phone over Wi-Fi or `tailscale serve`) log in with `STUDYSPACE_PASSWORD` (session cookie). Host allowlist, `X-StudySpace` header on writes, folder routes local-only. |
 | `types.ts` | Shared server types. |
 | `db/index.ts` | `openDatabase`, the `transaction` helper and `runMigrations`. Migrations are transactional and recorded; it refuses a DB that is newer than the code. |
-| `db/migrations.ts` | Schema v1–v8 (see the table below). Add a new version for any schema change; never edit an old one. |
+| `db/migrations.ts` | Schema v1–v9 (see the table below). Add a new version for any schema change; never edit an old one. |
 | `db/*.ts` | CRUD per table: `directories`, `documents`, `resources`, `annotations`, `progress`, `noteHighlights`, `documentHighlights`, `bookmarks` (tree, cycle check, outline import), `sessions`. Create functions accept a client-supplied `id`, so undo/redo can re-create rows with the same id. |
 | `library/fingerprint.ts` | Document identity: `v1:` + sha256(size + first and last 256 KiB). Moved or renamed files keep their data. |
 | `library/fileKinds.ts` | Which files the library shows: PDFs, slides (`.pptx`, `.ppt`), HTML (`.html`, `.htm`) and Markdown (`.md`); `DocumentRecord.kind` comes from the extension. `isPaged` (pdf, slides), `canEditFile` (pdf). |
@@ -93,6 +93,7 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. I
 - `directories`, `documents`, `resources` (notes of 5 kinds, scoped to a page, a range or the document), `annotations` (highlight, area, ink), `reading_progress`.
 - `document_history` (file-edit undo), `note_highlights`, `bookmarks` (tree via `parent_id`, `position` REAL, `top` on the page), `schema_migrations`.
 - v8: `document_highlights` (text highlights on HTML/Markdown, quote + context), `sessions` (other devices' logins, token hashes), `reading_progress.top` (how far down a document without pages).
+- v9: `resources.styles` (JSON: colours picked for single headings, labels or marks of a note; key from `rehypeNoteStyles`).
 
 **Tests:** `server/test/*.test.ts` (vitest), with temp dirs and generated PDFs from `helpers.ts`. OCR and slides tests use stub binaries (`ocrmypdf`/`tesseract`, `soffice`).
 
@@ -117,7 +118,8 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. I
 | `lib/tableRepair.ts` | Mends tables whose rows were broken over several lines (Gemini's copy), before rendering. |
 | `lib/math.ts`, `lib/noteAnchors.ts`, `lib/rehype*.ts` | Note rendering: LaTeX clean-up, money `$` escaping, highlights inside notes (a formula counts as `$tex$` in the anchor text), heading colours, `==mark==` rendering. |
 | `lib/pasteClean.ts` | Cleans an AI answer pasted into a note: cut before `@@START@@`, drop `[cite: n]`. |
-| `lib/noteColors.ts` | The notes' default highlighter colours (title, headings, bullet labels, `==marks==`): `NOTE_COLORS`, saved per browser in `localStorage` and applied as `--ss-note-*` variables on `<html>`; edited in Settings. |
+| `lib/noteColors.ts` | The notes' default highlighter colours (title, headings, bullet labels, `==marks==`): `NOTE_COLORS`, saved per browser in `localStorage` and applied as `--ss-note-*` variables on `<html>`; edited in Settings. `STYLE_COLORS`: the recolour menu's swatches. |
+| `lib/rehypeNoteStyles.ts` | Keys every default-coloured element of a note (`data-sk` = kind + text + `#n`) and applies the colour picked for it (`resources.styles`, `--hl`). Clicking one opens the `style` popover in `NoteAnnotations`. |
 | `components/viewer/` | `PdfViewer` (virtualized pages, current page, selection bars), `PdfPage`, `AnnotationOverlay` (draw, highlight, two-click boxes), `ViewerToolbar` (tools, colours, Page tools menu; by `kind`), `TextDocViewer` (HTML in a sandboxed frame, Markdown rendered; text highlights), `geometry.ts`. |
 | `components/ResourcePanel.tsx`, `ResourceEditor.tsx`, `NoteAnnotations.tsx`, `Markdown.tsx` | The notes column, the Markdown/KaTeX editor, and highlights or comments inside notes. |
 | `components/BookmarksPanel.tsx`, `LibraryPanel.tsx`, `SearchBox.tsx`, `StatusBar.tsx` | The left column, search and the status bar. |
@@ -174,6 +176,7 @@ Everything below is done and verified in the browser on scratch copies.
 25. Use it from a phone: password login for other devices, Wi-Fi (`STUDYSPACE_HOST=0.0.0.0`) or Tailscale (`tailscale serve`), works on plain http, touch selection, phone layout fixes, home-screen icon. Tested with Chromium's iPhone profile over the LAN address; Tailscale itself not tested (not installed here). No pinch-zoom yet.
 26. HTML pages (Claude artifacts) and Markdown files in the library: read, highlight, comment, quote into notes (undoable); HTML runs in a sandboxed frame. Read-only. An artifact can't use browser storage inside StudySpace. Tested in Chromium only.
 27. Tables copied from Gemini (rows broken over several lines, `<br>` in cells) render as tables in notes and Markdown files; note tables scroll sideways instead of breaking words. Checked with the user's pasted answer, in Chromium.
+29. Click a heading, bullet label or `==mark==` in a note to recolour just that one (menu like the highlight bar, keys 1–9 / 0 / Del; right-click the note title). Saved with the note (v9 `resources.styles`), undoable. Tested in Chromium only.
 28. Change the notes' default highlighter colours (title, heading levels, bullet header and label, `==marks==`) in Settings → Note colours; per browser, reset per colour or all. Tested in Chromium only.
 
 ## Change log
@@ -254,6 +257,10 @@ Everything below is done and verified in the browser on scratch copies.
   - New: `web/src/lib/noteColors.ts`. Changed: `index.css` (`--ss-note-*` variables), `main.tsx` (`installNoteColors`), `components/SettingsDialog.tsx` (`NoteColorsSection`, `ColorRow`, `Sample`), `lib/shortcuts.ts` (`,` label).
   - Docs: user guide §3, §5, §12; HANDOFF 36.
   - Verified: typecheck; build (rebuilt `web/dist`); Chromium on scratch 4399/5199 with a seeded note: live recolour, kept after reload, *Reset all* followed by a second tab. Real PDFs untouched by testing (the CSE 313/317 changes at 00:47 and 02:32 are the user's own, in their history).
+- **2026-10-21: recolour one element in a note (item 29, HANDOFF 37).** The user meant per-element colours, not (only) Settings.
+  - New: `web/src/lib/rehypeNoteStyles.ts`. Server: migration v9, `types.ts`, `db/resources.ts`, `app.ts` (`styles`), `pdfTools.ts`, `test/resources.test.ts`. Web: `lib/types.ts`, `lib/api.ts`, `lib/noteColors.ts` (`STYLE_COLORS`), `lib/shortcuts.ts` (`styleColour`, `styleNone`, `styleDefault`), `Markdown.tsx` (`styles`), `NoteAnnotations.tsx` (`style` popover, `StyleMenu`, `CustomColor`), `ResourcePanel.tsx` (title right-click, `onSetNoteStyle`), `App.tsx` (`setNoteStyle`, `resourceFields`), `index.css` (`.ss-pdf-hl` own `--hl`).
+  - Docs: user guide §5, §12; README (schema, API); HANDOFF 37.
+  - Verified: typecheck; 102 tests; build; Chromium on scratch 4399/5199 (see HANDOFF 37). Migration v9 is additive; the user's server picked it up on save and still answers. Real PDFs: only the user's own Save to PDF (PAC - 2 - pdf.pdf, 02:56, in its history).
 
 ## Open questions for the user
 

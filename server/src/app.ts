@@ -77,6 +77,10 @@ const resourceCreate = z.object({
   title: z.string().max(500).optional(),
   content: z.string().max(1_000_000).optional(),
   url: z.string().url().max(4000).nullish().or(z.literal("").transform(() => null)),
+  styles: z
+    .record(z.string().min(1).max(300), color.or(z.literal("none")))
+    .refine((o) => Object.keys(o).length <= 1000, "Too many colours")
+    .optional(),
 });
 const resourcePatch = resourceCreate.omit({ id: true }).partial();
 

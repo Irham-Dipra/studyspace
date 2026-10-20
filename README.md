@@ -164,7 +164,7 @@ In the browser, a per-document undo stack also covers notes and annotations. Del
 
 ### Database schema
 
-`schema_migrations`, `directories`, `documents`, `resources`, `resource_pages`, `annotations`, `reading_progress` (with `top` for documents without pages), `document_history`, `note_highlights`, `bookmarks`, `document_highlights` (text highlights on HTML / Markdown), `sessions` (other devices' logins). Migrations live in `server/src/db/migrations.ts`:
+`schema_migrations`, `directories`, `documents`, `resources` (with `styles`, colours picked for single headings or labels), `resource_pages`, `annotations`, `reading_progress` (with `top` for documents without pages), `document_history`, `note_highlights`, `bookmarks`, `document_highlights` (text highlights on HTML / Markdown), `sessions` (other devices' logins). Migrations live in `server/src/db/migrations.ts`:
 - They are append-only and applied in order.
 - Each runs in its own transaction and is rolled back completely on failure.
 - The server refuses to open a database created by a newer version.
@@ -205,7 +205,7 @@ All endpoints live under `/api`.
 
 **Resources**
 - `GET /documents/:id/resources[?page=N]`, `POST /documents/:id/resources`
-- `GET|PATCH|DELETE /resources/:id`
+- `GET|PATCH|DELETE /resources/:id` (body may carry `styles`: `{ "<element key>": "#rrggbb" | "none" }`)
 
 **Highlights inside notes**
 - `GET /documents/:id/note-highlights`, `POST /resources/:id/highlights` `{ color, quote, prefix, suffix, comment }`
