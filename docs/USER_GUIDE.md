@@ -115,7 +115,7 @@ Open as many StudySpace tabs as you like, each with its own PDF.
 
 For each existing folder you can rename its label, edit its excludes (then click **Save**), untick **Enabled** to hide it temporarily, or remove it. Removing a folder never deletes files, and its notes come back if you add it again.
 
-Settings also shows where the database lives and whether AI is configured.
+Settings also has **Note colours** (see §5, *Changing these colours*) and shows where the database lives and whether AI is configured.
 
 ---
 
@@ -263,6 +263,8 @@ Use **Preview** to check how it looks.
 - a bullet that is only a label, like `- **Deductive Learning:**`, heads the points under it and is **rose**. When the points were pasted at the same level as the header (AI answers often lose the indentation), the bullets after it, up to the next such header, are shown indented under it.
 
 The levels are relative to the note. If a note only uses `###` and `####`, those are orange and cyan. Your own highlights inside notes are drawn on top of these colours.
+
+**Changing these colours.** Open **⚙ Settings** (`,`) and scroll to **Note colours**. Each kind (note title, the four heading levels, bullet header, bullet label, and `==marked==` text) has a sample, a colour picker and a box for a hex code like `#ff8800`. Notes change as you pick. The ↺ button beside a colour puts its default back; **Reset all** resets every one. The colours are kept in this browser, so the phone keeps its own; other open tabs follow at once.
 
 ### Editing, deleting, jumping
 
@@ -603,7 +605,7 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `Ctrl+Shift+Z` / `Ctrl+Y` | Redo |
 | `Ctrl+S` | Save highlights, drawings & bookmarks into the PDF |
 | `Shift+D` | Dark / light mode |
-| `,` | Settings (study folders) |
+| `,` | Settings (study folders, note colours) |
 | `Shift+L` | Rescan the library folders |
 
 **Panels**

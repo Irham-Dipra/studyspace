@@ -41,7 +41,7 @@ export const SHORTCUTS = {
   redo: s("General", "Redo", "Ctrl+Shift+Z", "Ctrl+Y"),
   save: s("General", "Save highlights, drawings & bookmarks into the PDF", "Ctrl+S"),
   theme: s("General", "Dark / light mode", "Shift+D"),
-  settings: s("General", "Settings (study folders)", ","),
+  settings: s("General", "Settings (study folders, note colours)", ","),
   rescan: s("General", "Rescan the library folders", "Shift+L"),
 
   // Panels

@@ -21,6 +21,15 @@
   --ss-viewer: #e6e8ec;
   --ss-danger: #dc2626;
   --ss-warn: #b45309;
+  /* Default highlighter colours in notes; Settings → Note colours overrides them (lib/noteColors.ts). */
+  --ss-note-title: #f9a8d4;
+  --ss-note-h1: #fdba74;
+  --ss-note-h2: #67e8f9; /* cyan: not one of the highlighter colours, so it never looks like a yellow highlight */
+  --ss-note-h3: #86efac;
+  --ss-note-h4: #93c5fd;
+  --ss-note-group: #fda4af;
+  --ss-note-lead: #c4b5fd;
+  --ss-note-mark: #ffd54f;
   color-scheme: light;
 }
 
@@ -133,7 +142,7 @@ body {
 .ss-md [data-level],
 .ss-md [data-lead],
 .ss-md [data-group] {
-  --hl: #f9a8d4;
+  --hl: var(--ss-note-title);
   background: color-mix(in srgb, var(--hl) 55%, transparent);
   border-radius: 3px;
   padding: 0.05em 0.3em;
@@ -145,18 +154,18 @@ body {
   width: fit-content;
   max-width: 100%;
 }
-.ss-md [data-level="1"] { --hl: #fdba74; }
-.ss-md [data-level="2"] { --hl: #67e8f9; } /* cyan: not one of the highlighter colours, so it never looks like a yellow highlight */
-.ss-md [data-level="3"] { --hl: #86efac; }
-.ss-md [data-lead] { --hl: #c4b5fd; padding: 0.05em 0.25em; }
+.ss-md [data-level="1"] { --hl: var(--ss-note-h1); }
+.ss-md [data-level="2"] { --hl: var(--ss-note-h2); }
+.ss-md [data-level="3"] { --hl: var(--ss-note-h3); }
+.ss-md [data-lead] { --hl: var(--ss-note-lead); padding: 0.05em 0.25em; }
 /* A bullet heading the points under it ("- **Deductive Learning:**"): rose, a step above the violet labels. */
-.ss-md [data-group] { --hl: #fda4af; padding: 0.05em 0.3em; font-weight: 700; }
+.ss-md [data-group] { --hl: var(--ss-note-group); padding: 0.05em 0.3em; font-weight: 700; }
 /* A plain "Label:" that lost its bold (AI answers) looks like a bold one. */
 .ss-md span[data-lead] { font-weight: 600; }
 .ss-md [data-lead="2"] { background: color-mix(in srgb, var(--hl) 35%, transparent); }
 .ss-md [data-level="4"],
 .ss-md [data-level="5"],
-.ss-md [data-level="6"] { --hl: #93c5fd; }
+.ss-md [data-level="6"] { --hl: var(--ss-note-h4); }
 .dark .ss-title-hl,
 .dark .ss-md [data-level],
 .dark .ss-md [data-lead="1"],
@@ -215,7 +224,7 @@ body {
 
 /* ==text== in notes: passages highlighted in the PDF, kept by "Get text" */
 .ss-pdf-hl {
-  background: color-mix(in srgb, #ffd54f 55%, transparent);
+  background: color-mix(in srgb, var(--ss-note-mark) 55%, transparent);
   color: inherit;
   border-radius: 2px;
   padding: 0 1px;
@@ -223,7 +232,7 @@ body {
   -webkit-box-decoration-break: clone;
 }
 .dark .ss-pdf-hl {
-  background: color-mix(in srgb, #ffd54f 30%, transparent);
+  background: color-mix(in srgb, var(--ss-note-mark) 30%, transparent);
 }
 
 /* Highlights inside notes */

@@ -3,7 +3,7 @@
 StudySpace is a local-first PDF study app: library on the left, PDF viewer in the middle, notes on the right.
 It reads the user's course PDFs in place from `/home/dipra/Buet/3-1` and works fully offline.
 
-Status as of **2026-10-20**. Work since the last commit (items 17–26) is not committed yet. Other docs:
+Status as of **2026-10-21**. All work up to item 28 is committed. Other docs:
 - [HANDOFF.md](HANDOFF.md): the long version, with the detailed history of every feature and the problems already solved.
 - [README.md](README.md): setup, configuration, the HTTP API and the schema.
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md): every feature, explained for the user.
@@ -117,11 +117,12 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. I
 | `lib/tableRepair.ts` | Mends tables whose rows were broken over several lines (Gemini's copy), before rendering. |
 | `lib/math.ts`, `lib/noteAnchors.ts`, `lib/rehype*.ts` | Note rendering: LaTeX clean-up, money `$` escaping, highlights inside notes (a formula counts as `$tex$` in the anchor text), heading colours, `==mark==` rendering. |
 | `lib/pasteClean.ts` | Cleans an AI answer pasted into a note: cut before `@@START@@`, drop `[cite: n]`. |
+| `lib/noteColors.ts` | The notes' default highlighter colours (title, headings, bullet labels, `==marks==`): `NOTE_COLORS`, saved per browser in `localStorage` and applied as `--ss-note-*` variables on `<html>`; edited in Settings. |
 | `components/viewer/` | `PdfViewer` (virtualized pages, current page, selection bars), `PdfPage`, `AnnotationOverlay` (draw, highlight, two-click boxes), `ViewerToolbar` (tools, colours, Page tools menu; by `kind`), `TextDocViewer` (HTML in a sandboxed frame, Markdown rendered; text highlights), `geometry.ts`. |
 | `components/ResourcePanel.tsx`, `ResourceEditor.tsx`, `NoteAnnotations.tsx`, `Markdown.tsx` | The notes column, the Markdown/KaTeX editor, and highlights or comments inside notes. |
 | `components/BookmarksPanel.tsx`, `LibraryPanel.tsx`, `SearchBox.tsx`, `StatusBar.tsx` | The left column, search and the status bar. |
 | `components/LoginScreen.tsx` | `AuthGate`: the password screen for other devices. |
-| `components/*Dialog.tsx` | `GetTextDialog` (get text / OCR / bookmark sections / notes), `PageOpsDialog` (page edits), `PdfToolsDialog` (extract/split/merge), `PageImagesDialog`, `PageHalvesDialog`, `HelpDialog` (generated from the shortcuts), `SettingsDialog`, `UnsavedDialog`. |
+| `components/*Dialog.tsx` | `GetTextDialog` (get text / OCR / bookmark sections / notes), `PageOpsDialog` (page edits), `PdfToolsDialog` (extract/split/merge), `PageImagesDialog`, `PageHalvesDialog`, `HelpDialog` (generated from the shortcuts), `SettingsDialog` (folders, note colours), `UnsavedDialog`. |
 | `components/SnipOverlay.tsx`, `ui.tsx`, `index.css` | The window-screenshot overlay; shared UI (`Modal`, `Button`, `NumberInput`, `Kbd`, `KeyHint`, toasts); theme tokens and dark mode. |
 
 ### Conventions
@@ -135,6 +136,7 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. I
 - **Phones.** The app also runs on plain http (Wi-Fi): never call `crypto.randomUUID` (use `uuid()`), and say why copying fails (`copyText`). Anything that opens on mouseup also needs `useTouchSelection`, and hover-only buttons need `[@media(hover:none)]:flex`.
 - **Kinds.** Check `isPaged` / `canEditFile`, not `kind === "slides"`: HTML and Markdown have no pages.
 - **Coordinates.** Annotations and bookmark `top`s are normalized display coordinates: 0..1 from the top-left of the page as shown.
+- **Note colours.** The default note colours live in `index.css` as `--ss-note-*` on `:root`; a new kind needs a variable there and an entry in `NOTE_COLORS`.
 - **Style.** Comments are short and explain *why*. UI text is plain, short English.
 - **Dependencies.** Pin exact versions. Keep `katex` at ~0.16.47 to match rehype-katex.
 - **Avoid.** Components defined inside render functions. A controlled `<input type="number">`: use `NumberInput`. Dropdowns inside scrolling bars must use `position: fixed`.
@@ -172,6 +174,7 @@ Everything below is done and verified in the browser on scratch copies.
 25. Use it from a phone: password login for other devices, Wi-Fi (`STUDYSPACE_HOST=0.0.0.0`) or Tailscale (`tailscale serve`), works on plain http, touch selection, phone layout fixes, home-screen icon. Tested with Chromium's iPhone profile over the LAN address; Tailscale itself not tested (not installed here). No pinch-zoom yet.
 26. HTML pages (Claude artifacts) and Markdown files in the library: read, highlight, comment, quote into notes (undoable); HTML runs in a sandboxed frame. Read-only. An artifact can't use browser storage inside StudySpace. Tested in Chromium only.
 27. Tables copied from Gemini (rows broken over several lines, `<br>` in cells) render as tables in notes and Markdown files; note tables scroll sideways instead of breaking words. Checked with the user's pasted answer, in Chromium.
+28. Change the notes' default highlighter colours (title, heading levels, bullet header and label, `==marks==`) in Settings → Note colours; per browser, reset per colour or all. Tested in Chromium only.
 
 ## Change log
 
@@ -246,6 +249,11 @@ Everything below is done and verified in the browser on scratch copies.
   - New: `web/src/lib/tableRepair.ts`, `web/src/lib/rehypeBreaks.ts`. Changed: `components/Markdown.tsx` (runs both), `index.css` (`.ss-md table`, cells).
   - Docs: user guide §5; HANDOFF 35. Also `docs/PHONE_SETUP.md`: a row for "Tailscale works but Wi-Fi doesn't".
   - Verified: typecheck; the user's answer rendered with react-markdown (7 rows, 6 breaks) plus cases that must not change; Chromium screenshot on scratch 4399. Rebuilt `web/dist`.
+- **2026-10-21:** committed items 17–27 (`201f684`).
+- **2026-10-21: note colours (item 28, HANDOFF 36).**
+  - New: `web/src/lib/noteColors.ts`. Changed: `index.css` (`--ss-note-*` variables), `main.tsx` (`installNoteColors`), `components/SettingsDialog.tsx` (`NoteColorsSection`, `ColorRow`, `Sample`), `lib/shortcuts.ts` (`,` label).
+  - Docs: user guide §3, §5, §12; HANDOFF 36.
+  - Verified: typecheck; build (rebuilt `web/dist`); Chromium on scratch 4399/5199 with a seeded note: live recolour, kept after reload, *Reset all* followed by a second tab. Real PDFs untouched by testing (the CSE 313/317 changes at 00:47 and 02:32 are the user's own, in their history).
 
 ## Open questions for the user
 

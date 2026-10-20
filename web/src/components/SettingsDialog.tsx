@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { ArrowUp, Bot, Database, Folder, FolderPlus, Loader2, LogOut, Trash2 } from "lucide-react";
+import { ArrowUp, Bot, Database, Folder, FolderPlus, Loader2, LogOut, RotateCcw, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
+import { NOTE_COLORS, isHex, loadNoteColors, saveNoteColors, type NoteColor, type NoteColorMap } from "../lib/noteColors";
 import type { AppConfigInfo, Directory } from "../lib/types";
 import { Button, Field, IconButton, Modal, cx, inputCls } from "./ui";
 
@@ -55,6 +56,7 @@ export function SettingsDialog({ directories, config, onClose, onChanged, onErro
           </ul>
           <p className="mt-2 text-xs text-ink-3">Folders can be added or changed on the computer itself.</p>
         </section>
+        <NoteColorsSection />
         <section className="mt-5 border-t border-line pt-4">
           <Button onClick={() => void logout()}>
             <LogOut className="size-4" /> Log out of this device
@@ -140,6 +142,8 @@ export function SettingsDialog({ directories, config, onClose, onChanged, onErro
         </div>
       </section>
 
+      <NoteColorsSection />
+
       {config && (
         <section className="mt-5 grid gap-3 sm:grid-cols-2">
           <div className="rounded-lg bg-subtle p-3 text-xs">
@@ -208,6 +212,91 @@ function DirectoryRow({ dir, onChanged, onError }: { dir: Directory; onChanged: 
           <Button size="sm" variant="danger" disabled={busy} onClick={() => run(() => api.deleteDirectory(dir.id), "Folder removed")}>Remove</Button>
         </div>
       )}
+    </li>
+  );
+}
+
+function NoteColorsSection() {
+  const [colors, setColors] = useState<NoteColorMap>(loadNoteColors);
+  const set = (id: string, value: string | null) => {
+    const next = { ...colors };
+    if (value === null) delete next[id];
+    else next[id] = value.toLowerCase();
+    setColors(next);
+    saveNoteColors(next);
+  };
+  const changed = Object.keys(colors).length > 0;
+
+  return (
+    <section className="mt-5 border-t border-line pt-4">
+      <div className="mb-2 flex items-center gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-3">Note colours</h3>
+        {changed && (
+          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => { setColors({}); saveNoteColors({}); }}>
+            <RotateCcw className="size-3.5" /> Reset all
+          </Button>
+        )}
+      </div>
+      <p className="mb-3 text-xs text-ink-3">The highlighter colours notes get on their own. Saved in this browser only.</p>
+      <ul className="space-y-1.5">
+        {NOTE_COLORS.map((c) => (
+          <ColorRow key={c.id} color={c} value={colors[c.id]} onChange={(v) => set(c.id, v)} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** The sample uses the real note styles, so it shows the colour as notes will. */
+function Sample({ id, text }: { id: string; text: string }) {
+  if (id === "title") return <span className="ss-title-hl text-sm font-semibold">{text}</span>;
+  if (id === "mark") return <mark className="ss-pdf-hl">{text}</mark>;
+  const attrs =
+    id === "lead" ? { "data-lead": "1" } : id === "group" ? { "data-group": "" } : { "data-level": id.slice(1) };
+  return <span {...attrs}>{text}</span>;
+}
+
+function ColorRow({ color, value, onChange }: { color: NoteColor; value?: string; onChange: (v: string | null) => void }) {
+  const current = value ?? color.default;
+  const [draft, setDraft] = useState(current);
+  useEffect(() => setDraft(current), [current]);
+
+  const typed = (text: string) => {
+    setDraft(text);
+    const hex = text.startsWith("#") ? text : `#${text}`;
+    if (isHex(hex)) onChange(hex);
+  };
+
+  return (
+    <li className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 sm:grid-cols-[11rem_1fr_auto]">
+      <span className="text-xs text-ink-2">{color.label}</span>
+      <div className="ss-md order-3 col-span-2 truncate sm:order-none sm:col-span-1">
+        <Sample id={color.id} text={color.sample} />
+      </div>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="color"
+          className="h-7 w-9 cursor-pointer rounded border border-line bg-panel p-0.5"
+          value={current}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label={`${color.label} colour`}
+        />
+        <input
+          className={cx(inputCls, "h-7 w-[5.5rem] font-mono text-xs")}
+          value={draft}
+          onChange={(e) => typed(e.target.value.trim())}
+          onBlur={() => setDraft(current)}
+          aria-label={`${color.label} hex code`}
+          spellCheck={false}
+        />
+        <IconButton
+          label="Back to the default colour"
+          className={cx("size-7", !value && "invisible")}
+          onClick={() => onChange(null)}
+        >
+          <RotateCcw className="size-3.5" />
+        </IconButton>
+      </div>
     </li>
   );
 }
