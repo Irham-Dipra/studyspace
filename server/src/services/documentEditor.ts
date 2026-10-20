@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { constants as FS } from "node:fs";
+import { constants as FS, existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import type { PDFDocument } from "pdf-lib";
 import { transaction, type DB } from "../db/index.js";
@@ -12,6 +12,7 @@ import { getProgress, saveProgress } from "../db/progress.js";
 import { setResourcePages } from "../db/resources.js";
 import { fingerprintFile } from "../library/fingerprint.js";
 import { resolveInsideRoots } from "../library/pathGuard.js";
+import { canEditFile, isPaged } from "../library/fileKinds.js";
 import {
   deletePages,
   insertBlankPages,
@@ -36,6 +37,7 @@ import {
 import { writeFileAtomic } from "./fileWriter.js";
 import { rotateNormPoint, rotateNormRect } from "../pdf/coords.js";
 import { HttpError, type DocumentRecord } from "../types.js";
+import { convertedPdfPath } from "./slides.js";
 
 export interface EditorOptions {
   dataDir: string;
@@ -61,10 +63,29 @@ export function resolveDocumentFile(db: DB, id: string): { doc: DocumentRecord; 
   return { doc, file };
 }
 
+/**
+ * The PDF to read a document's pages from: the file itself, or for slides the PDF they were turned
+ * into when opened.
+ */
+export function resolveReadablePdf(db: DB, dataDir: string, id: string): { doc: DocumentRecord; file: string } {
+  const { doc, file } = resolveDocumentFile(db, id);
+  if (!isPaged(doc.kind)) throw new HttpError(400, notPagesMessage(doc));
+  if (doc.kind === "pdf") return { doc, file };
+  const pdf = convertedPdfPath(dataDir, doc);
+  if (!existsSync(pdf)) throw new HttpError(409, `Open “${doc.title}” once first, so its slides are turned into pages.`);
+  return { doc, file: pdf };
+}
+
+export const SLIDES_READ_ONLY = "Slides can't be changed here. To edit pages, make a PDF of them with PDF tools → Extract.";
+
+/** For HTML and Markdown documents, which have no pages to take or change. */
+export const notPagesMessage = (doc: Pick<DocumentRecord, "title" | "kind">) =>
+  `“${doc.title}” is ${doc.kind === "html" ? "an HTML page" : "a Markdown file"}, not a PDF, so it has no pages to use here.`;
+
 const locks = new Map<string, Promise<unknown>>();
 
 /** Serialises edits per document so two quick operations never interleave their read/modify/write. */
-async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+export async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const prev = locks.get(key) ?? Promise.resolve();
   const next = prev.catch(() => undefined).then(fn);
   locks.set(key, next);
@@ -184,6 +205,7 @@ interface EditSpec {
 async function editFile(db: DB, opts: EditorOptions, id: string, expectedFingerprint: string | undefined, spec: EditSpec): Promise<EditResult> {
   return withLock(id, async () => {
     const { doc, file } = resolveDocumentFile(db, id);
+    if (!canEditFile(doc.kind)) throw new HttpError(400, doc.kind === "slides" ? SLIDES_READ_ONLY : notPagesMessage(doc));
     try {
       await fs.access(file, FS.W_OK);
     } catch {
@@ -332,7 +354,7 @@ export async function insertFromDocument(
   input: { after: number; sourceDocumentId: string; fromPage: number; toPage: number },
   fp?: string,
 ) {
-  const { doc: source, file: sourceFile } = resolveDocumentFile(db, input.sourceDocumentId);
+  const { doc: source, file: sourceFile } = resolveReadablePdf(db, opts.dataDir, input.sourceDocumentId);
   const sourcePdf = await loadPdf(await fs.readFile(sourceFile));
   const count = input.toPage - input.fromPage + 1;
   return editFile(db, opts, id, fp, {
@@ -358,7 +380,7 @@ export async function replaceFromDocument(
   input: { page: number; sourceDocumentId: string; fromPage: number; toPage: number; keepAnnotations?: boolean },
   fp?: string,
 ) {
-  const { doc: source, file: sourceFile } = resolveDocumentFile(db, input.sourceDocumentId);
+  const { doc: source, file: sourceFile } = resolveReadablePdf(db, opts.dataDir, input.sourceDocumentId);
   const sourcePdf = await loadPdf(await fs.readFile(sourceFile));
   const count = input.toPage - input.fromPage + 1;
   const last = input.page + count - 1;

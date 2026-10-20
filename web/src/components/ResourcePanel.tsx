@@ -38,6 +38,8 @@ export interface EditorRequest {
 interface Props {
   page: number;
   pageCount: number;
+  /** False for documents without pages (HTML, Markdown): every note is for the whole document. */
+  paged: boolean;
   resources: Resource[];
   annotations: Annotation[];
   /** Highlights inside notes/resources of this document. */
@@ -120,7 +122,7 @@ export function ResourcePanel(props: Props) {
   }, [props.toggleAllRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startAdd = () =>
-    setEditing({ key: Date.now(), defaults: { type: "note", scope: "page", pageStart: page, pageEnd: page } });
+    setEditing({ key: Date.now(), defaults: props.paged ? { type: "note", scope: "page", pageStart: page, pageEnd: page } : { type: "note", scope: "document" } });
 
   const card = (r: Resource) => {
     if (editing?.resource?.id === r.id) {
@@ -129,6 +131,7 @@ export function ResourcePanel(props: Props) {
           key={r.id}
           page={page}
           pageCount={props.pageCount}
+          paged={props.paged}
           initial={r}
           onCancel={() => setEditing(null)}
           onDirtyChange={props.onDraftChange}
@@ -262,14 +265,16 @@ export function ResourcePanel(props: Props) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Page resources</h2>
-        <span className="rounded-full bg-accent-soft px-1.5 text-[11px] font-medium tabular-nums text-accent" title="Items shown for this page">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">{props.paged ? "Page resources" : "Notes & resources"}</h2>
+        <span className="rounded-full bg-accent-soft px-1.5 text-[11px] font-medium tabular-nums text-accent" title={props.paged ? "Items shown for this page" : "Items for this document"}>
           {visible.length}
         </span>
-        <span className="ml-auto text-sm font-semibold tabular-nums">
-          Page {page}
-          {props.pageCount > 0 && <span className="font-normal text-ink-3"> / {props.pageCount}</span>}
-        </span>
+        {props.paged && (
+          <span className="ml-auto text-sm font-semibold tabular-nums">
+            Page {page}
+            {props.pageCount > 0 && <span className="font-normal text-ink-3"> / {props.pageCount}</span>}
+          </span>
+        )}
       </div>
 
       <div className="ss-scroll min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3" onScroll={() => popover && setPopover(null)}>
@@ -278,6 +283,7 @@ export function ResourcePanel(props: Props) {
             key={editing.key}
             page={page}
             pageCount={props.pageCount}
+            paged={props.paged}
             defaults={editing.defaults}
             onCancel={() => setEditing(null)}
             onDirtyChange={props.onDraftChange}
@@ -288,7 +294,7 @@ export function ResourcePanel(props: Props) {
           />
         )}
 
-        {visible.length === 0 && !editing && empty("No notes or resources for this page yet.")}
+        {visible.length === 0 && !editing && empty(props.paged ? "No notes or resources for this page yet." : "No notes or resources for this document yet.")}
         {bulkToggle(visible)}
 
         {GROUPS.map((g) => {
@@ -337,9 +343,11 @@ export function ResourcePanel(props: Props) {
           <Plus className="size-4" /> Add note or resource
           <KeyHint id="newNote" className="border-white/40 bg-white/10 text-white/80" />
         </Button>
-        <p className="mt-1.5 flex items-center justify-center gap-1 text-[11px] text-ink-3">
-          <BookOpen className="size-3" /> Showing items for page {page} and the whole document
-        </p>
+        {props.paged && (
+          <p className="mt-1.5 flex items-center justify-center gap-1 text-[11px] text-ink-3">
+            <BookOpen className="size-3" /> Showing items for page {page} and the whole document
+          </p>
+        )}
       </div>
 
       {popover && (

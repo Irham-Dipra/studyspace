@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "./config.js";
@@ -37,14 +38,33 @@ const server = app.listen(config.port, config.host, () => {
   console.log(`[studyspace] database: ${dbPath}`);
   console.log(`[studyspace] AI provider: ${ai.id}${ai.enabled ? "" : " (disabled)"}`);
   if (config.webDistDir) console.log(`[studyspace] serving web UI from ${config.webDistDir}`);
+  logPhoneAccess();
   syncLibrary(db)
     .then((r) =>
       console.log(
-        `[studyspace] library scan: ${r.scanned} PDFs (${r.added} new, ${r.moved} moved, ${r.changed} changed, ${r.missing} missing)`,
+        `[studyspace] library scan: ${r.scanned} files (${r.added} new, ${r.moved} moved, ${r.changed} changed, ${r.missing} missing)`,
       ),
     )
     .catch((err) => console.error("[studyspace] library scan failed", err));
 });
+
+/** Says how other devices reach StudySpace, or why they can't. */
+function logPhoneAccess() {
+  const loopback = ["127.0.0.1", "localhost", "::1"].includes(config.host);
+  if (!config.password) {
+    if (!loopback) console.warn("[studyspace] other devices can't log in: set STUDYSPACE_PASSWORD in .env");
+    return;
+  }
+  if (loopback) {
+    console.log("[studyspace] password set: other devices can use StudySpace through `tailscale serve`");
+    return;
+  }
+  const lan = Object.values(os.networkInterfaces())
+    .flat()
+    .filter((a) => a && a.family === "IPv4" && !a.internal)
+    .map((a) => `http://${a!.address}:${config.port}`);
+  console.log(`[studyspace] on your phone (same Wi-Fi), open: ${lan.join("  or  ") || "(no network found)"}`);
+}
 
 function shutdown() {
   server.close(() => {

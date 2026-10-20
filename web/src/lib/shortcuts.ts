@@ -22,6 +22,7 @@ export type ShortcutGroup =
   | "In the cut-in-half window"
   | "In the Save pictures window"
   | "In the bookmarks list"
+  | "In the files list"
   | "In dialogs & editors";
 
 export interface Shortcut {
@@ -49,6 +50,7 @@ export const SHORTCUTS = {
   files: s("Panels", "Show the library files", "L"),
   bookmarks: s("Panels", "Show this PDF's bookmarks", "Shift+B"),
   filter: s("Panels", "Filter the files / bookmarks list", "/"),
+  renameFile: s("Panels", "Rename this PDF's file", "F2"),
 
   // Pages & zoom
   nextPage: s("Pages & zoom", "Next page", "ArrowRight"),
@@ -166,6 +168,13 @@ export const SHORTCUTS = {
   bmReorder: s("In the bookmarks list", "Move up / down", "Alt+ArrowUp", "Alt+ArrowDown"),
   bmNest: s("In the bookmarks list", "Nest under the one above / un-nest", "Alt+ArrowRight", "Alt+ArrowLeft"),
 
+  // Files list (with a file focused)
+  fileMoveFocus: s("In the files list", "Previous / next file or folder (↓ from the filter box goes in)", "ArrowUp", "ArrowDown"),
+  fileOpenClose: s("In the files list", "Open / close a folder", "ArrowRight", "ArrowLeft"),
+  fileOpen: s("In the files list", "Open the file / folder", "Enter"),
+  fileRename: s("In the files list", "Rename the file", "F2"),
+  fileDelete: s("In the files list", "Delete the file (to the Trash; asks first)", "Delete"),
+
   // Dialogs & editors
   confirm: s("In dialogs & editors", "Confirm a page dialog (in its first field)", "Enter"),
   saveNote: s("In dialogs & editors", "Save the note or comment you're writing", "Ctrl+Enter"),
@@ -250,5 +259,6 @@ export const GROUP_ORDER: ShortcutGroup[] = [
   "In the cut-in-half window",
   "In the Save pictures window",
   "In the bookmarks list",
+  "In the files list",
   "In dialogs & editors",
 ];

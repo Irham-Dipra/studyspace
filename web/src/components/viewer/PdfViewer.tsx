@@ -5,9 +5,11 @@ import { resolveDest, type PdfPosition } from "../../lib/outline";
 import { keyOf } from "../../lib/shortcuts";
 import { Kbd } from "../ui";
 import type { Annotation, DocumentRecord, NormRect } from "../../lib/types";
-import type { AnnotationInput } from "../../lib/api";
+import { api, type AnnotationInput } from "../../lib/api";
+import { copyText } from "../../lib/pageImage";
+import { belowSelection, useTouchSelection } from "../../lib/touchSelection";
 import { PdfPage } from "./PdfPage";
-import { HIGHLIGHT_COLORS, hitTest, mergeLineRects, type Tool } from "./geometry";
+import { HIGHLIGHT_COLORS, HIGHLIGHT_OPACITY, hitTest, mergeLineRects, type Tool } from "./geometry";
 
 export interface PdfViewerHandle {
   /** Scrolls to `page`; with `top` (0 = top of the page, 1 = bottom) to that spot on it. */
@@ -53,6 +55,7 @@ export function PdfViewer(props: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [sizes, setSizes] = useState<{ w: number; h: number }[]>([]);
   const [range, setRange] = useState<[number, number]>([1, 1]);
@@ -75,13 +78,23 @@ export function PdfViewer(props: Props) {
     setLoadError(null);
     setSizes([]);
     setProgress(0);
-    const task = openPdf(`/api/documents/${doc.id}/file?v=${encodeURIComponent(doc.fingerprint)}`);
-    task.onProgress = ({ loaded, total }: { loaded: number; total: number }) => {
-      if (total) setProgress(Math.min(1, loaded / total));
-    };
-    task.promise.then(
-      async (p) => {
+    setConverting(doc.kind === "slides");
+    let task: ReturnType<typeof openPdf> | null = null;
+    // Slides are turned into a PDF on the server first; that can take a while, so say so.
+    const ready = doc.kind === "slides" ? api.convert(doc.id) : Promise.resolve();
+    ready
+      .then(() => {
         if (cancelled) return;
+        setConverting(false);
+        task = openPdf(api.fileUrl({ id: doc.id, fingerprint: doc.fingerprint }));
+        task.onProgress = ({ loaded, total }: { loaded: number; total: number }) => {
+          if (total) setProgress(Math.min(1, loaded / total));
+        };
+        return task.promise;
+      })
+      .then(
+      async (p) => {
+        if (cancelled || !p) return;
         const first = await p.getPage(1);
         const vp = first.getViewport({ scale: 1 });
         if (cancelled) return;
@@ -94,14 +107,17 @@ export function PdfViewer(props: Props) {
         onLoaded(p.numPages, p);
       },
       (err: Error) => {
-        if (!cancelled) setLoadError(err.message || "Failed to load PDF");
+        if (!cancelled) {
+          setConverting(false);
+          setLoadError(err.message || "Failed to load PDF");
+        }
       },
     );
     return () => {
       cancelled = true;
-      task.destroy();
+      void task?.destroy();
     };
-  }, [doc.id, doc.fingerprint, onLoaded]);
+  }, [doc.id, doc.fingerprint, doc.kind, onLoaded]);
 
   // Fetch true page sizes in the background (mixed-size PDFs), in batches to limit re-renders.
   useEffect(() => {
@@ -432,7 +448,7 @@ export function PdfViewer(props: Props) {
   const createHighlights = useCallback(
     (items: SelMenu["items"], color: string) => {
       for (const it of items) {
-        if (it.rects?.length) props.onCreateAnnotation({ page: it.page, kind: "highlight", color, opacity: 0.4, rects: it.rects, text: it.text });
+        if (it.rects?.length) props.onCreateAnnotation({ page: it.page, kind: "highlight", color, opacity: HIGHLIGHT_OPACITY, rects: it.rects, text: it.text });
       }
       window.getSelection()?.removeAllRanges();
       setSelMenu(null);
@@ -459,6 +475,17 @@ export function PdfViewer(props: Props) {
       setAnnMenu(hit ? { x: e.clientX, y: e.clientY, annotation: hit } : null);
     }, 0);
   };
+
+  // Phones: a long-press selection always gets the bar (also with the highlight tool), since its
+  // handles may still be dragged after it first settles.
+  useTouchSelection(
+    scrollRef,
+    (r) => {
+      const items = selectionToItems();
+      if (items.length) setSelMenu({ ...belowSelection(r), items });
+    },
+    props.tool === "select" || props.tool === "highlight",
+  );
 
   // ---- Render ---------------------------------------------------------------
   const first = Math.max(1, range[0] - OVERSCAN);
@@ -491,10 +518,15 @@ export function PdfViewer(props: Props) {
     }
   }
 
-  const menuStyle = (x: number, y: number) => ({
-    left: Math.min(x, window.innerWidth - 300),
-    top: Math.min(y + 12, window.innerHeight - 60),
-  });
+  // On a phone the bar is about as wide as the screen: it starts at the left edge and may wrap.
+  const menuStyle = (x: number, y: number) => {
+    const narrow = window.innerWidth < 640;
+    return {
+      left: narrow ? 8 : Math.min(x, window.innerWidth - 300),
+      top: Math.min(y + 12, window.innerHeight - (narrow ? 110 : 60)),
+      maxWidth: "calc(100vw - 16px)",
+    };
+  };
 
   return (
     <div className={`relative h-full min-h-0 ${props.tool === "pen" || props.tool === "area" || props.tool === "eraser" ? "ss-tool-draw" : ""}`}>
@@ -502,7 +534,7 @@ export function PdfViewer(props: Props) {
         {loadError ? (
           <div className="grid h-full place-items-center p-6 text-center text-sm text-danger">
             <div>
-              <p className="font-medium">Could not open this PDF</p>
+              <p className="font-medium">Could not open {doc.kind === "slides" ? "these slides" : "this PDF"}</p>
               <p className="mt-1 text-ink-3">{loadError}</p>
             </div>
           </div>
@@ -510,7 +542,15 @@ export function PdfViewer(props: Props) {
           <div className="grid h-full place-items-center text-sm text-ink-3">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="size-6 animate-spin" />
-              <span>Opening {doc.title}{progress ? ` · ${Math.round(progress * 100)}%` : "…"}</span>
+              {converting ? (
+                <span className="max-w-xs text-center">
+                  Turning the slides of {doc.title} into pages…
+                  <br />
+                  <span className="text-xs">The first time takes up to a minute; after that they open at once.</span>
+                </span>
+              ) : (
+                <span>Opening {doc.title}{progress ? ` · ${Math.round(progress * 100)}%` : "…"}</span>
+              )}
             </div>
           </div>
         ) : (
@@ -523,7 +563,7 @@ export function PdfViewer(props: Props) {
       {selMenu && (
         <div
           data-floating-menu
-          className="fixed z-50 flex items-center gap-1 rounded-lg border border-line bg-panel p-1 shadow-lg"
+          className="fixed z-50 flex flex-wrap items-center gap-1 rounded-lg border border-line bg-panel p-1 shadow-lg"
           style={menuStyle(selMenu.x, selMenu.y)}
           onMouseDown={(e) => e.preventDefault()}
         >
@@ -554,7 +594,7 @@ export function PdfViewer(props: Props) {
             label="Copy"
             hint={keyOf("selCopy")}
             onClick={() => {
-              void navigator.clipboard?.writeText(selMenu.items.map((i) => i.text).join(" "));
+              void copyText(selMenu.items.map((i) => i.text).join(" "));
               setSelMenu(null);
             }}
           />
@@ -563,7 +603,7 @@ export function PdfViewer(props: Props) {
 
       {annMenu && (
         <div data-floating-menu
-          className="fixed z-50 flex items-center gap-1 rounded-lg border border-line bg-panel p-1 shadow-lg" style={menuStyle(annMenu.x, annMenu.y)}>
+          className="fixed z-50 flex flex-wrap items-center gap-1 rounded-lg border border-line bg-panel p-1 shadow-lg" style={menuStyle(annMenu.x, annMenu.y)}>
           {(annMenu.annotation.kind === "ink" ? INK_MENU_COLORS : HIGHLIGHT_COLORS).map((c, i) => (
             <button
               key={c}

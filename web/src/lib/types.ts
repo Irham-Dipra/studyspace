@@ -12,8 +12,21 @@ export interface Directory {
   lastScannedAt: string | null;
 }
 
+/**
+ * "slides" (PowerPoint) are shown through a PDF LibreOffice makes of them. "html" (e.g. a Claude
+ * artifact) and "markdown" are shown as flowing text with no pages. Only PDFs can be edited.
+ */
+export type DocumentKind = "pdf" | "slides" | "html" | "markdown";
+
+/** Shown as pages by pdf.js. */
+export const isPaged = (kind: DocumentKind) => kind === "pdf" || kind === "slides";
+
+/** StudySpace may rewrite the file: page edits, Save to PDF, an OCR text layer. */
+export const canEditFile = (kind: DocumentKind) => kind === "pdf";
+
 export interface DocumentRecord {
   id: string;
+  kind: DocumentKind;
   directoryId: number | null;
   path: string;
   relPath: string;
@@ -45,12 +58,18 @@ export interface Bookmark {
 }
 
 /** Highlights or bookmarks that are not yet written into the PDF file. */
-export const hasUnsavedChanges = (d: Pick<DocumentRecord, "annotationsDirty" | "bookmarksDirty">) => d.annotationsDirty || d.bookmarksDirty;
+// Only PDFs take highlights into the file, so for other kinds there is never anything to save there.
+export const hasUnsavedChanges = (d: Pick<DocumentRecord, "kind" | "annotationsDirty" | "bookmarksDirty">) =>
+  canEditFile(d.kind) && (d.annotationsDirty || d.bookmarksDirty);
+
+export const SLIDES_READ_ONLY = "Slides can't be changed here. To edit pages, make a PDF of them with Page tools → Extract pages.";
 
 export interface ReadingProgress {
   documentId: string;
   page: number;
   zoom: number;
+  /** Documents without pages (HTML, Markdown): how far down, 0 = top, 1 = bottom. */
+  top?: number | null;
   updatedAt: string | null;
 }
 
@@ -104,6 +123,16 @@ export interface NoteHighlight {
   updatedAt: string;
 }
 
+/** The fields that place a highlight in text that flows (a note, or an HTML / Markdown document). */
+export type TextAnchoredHighlight = Pick<NoteHighlight, "id" | "color" | "quote" | "prefix" | "suffix" | "comment">;
+
+/** A highlight on the text of an HTML or Markdown document. */
+export interface TextHighlight extends TextAnchoredHighlight {
+  documentId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ScanResult {
   scanned: number;
   added: number;
@@ -114,8 +143,11 @@ export interface ScanResult {
 }
 
 export interface AppConfigInfo {
-  dataDir: string;
-  databasePath: string;
+  /** False on another device (a phone): study folders can then only be changed on the computer. */
+  local: boolean;
+  /** Only sent to this computer itself. */
+  dataDir?: string;
+  databasePath?: string;
   historyLimit: number;
   ai: { provider: string; enabled: boolean; message: string };
 }

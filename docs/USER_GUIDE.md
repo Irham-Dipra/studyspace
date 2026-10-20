@@ -54,10 +54,21 @@ The two `☰` buttons in the top bar (or the **`[`** and **`]`** keys) hide and 
 
 ## 3. Library: finding and opening PDFs
 
-- **Open a PDF:** click a course folder to expand it, then click a file. The file you have open is highlighted.
+- **Open a PDF:** click a course folder to expand it, then click a file. The file you have open is highlighted. Click a folder again to close it, even the one holding the open file.
+- **Slides (PowerPoint):** `.pptx` and `.ppt` files are listed too, with an orange slides icon.
+  - The first time you open one, StudySpace turns its slides into pages. That takes about half a minute to a minute; the viewer says so while it works. After that it opens at once, until the file changes.
+  - Notes, highlights, drawings, bookmarks, *Get text*, copying a page and saving pictures work as on a PDF.
+  - The slides file itself is never changed, so page edits, *Save to PDF* and OCR are not offered. To edit the pages, use 🔧 → *Extract pages* to make a PDF of them.
+  - This needs LibreOffice, which is installed.
+- **HTML pages and Markdown files:** `.html` files (for example a Claude artifact you downloaded) and `.md` files are listed too, with a blue `</>` or a green icon. See *HTML pages and Markdown files* below.
 - **Filter:** type in *Filter files…* at the top of the library to narrow the tree instantly.
 - **Continue reading:** your recently opened PDFs are listed at the top with the page you were on. Click one to jump back in.
 - **Search everything:** press **`Ctrl+K`** (or click the search box), type part of a file name or of a note, use **↑/↓** to choose, and press **Enter**. Choosing a note opens its PDF on the note's page.
+- **Rename a file:** hover over it and click ✏ (or select it and press **`F2`**; **`F2`** anywhere renames the open PDF). Type the new name and press **Enter** (**Esc** cancels). Only the part before `.pdf` is selected, and the extension is always kept. The file is renamed on disk in the same folder, and keeps its notes, highlights and bookmarks. **Ctrl+Z** renames it back.
+- **Delete a file:** hover over it and click 🗑 (or select it and press **`Del`**), then confirm with **Enter**. The file goes to the **desktop Trash**, not away for good. Its notes, highlights and bookmarks stay in StudySpace.
+  - **Ctrl+Z** right away puts it back where it was, with everything. (If the deleted file was open, it closes; press Ctrl+Z before opening another PDF, since each PDF has its own undo.)
+  - Later, restore it from the Trash in your file manager, then click **⟳ Rescan**: its notes come back too.
+- **Keyboard in the file list:** press **`/`**, then **↓** to step into the list. **↑/↓** move between files and folders, **→/←** open and close folders, **Enter** opens.
 - **Rescan (⟳):** click after you add, rename or move PDFs on disk. Renamed or moved files keep all their notes. StudySpace recognises them by content, not by name.
 - An orange dot next to a file means it has highlights that are not yet saved into the PDF file (see §7).
 - **Unsaved work when switching PDFs:** if the PDF you're leaving has unsaved work, StudySpace asks before opening another one in the same tab. That covers highlights not yet saved into the file and a note you're still writing. The choices are:
@@ -66,6 +77,26 @@ The two `☰` buttons in the top bar (or the **`[`** and **`]`** keys) hide and 
   - **Stay here:** go back to what you were doing.
 
   Closing or reloading the tab while a note is half written also makes the browser ask first.
+
+### HTML pages (Claude artifacts) and Markdown files
+
+- **Getting them in:** on claude.ai, open the artifact and download it. An HTML artifact downloads as a `.html` file and a Markdown one as `.md`. Save it into a study folder, then click **⟳ Rescan**. (A React artifact downloads as `.jsx` code, which isn't a page, so it isn't shown.)
+- **Reading:** they open as one long page with no page numbers. The zoom (**+** / **−**, or the % box) makes the text bigger or smaller. StudySpace remembers how far down you were.
+- **Highlighting:** select some text and a bar appears:
+  - a colour (keys **1–5**) highlights it;
+  - *Comment* highlights it and opens a comment box;
+  - *Note* (**N**) puts the text into a new note;
+  - *Copy* copies it.
+
+  With the highlighter tool (**H**), selecting highlights at once. Click a highlight to recolour it, comment on it or remove it (**Del**). **Ctrl+Z** undoes all of these. On a phone, long-press the text and drag the handles: the bar appears below the text.
+- **Notes** on these files are for the whole file.
+- **The file is never changed.** Highlights and notes stay in StudySpace. Page tools, bookmarks, *Get text*, OCR and *Save to PDF* are for PDFs, so they aren't offered here.
+- **HTML pages run sealed off.** A page's own scripts work (buttons, tabs, charts), but it can't reach StudySpace or your files. Because of that:
+  - a page that saves things in the browser (like *"Changes are saved on this device"* in a planner) can't save them inside StudySpace. Open the file directly in Firefox when you want to use that;
+  - a page that loads fonts or scripts from the internet needs internet to look right;
+  - if the page's text changes (a checklist, a new card), a highlight whose text is gone is listed under *"no longer match"*, with **Remove**.
+- **Keys inside an HTML page:** after clicking into the page, one-key shortcuts (`[`, `]`, `N`, `?`, Esc…) still work. Keys with Ctrl are left to the page.
+- **Markdown:** formulas (`$…$`), tables and pictures stored next to the file (`![](img/x.png)`) are shown.
 
 ### Several PDFs at once (browser tabs)
 
@@ -198,9 +229,16 @@ Empty groups are hidden. The number next to *Page resources* is how many items a
    - **Whole document**: shown on every page of the PDF (e.g. a course website link).
 6. Click **Add**, or press **Ctrl+Enter**. **Esc** cancels.
 
+**Pasting an AI answer (Gemini, ChatGPT).** Pasting into the content box cleans the answer for you:
+- **The chat before the explanation is cut.** Ask the AI to start its explanation with a line holding just `@@START@@`, for example: *"Put the line @@START@@ just before your explanation."* Everything above that line ("Here is a detailed explanation of slides 5 through 11…") is dropped, and the mark too. With no mark, nothing is cut.
+- **Citation tags are removed:** `[cite: 13]`, `[cite: 4, 7]`, `[cite_start]`.
+- A line under the box says what was cleaned. **Ctrl+Z** right after takes the paste back.
+- Saving a note cleans it the same way. To clean an older note, open it with ✏ and press **Ctrl+Enter**.
+
 **Formatting.** Content is written in Markdown:
 - `**bold**`, `*italic*`, `# Heading`, `- bullet`, `1. numbered`
 - `> quote`, `` `code` ``, tables
+- **Tables copied from Gemini** often have each row broken over several lines, with `<br>` for the line breaks inside a cell. They are shown as proper tables, with those line breaks. A wide table scrolls sideways in the notes panel.
 
 **Math (LaTeX).** A formula has to be wrapped in math delimiters. Both styles work, so you can paste from ChatGPT or a LaTeX document as-is:
 
@@ -220,10 +258,11 @@ Use **Preview** to check how it looks.
 
 **Colour coding.** Every note gets highlighter colours automatically, so its structure stands out:
 - the **title** of the card is **pink**;
-- the top level of headings inside the note is **orange**, the next level **yellow**, then **green**, then **blue**;
-- the bold label at the start of a bullet or numbered point (`- **Term:** explanation`) is **violet**, lighter in nested lists. An italic label ending in a colon (`- *Example:* …`) counts too.
+- the top level of headings inside the note is **orange**, the next level **cyan**, then **green**, then **blue**;
+- the bold label at the start of a bullet or numbered point (`- **Term:** explanation`) is **violet**, lighter in nested lists. An italic label ending in a colon (`- *Example:* …`) counts too. So does a short plain label (`- Superblock: checks…`, up to 8 words before the colon), which AI answers often paste without the bold; it is shown bold.
+- a bullet that is only a label, like `- **Deductive Learning:**`, heads the points under it and is **rose**. When the points were pasted at the same level as the header (AI answers often lose the indentation), the bullets after it, up to the next such header, are shown indented under it.
 
-The levels are relative to the note. If a note only uses `###` and `####`, those are orange and yellow. Your own highlights inside notes are drawn on top of these colours.
+The levels are relative to the note. If a note only uses `###` and `####`, those are orange and cyan. Your own highlights inside notes are drawn on top of these colours.
 
 ### Editing, deleting, jumping
 
@@ -245,7 +284,7 @@ You can annotate the text of any opened note or resource, the same way you annot
 Highlights with a comment are underlined with a dotted line and marked 💬. Hover over one to read its comment. All comments are also listed under the note: click one to edit it.
 
 - Your note's text is **never changed** by highlighting: highlights are stored separately and attached to the words you selected. If you later edit the note, they stay on those words. If the words were edited away, the card says *"1 highlight no longer matches the edited text"*, with a **Remove** button.
-- Formulas can't be partly highlighted; select the words around them instead.
+- **Formulas** are highlighted whole: select a formula (or part of it) to highlight all of it, or select a sentence and the formulas in it are highlighted along with the words. Highlights made before 19 Oct 2026 now colour their formulas too.
 - Highlights in notes are undone and redone with **Ctrl+Z / Ctrl+Shift+Z**, like everything else, and they are kept when you undo a page deletion that had removed their note.
 - **Esc** closes the bar without highlighting anything.
 
@@ -264,6 +303,7 @@ The tools are at the top-left of the viewer. Each one also has a key.
 | **Eraser** | `E` | Click on a highlight or drawing to delete it, or hold the mouse button and drag across several. |
 | Back to Select | `Esc` | Also closes the floating highlight bar and clears the selection. |
 
+- **Reading through a highlight:** highlights are light and blend with the page like a real highlighter pen, so the text under them stays black and sharp.
 - **Dismiss the bar:** press **Esc** or click anywhere else; nothing is highlighted.
 - **Change or delete one highlight:** with the Select tool, click it. A small menu offers colours, **Note** (turn the highlighted text into a note) and **Delete**.
 - **Highlights on this page:** the bottom of the notes panel lists the text you highlighted on the current page. Click **Note** beside one to quote it into a new note.
@@ -521,8 +561,9 @@ Hover over ↶ / ↷ to see exactly what will be undone or redone, e.g. *"Undo: 
 
 **What can be undone:**
 - adding, editing or deleting a note or resource
-- adding, recolouring or erasing highlights and drawings
+- adding, recolouring or erasing highlights and drawings (also highlights on HTML and Markdown files)
 - adding, renaming, moving or deleting bookmarks
+- renaming or deleting a file in the library (§3)
 - adding an OCR text layer to pages
 - deleting, inserting (blank or from another PDF), replacing, turning and moving pages: the previous version of the file is restored exactly, and every note, range and highlight returns to its original page
 - **Save to PDF**
@@ -574,6 +615,7 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `L` | Show the library files |
 | `Shift+B` | Show this PDF's bookmarks |
 | `/` | Filter the files / bookmarks list |
+| `F2` | Rename this PDF's file |
 
 **Pages & zoom**
 
@@ -727,6 +769,16 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `Alt+↑` / `Alt+↓` | Move up / down |
 | `Alt+→` / `Alt+←` | Nest under the one above / un-nest |
 
+**In the files list**
+
+| Keys | Action |
+| --- | --- |
+| `↑` / `↓` | Previous / next file or folder (↓ from the filter box goes in) |
+| `→` / `←` | Open / close a folder |
+| `Enter` | Open the file / folder |
+| `F2` | Rename the file |
+| `Del` | Delete the file (to the Trash; asks first) |
+
 **In dialogs & editors**
 
 | Keys | Action |
@@ -745,6 +797,8 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | Notes, resources, highlights, reading positions | `~/.local/share/studyspace/studyspace.db` |
 | Previous versions of PDFs you edited (for undo) | `~/.local/share/studyspace/history/<document-id>/` |
 | Your PDFs | Exactly where they were, e.g. `/home/dipra/Buet/3-1/…` |
+| Files you deleted in the library | The desktop Trash (`~/.local/share/Trash/`); restore them from your file manager, then click **⟳ Rescan** |
+| Logins of your phone (or other devices) | In the same database; *Log out of this device* in ⚙ Settings on the phone ends one |
 
 - **Back up your notes:** copy `~/.local/share/studyspace/` somewhere safe while the app is stopped.
 - **Recover an older version of a PDF by hand:** the newest files in `history/<document-id>/` are the versions before your most recent edits. Copy one back over the original while the app is stopped, then click **Rescan**.
@@ -759,3 +813,45 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | A new or renamed file doesn't appear | Click **⟳ Rescan** in the library. |
 | A file shows no notes after moving it | Click **⟳ Rescan**. Moved files are matched by content and keep their notes. |
 | The page looks blurry while zooming | It re-renders sharply a moment after you stop zooming. |
+| The phone says *"Can't reach StudySpace"* | Is the computer on and awake, with StudySpace running? On Wi-Fi: same network, and `STUDYSPACE_HOST=0.0.0.0` in `.env`? Away: is Tailscale switched on in the phone? |
+| The phone says StudySpace *"has no password yet"* | Add `STUDYSPACE_PASSWORD=…` to `.env` on the computer and restart StudySpace (§15). |
+| *"Unknown address …"* | StudySpace only answers to this computer's own names and addresses. Add the one you used to `STUDYSPACE_ALLOWED_HOSTS` in `.env`. |
+| *Copy* does nothing on the phone | Browsers block copying on plain `http://` addresses. Use the Tailscale `https://` address, or the phone's own Copy. |
+| A change on the computer doesn't show on the phone (or the other way round) | Tabs on the same device update each other, but devices don't. Reload the page on the other device. |
+
+---
+
+## 15. Using StudySpace on your phone
+
+> The same steps as a checklist, with troubleshooting: [PHONE_SETUP.md](PHONE_SETUP.md).
+
+Your files stay on the computer. The phone opens StudySpace in its browser, like a website the computer serves, and what you change there changes the files on the computer. So the computer must be **on, awake and running StudySpace** (`npm run dev`).
+
+**First, on the computer, once:**
+1. Add a password to the `.env` file in the StudySpace folder: `STUDYSPACE_PASSWORD=pick-a-password`. Without it, StudySpace refuses every other device.
+2. The phone uses the built app on port 4317, so after an update run `npm run build`.
+
+**At home (same Wi-Fi as the computer):**
+1. Also add `STUDYSPACE_HOST=0.0.0.0` to `.env` (it lets devices on your Wi-Fi in), then restart StudySpace (`Ctrl+C`, then `npm run dev`). It prints the address to open, e.g. `http://192.168.0.114:4317`.
+2. If `sudo ufw status` says *active*, allow the port once: `sudo ufw allow from 192.168.0.0/24 to any port 4317`.
+3. On the phone, open that address and log in. The phone stays logged in for 90 days.
+4. Limits: only on that Wi-Fi; the address can change after the router restarts (`hostname -I` shows the new one); copying doesn't work; the connection isn't encrypted, so don't use this on hall or public Wi-Fi.
+
+**Anywhere (mobile data, any Wi-Fi), with Tailscale:** Tailscale is a free app that links your own devices privately and encrypted. You don't need the `STUDYSPACE_HOST` line for this.
+1. On the computer:
+   ```bash
+   sudo apt install curl
+   curl -fsSL https://tailscale.com/install.sh | sh
+   sudo tailscale up
+   ```
+   The last command shows a link: open it and log in.
+2. On the phone, install the **Tailscale** app, log in with the same account and switch it on.
+3. On the computer, run `sudo tailscale serve --bg 4317`. The first time, it gives a link to turn on HTTPS: open it and enable it. It then shows your address, like `https://your-pc.tail1234.ts.net`. This stays set after a restart.
+4. On the phone, open that address and log in. Copying works here.
+
+**Tip:** in the phone's browser menu, choose *Add to Home screen* for a StudySpace icon.
+
+**On the phone you can** open files, read, write notes, highlight (long-press the text, drag the handles, then pick a colour in the bar below it), rename or delete files, and undo. Search is the 🔍 button. ⚙ Settings has *Log out of this device*.
+
+**Only on the computer:** adding or changing study folders (for safety). Zoom with the **+** / **−** buttons; pinching the page doesn't zoom the PDF.
+

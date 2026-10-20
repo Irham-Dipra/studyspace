@@ -34,7 +34,15 @@ export async function writePdf(file: string, pages: number, label = path.basenam
 
 export function createTestContext(overrides: Partial<AppConfig> = {}) {
   const dataDir = tempDir("studyspace-data-");
-  const config: AppConfig = { ...loadConfig({}), dataDir, historyLimit: 3, ...overrides };
+  const config: AppConfig = {
+    ...loadConfig({}),
+    dataDir,
+    trashDir: path.join(dataDir, "Trash"),
+    historyLimit: 3,
+    // The older tests send no X-StudySpace header; auth.test.ts turns the check back on.
+    requireCsrfHeader: false,
+    ...overrides,
+  };
   const db: DB = openDatabase(path.join(dataDir, "test.db"));
   const app = createApp({ db, config, ai: new DisabledProvider() });
   return { db, app, config, dataDir };

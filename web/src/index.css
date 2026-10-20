@@ -66,6 +66,11 @@ body,
   height: 100%;
 }
 
+/* Phones: 100% can be taller than what shows between the browser's bars, hiding the status bar. */
+#root {
+  height: 100dvh;
+}
+
 body {
   margin: 0;
   background: var(--ss-canvas);
@@ -121,12 +126,13 @@ body {
 .ss-md h2 { font-size: 1.07em; }
 .ss-md h3, .ss-md h4 { font-size: 1em; }
 
-/* Default highlighter colours: the card title is pink, headings inside a note go orange → yellow →
+/* Default highlighter colours: the card title is pink, headings inside a note go orange → cyan →
    green → blue by their level relative to the note, and the bold lead-in of a list item ("- **Term:**")
    is violet, lighter in nested lists (see rehypeNoteStructure). */
 .ss-title-hl,
 .ss-md [data-level],
-.ss-md [data-lead] {
+.ss-md [data-lead],
+.ss-md [data-group] {
   --hl: #f9a8d4;
   background: color-mix(in srgb, var(--hl) 55%, transparent);
   border-radius: 3px;
@@ -140,16 +146,21 @@ body {
   max-width: 100%;
 }
 .ss-md [data-level="1"] { --hl: #fdba74; }
-.ss-md [data-level="2"] { --hl: #fde047; }
+.ss-md [data-level="2"] { --hl: #67e8f9; } /* cyan: not one of the highlighter colours, so it never looks like a yellow highlight */
 .ss-md [data-level="3"] { --hl: #86efac; }
 .ss-md [data-lead] { --hl: #c4b5fd; padding: 0.05em 0.25em; }
+/* A bullet heading the points under it ("- **Deductive Learning:**"): rose, a step above the violet labels. */
+.ss-md [data-group] { --hl: #fda4af; padding: 0.05em 0.3em; font-weight: 700; }
+/* A plain "Label:" that lost its bold (AI answers) looks like a bold one. */
+.ss-md span[data-lead] { font-weight: 600; }
 .ss-md [data-lead="2"] { background: color-mix(in srgb, var(--hl) 35%, transparent); }
 .ss-md [data-level="4"],
 .ss-md [data-level="5"],
 .ss-md [data-level="6"] { --hl: #93c5fd; }
 .dark .ss-title-hl,
 .dark .ss-md [data-level],
-.dark .ss-md [data-lead="1"] {
+.dark .ss-md [data-lead="1"],
+.dark .ss-md [data-group] {
   background: color-mix(in srgb, var(--hl) 32%, transparent);
 }
 .dark .ss-md [data-lead="2"] {
@@ -179,7 +190,10 @@ body {
   padding-left: 0.75em;
   color: var(--ss-ink-2);
 }
-.ss-md table { border-collapse: collapse; font-size: 0.9em; }
+/* A table wider than the panel scrolls sideways. Cells keep words whole when the columns are sized:
+   the panel's overflow-wrap: anywhere let a narrow panel squeeze a column to a letter or two. */
+.ss-md table { border-collapse: collapse; font-size: 0.9em; display: block; max-width: 100%; overflow-x: auto; }
+.ss-md th, .ss-md td { overflow-wrap: break-word; }
 .ss-md th, .ss-md td { border: 1px solid var(--ss-line); padding: 0.25em 0.5em; }
 .ss-md hr { border-color: var(--ss-line); margin-block: 1.1em; }
 .ss-md .katex-display {
@@ -213,6 +227,19 @@ body {
 }
 
 /* Highlights inside notes */
+/* A whole Markdown document (not a note): the text size follows the zoom, headings stand out. */
+.ss-doc .ss-md {
+  font-size: 1em;
+  line-height: 1.75;
+}
+.ss-doc .ss-md > :first-child { margin-top: 0; }
+.ss-doc .ss-md h1 { font-size: 1.75em; margin-top: 1.3em; }
+.ss-doc .ss-md h2 { font-size: 1.4em; margin-top: 1.2em; padding-bottom: 0.2em; border-bottom: 1px solid var(--ss-line); }
+.ss-doc .ss-md h3 { font-size: 1.2em; margin-top: 1.1em; }
+.ss-doc .ss-md h4 { font-size: 1.05em; }
+.ss-doc .ss-md img { max-width: 100%; height: auto; }
+.ss-doc .ss-md table { display: block; max-width: 100%; overflow-x: auto; }
+
 .ss-note-hl {
   background: color-mix(in srgb, var(--hl) 45%, transparent);
   color: inherit;
@@ -233,6 +260,11 @@ body {
   font-size: 0.7em;
   vertical-align: super;
   margin-left: 1px;
+}
+/* A formula inside a highlight carries the highlight itself (see rehypeNoteHighlights). */
+.ss-md .katex.ss-note-hl,
+.ss-md .katex-display.ss-note-hl {
+  padding: 0 2px;
 }
 .ss-note-hl.ss-active {
   outline: 2px solid var(--ss-accent);

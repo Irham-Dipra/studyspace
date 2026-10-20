@@ -1,3 +1,4 @@
+import type { DocumentKind } from "./library/fileKinds.js";
 export const RESOURCE_TYPES = ["note", "ai_explanation", "summary", "pyq", "link"] as const;
 export type ResourceType = (typeof RESOURCE_TYPES)[number];
 
@@ -19,6 +20,8 @@ export interface Directory {
 
 export interface DocumentRecord {
   id: string;
+  /** "slides" (PowerPoint) are shown through a converted PDF and can't be edited. */
+  kind: DocumentKind;
   directoryId: number | null;
   path: string;
   relPath: string;
@@ -91,10 +94,25 @@ export interface NoteHighlight {
   updatedAt: string;
 }
 
+/** A highlight on the text of an HTML or Markdown document, anchored like a note highlight. */
+export interface DocumentHighlight {
+  id: string;
+  documentId: string;
+  color: string;
+  quote: string;
+  prefix: string;
+  suffix: string;
+  comment: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ReadingProgress {
   documentId: string;
   page: number;
   zoom: number;
+  /** Documents without pages (HTML, Markdown): how far down, 0 = top, 1 = bottom. */
+  top: number | null;
   updatedAt: string;
 }
 

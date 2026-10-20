@@ -5,6 +5,7 @@ interface Row {
   document_id: string;
   page: number;
   zoom: number;
+  top: number | null;
   updated_at: string;
 }
 
@@ -12,6 +13,7 @@ const map = (r: Row): ReadingProgress => ({
   documentId: r.document_id,
   page: r.page,
   zoom: r.zoom,
+  top: r.top,
   updatedAt: r.updated_at,
 });
 
@@ -22,12 +24,14 @@ export function getProgress(db: DB, documentId: string): ReadingProgress | undef
   return row && map(row);
 }
 
-export function saveProgress(db: DB, documentId: string, page: number, zoom: number): ReadingProgress {
+/** `top` left out keeps the stored one (page edits only move the page). */
+export function saveProgress(db: DB, documentId: string, page: number, zoom: number, top?: number | null): ReadingProgress {
   db.prepare(
-    `INSERT INTO reading_progress (document_id, page, zoom) VALUES (?, ?, ?)
+    `INSERT INTO reading_progress (document_id, page, zoom, top) VALUES (?, ?, ?, ?)
      ON CONFLICT(document_id) DO UPDATE SET page = excluded.page, zoom = excluded.zoom,
+       top = ${top === undefined ? "reading_progress.top" : "excluded.top"},
        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
-  ).run(documentId, page, zoom);
+  ).run(documentId, page, zoom, top ?? null);
   return getProgress(db, documentId)!;
 }
 

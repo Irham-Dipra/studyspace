@@ -3,8 +3,13 @@ import { BookOpenText, Bookmark as BookmarkIcon, ChevronRight, Crop, CircleHelp,
 import { api, ApiError, setMutationListener, type AnnotationInput, type BookmarkInput, type EditResult, type ResourceInput } from "./lib/api";
 import { announceChange, classifyMutation, onRemoteChange, type TabChange } from "./lib/tabSync";
 import { useUndoHistory } from "./lib/undo";
+import { uuid } from "./lib/uuid";
+import { setNotifier } from "./lib/notify";
 import {
+  canEditFile,
   hasUnsavedChanges,
+  isPaged,
+  SLIDES_READ_ONLY,
   type Annotation,
   type AppConfigInfo,
   type Bookmark,
@@ -13,6 +18,7 @@ import {
   type NoteHighlight,
   type ReadingProgress,
   type Resource,
+  type TextHighlight,
 } from "./lib/types";
 import { buildBookmarkTree, currentBookmarkId, readOutline, type BookmarkTreeNode } from "./lib/outline";
 import type { PDFDocumentProxy } from "./lib/pdf";
@@ -22,6 +28,7 @@ import { BookmarksPanel, type BookmarkPatch } from "./components/BookmarksPanel"
 import { ResourcePanel, type EditorRequest } from "./components/ResourcePanel";
 import { PdfViewer, MAX_ZOOM, MIN_ZOOM, type PdfViewerHandle } from "./components/viewer/PdfViewer";
 import { ViewerToolbar } from "./components/viewer/ViewerToolbar";
+import { TextDocViewer } from "./components/viewer/TextDocViewer";
 import { HIGHLIGHT_COLORS, PEN_COLORS, type Tool } from "./components/viewer/geometry";
 import { StatusBar, ZOOM_STEPS } from "./components/StatusBar";
 import { SearchBox } from "./components/SearchBox";
@@ -88,6 +95,45 @@ function usePersistentState<T>(key: string, initial: T) {
   return [v, setV] as const;
 }
 
+/** The undo stack used while no PDF is open (e.g. for deleting the open PDF's file). */
+const LIBRARY_UNDO = "library";
+
+/** Keys that act on pages (or the PDF's outline), so not on HTML / Markdown. */
+const PAGED_ONLY: ShortcutId[] = [
+  "nextPage",
+  "prevPage",
+  "firstPage",
+  "lastPage",
+  "goToPage",
+  "addBookmark",
+  "bookmarks",
+  "deletePage",
+  "deletePages",
+  "insertBlank",
+  "insertFrom",
+  "replace",
+  "turn",
+  "move",
+  "textPage",
+  "textPages",
+  "textAll",
+  "ocrPage",
+  "ocrPages",
+  "ocrAll",
+  "textSection",
+  "ocrSection",
+  "extract",
+  "split",
+  "merge",
+  "copyPage",
+  "halves",
+  "savePictures",
+];
+
+/** Why a file's pages can't be edited: slides are read-only; HTML and Markdown have no pages. */
+const readOnlyMessage = (d: DocumentRecord) =>
+  d.kind === "slides" ? SLIDES_READ_ONLY : `“${d.title}” is ${d.kind === "html" ? "an HTML page" : "a Markdown file"}: it has no pages to edit.`;
+
 const docIdFromHash = () => /^#\/doc\/([\w-]+)/.exec(window.location.hash)?.[1] ?? null;
 
 export default function App() {
@@ -115,12 +161,17 @@ export default function App() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [noteHighlights, setNoteHighlights] = useState<NoteHighlight[]>([]);
+  /** Highlights on the text of an HTML or Markdown document. */
+  const [textHighlights, setTextHighlights] = useState<TextHighlight[]>([]);
+  /** HTML / Markdown: how far down to open (0..1). */
+  const [startTop, setStartTop] = useState<number | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   /** The PDF's own outline has been read (false while it is, or if reading it failed). */
   const [bookmarksReady, setBookmarksReady] = useState(false);
   const [bookmarksError, setBookmarksError] = useState<string | null>(null);
   const [leftTab, setLeftTab] = usePersistentState<"files" | "bookmarks">("ss-left-tab", "files");
   const [bookmarkRename, setBookmarkRename] = useState<{ id: string; nonce: number } | null>(null);
+  const [fileRename, setFileRename] = useState<{ id: string; nonce: number } | null>(null);
 
   const [tool, setTool] = useState<Tool>("select");
   const [highlightColor, setHighlightColor] = usePersistentState("ss-hl-color", HIGHLIGHT_COLORS[0]);
@@ -161,6 +212,10 @@ export default function App() {
   docRef.current = doc;
   const pageRef = useRef(page);
   pageRef.current = page;
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  /** HTML / Markdown: how far down the reader is (0..1). */
+  const textTopRef = useRef(0);
 
   const toast = useCallback((text: string, kind: ToastMsg["kind"] = "info") => {
     const id = Date.now() + Math.random();
@@ -168,6 +223,19 @@ export default function App() {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === "error" ? 7000 : 3500);
   }, []);
   const toastError = useCallback((e: unknown) => toast((e as Error).message ?? String(e), "error"), [toast]);
+  useEffect(() => {
+    setNotifier(toast);
+    return () => setNotifier(null);
+  }, [toast]);
+
+  // Every page edit changes the file, and only PDFs can be changed: say so instead of opening the dialog.
+  useEffect(() => {
+    const d = docRef.current;
+    if (pageOp && d && !canEditFile(d.kind)) {
+      toast(readOnlyMessage(d), "error");
+      setPageOp(null);
+    }
+  }, [pageOp, toast]);
 
   // ---- Library ---------------------------------------------------------------
   const refreshLibrary = useCallback(async () => {
@@ -189,7 +257,7 @@ export default function App() {
     try {
       const r = await api.scan();
       await refreshLibrary();
-      toast(`Scan complete: ${r.scanned} PDFs${r.added ? `, ${r.added} new` : ""}${r.moved ? `, ${r.moved} moved` : ""}${r.missing ? `, ${r.missing} missing` : ""}`, "success");
+      toast(`Scan complete: ${r.scanned} files${r.added ? `, ${r.added} new` : ""}${r.moved ? `, ${r.moved} moved` : ""}${r.missing ? `, ${r.missing} missing` : ""}`, "success");
     } catch (e) {
       toastError(e);
     } finally {
@@ -207,15 +275,21 @@ export default function App() {
         return;
       }
       try {
-        const [full, res, anns, hls, bms] = await Promise.all([
+        const [full, res, anns, hls, bms, ths] = await Promise.all([
           api.document(id),
           api.resources(id),
           api.annotations(id),
           api.noteHighlights(id),
           api.bookmarks(id),
+          api.textHighlights(id),
         ]);
         if (full.missing) throw new Error("This file is no longer on disk. Rescan your library.");
         const p = atPage ?? full.progress?.page ?? 1;
+        setTextHighlights(ths);
+        setStartTop(full.progress?.top ?? null);
+        textTopRef.current = full.progress?.top ?? 0;
+        // Text that flows has only the select and highlight tools.
+        if (!isPaged(full.kind)) setTool((t) => (t === "select" || t === "highlight" ? t : "select"));
         setStartPage(p);
         setPage(p);
         setPageCount(full.pageCount ?? 0);
@@ -271,6 +345,19 @@ export default function App() {
     const cur = docRef.current;
     if (cur && window.location.hash !== `#/doc/${cur.id}`) window.history.replaceState(null, "", `#/doc/${cur.id}`);
   };
+
+  /** Shows the empty viewer again (after the open PDF's file was deleted). */
+  const closeDocument = useCallback(() => {
+    setDoc(null);
+    setResources([]);
+    setAnnotations([]);
+    setNoteHighlights([]);
+    setTextHighlights([]);
+    setBookmarks([]);
+    setPageCount(0);
+    setNoteDraft(false);
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }, []);
 
   // Closing or reloading the tab would lose a half-written note, so let the browser ask first.
   useEffect(() => {
@@ -329,11 +416,11 @@ export default function App() {
     [importOutline],
   );
 
-  // Persist reading progress (debounced).
+  // Persist reading progress (debounced). HTML / Markdown also keep how far down the reader is.
   useEffect(() => {
     if (!doc) return;
     const t = setTimeout(() => {
-      api.saveProgress(doc.id, page, zoom).then(
+      api.saveProgress(doc.id, page, zoom, isPaged(doc.kind) ? undefined : textTopRef.current).then(
         () => setRecent((r) => [{ documentId: doc.id, page, zoom, updatedAt: new Date().toISOString(), title: doc.title }, ...r.filter((x) => x.documentId !== doc.id)]),
         () => undefined,
       );
@@ -341,28 +428,98 @@ export default function App() {
     return () => clearTimeout(t);
   }, [doc, page, zoom]);
 
+  const scrollSaveRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** HTML / Markdown scrolled: saved a moment after the reader stops. */
+  const onTextScroll = useCallback((top: number) => {
+    textTopRef.current = top;
+    clearTimeout(scrollSaveRef.current);
+    const d = docRef.current;
+    if (!d) return;
+    scrollSaveRef.current = setTimeout(() => void api.saveProgress(d.id, 1, zoomRef.current, top).catch(() => undefined), 700);
+  }, []);
+
+  /** HTML / Markdown loaded: one "page", and no outline to read. */
+  const onTextLoaded = useCallback(() => {
+    setPageCount(1);
+    setBookmarksReady(true);
+  }, []);
+
   const goToPage = useCallback((p: number, top?: number | null) => viewerRef.current?.goToPage(p, top), []);
   const changeZoom = useCallback((z: number) => setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100))), []);
 
   // ---- Undo / redo ----------------------------------------------------------------
   const history = useUndoHistory(
-    doc?.id ?? null,
+    doc?.id ?? LIBRARY_UNDO,
     toastError,
     useCallback((m: string) => toast(m), [toast]),
   );
 
+  // ---- Renaming / deleting library files (both undoable) ---------------------------------
+  /** Puts a renamed or restored file's new name into the list and the open PDF. */
+  const applyDocRecord = useCallback((d: DocumentRecord) => {
+    setDocuments((ds) => ds.map((x) => (x.id === d.id ? { ...x, ...d } : x)));
+    setDoc((cur) => (cur?.id === d.id ? { ...cur, path: d.path, relPath: d.relPath, title: d.title } : cur));
+  }, []);
+
+  const fileName = (d: DocumentRecord) => d.relPath.split("/").pop() ?? d.title;
+
+  const renameFile = async (d: DocumentRecord, name: string) => {
+    const from = fileName(d);
+    try {
+      const after = await api.renameFile(d.id, name);
+      const to = fileName(after);
+      if (to === from) return;
+      applyDocRecord(after);
+      history.push(docRef.current?.id ?? LIBRARY_UNDO, {
+        label: `Rename “${from}” to “${to}”`,
+        undo: async () => applyDocRecord(await api.renameFile(d.id, from)),
+        redo: async () => applyDocRecord(await api.renameFile(d.id, to)),
+      });
+      toast(`Renamed to “${to}” · Ctrl+Z to undo`, "success");
+    } catch (e) {
+      toastError(e);
+    }
+  };
+
+  const deleteFile = async (d: DocumentRecord) => {
+    const name = fileName(d);
+    try {
+      let trashName = (await api.trashFile(d.id)).trashName;
+      if (docRef.current?.id === d.id) closeDocument();
+      await refreshLibrary();
+      // Notes, highlights and bookmarks stay in the database, so putting the file back restores everything.
+      history.push(docRef.current && docRef.current.id !== d.id ? docRef.current.id : LIBRARY_UNDO, {
+        label: `Delete “${name}”`,
+        undo: async () => {
+          await api.restoreFile(d.id, trashName);
+          await refreshLibrary();
+        },
+        redo: async () => {
+          trashName = (await api.trashFile(d.id)).trashName;
+          if (docRef.current?.id === d.id) closeDocument();
+          await refreshLibrary();
+        },
+      });
+      toast(`Moved “${name}” to the Trash · Ctrl+Z to undo`, "success");
+    } catch (e) {
+      toastError(e);
+    }
+  };
+
   /** Re-reads notes and highlights from the server (after undo/redo or a file edit). */
   const reloadDocData = useCallback(async (docId: string) => {
-    const [res, anns, hls, bms] = await Promise.all([
+    const [res, anns, hls, bms, ths] = await Promise.all([
       api.resources(docId),
       api.annotations(docId),
       api.noteHighlights(docId),
       api.bookmarks(docId),
+      api.textHighlights(docId),
     ]);
     if (docRef.current?.id !== docId) return;
     setResources(res);
     setAnnotations(anns);
     setNoteHighlights(hls);
+    setTextHighlights(ths);
     setBookmarks(bms.bookmarks);
     if (bms.imported) setBookmarksReady(true);
   }, []);
@@ -398,7 +555,7 @@ export default function App() {
   const createResource = async (input: ResourceInput) => {
     if (!doc) return;
     const docId = doc.id;
-    const id = crypto.randomUUID();
+    const id = uuid();
     const r = await api.createResource(docId, { ...input, id });
     setResources((rs) => [...rs, r]);
     toast("Saved", "success");
@@ -479,7 +636,7 @@ export default function App() {
       const d = docRef.current;
       if (!d) return;
       const docId = d.id;
-      const id = crypto.randomUUID();
+      const id = uuid();
       api.createAnnotation(docId, { ...input, id }).then((a) => {
         setAnnotations((as) => [...as, a]);
         markDirty();
@@ -581,7 +738,7 @@ export default function App() {
     if (!d) return undefined;
     const docId = d.id;
     try {
-      const h = await api.createNoteHighlight(resourceId, { id: crypto.randomUUID(), color, ...anchor });
+      const h = await api.createNoteHighlight(resourceId, { id: uuid(), color, ...anchor });
       setNoteHighlights((hs) => [...hs, h]);
       history.push(docId, {
         label: "Highlight in note",
@@ -646,6 +803,88 @@ export default function App() {
     });
   };
 
+  // ---- Highlights on HTML / Markdown documents ----------------------------------------------
+  const textHighlightsRef = useRef(textHighlights);
+  textHighlightsRef.current = textHighlights;
+  const textHighlightFields = (h: TextHighlight) => ({
+    id: h.id,
+    color: h.color,
+    quote: h.quote,
+    prefix: h.prefix,
+    suffix: h.suffix,
+    comment: h.comment,
+  });
+
+  const createTextHighlight = async (anchor: Anchor, color: string) => {
+    const d = docRef.current;
+    if (!d) return undefined;
+    const docId = d.id;
+    try {
+      const h = await api.createTextHighlight(docId, { id: uuid(), color, ...anchor });
+      setTextHighlights((hs) => [...hs, h]);
+      history.push(docId, {
+        label: "Highlight",
+        undo: async () => {
+          await api.deleteTextHighlight(h.id).catch(tolerate([404]));
+          await reloadDocData(docId);
+        },
+        redo: async () => {
+          await api.createTextHighlight(docId, textHighlightFields(h)).catch(tolerate([409]));
+          await reloadDocData(docId);
+        },
+      });
+      return h;
+    } catch (e) {
+      toastError(e);
+      return undefined;
+    }
+  };
+
+  const updateTextHighlight = (id: string, patch: { color?: string; comment?: string }) => {
+    const d = docRef.current;
+    const before = textHighlightsRef.current.find((h) => h.id === id);
+    if (!d || !before) return;
+    const docId = d.id;
+    api.updateTextHighlight(id, patch).then((h) => {
+      setTextHighlights((hs) => hs.map((x) => (x.id === id ? h : x)));
+      history.push(docId, {
+        label: patch.comment !== undefined ? "Edit comment" : "Recolour highlight",
+        undo: async () => {
+          await api.updateTextHighlight(id, { color: before.color, comment: before.comment });
+          await reloadDocData(docId);
+        },
+        redo: async () => {
+          await api.updateTextHighlight(id, patch);
+          await reloadDocData(docId);
+        },
+      });
+    }, toastError);
+  };
+
+  const deleteTextHighlights = (ids: string[]) => {
+    const d = docRef.current;
+    const removed = textHighlightsRef.current.filter((h) => ids.includes(h.id));
+    if (!d || !removed.length) return;
+    const docId = d.id;
+    setTextHighlights((hs) => hs.filter((h) => !ids.includes(h.id)));
+    Promise.all(removed.map((h) => api.deleteTextHighlight(h.id).catch(tolerate([404])))).then(() => {
+      history.push(docId, {
+        label: removed.length === 1 ? "Remove highlight" : `Remove ${removed.length} highlights`,
+        undo: async () => {
+          for (const h of removed) await api.createTextHighlight(docId, textHighlightFields(h)).catch(tolerate([409]));
+          await reloadDocData(docId);
+        },
+        redo: async () => {
+          for (const h of removed) await api.deleteTextHighlight(h.id).catch(tolerate([404]));
+          await reloadDocData(docId);
+        },
+      });
+    }, (e) => {
+      toastError(e);
+      void reloadDocData(docId);
+    });
+  };
+
   // ---- File edits (rewrite the PDF; undone by restoring the previous version) ---------
   /** Reloads the document after its file changed, showing `preferPage` (or the server's remapped page). */
   const refreshAfterFileChange = async (docId: string, preferPage?: number) => {
@@ -680,6 +919,10 @@ export default function App() {
   ): Promise<boolean> => {
     const d = docRef.current;
     if (!d) return false;
+    if (!canEditFile(d.kind)) {
+      toast(readOnlyMessage(d), "error");
+      return false;
+    }
     const docId = d.id;
     setBusy(kind);
     try {
@@ -785,7 +1028,7 @@ export default function App() {
       }
     }
 
-    const id = crypto.randomUUID();
+    const id = uuid();
     const input: BookmarkInput = { id, title, page: pos.page, top: pos.top, parentId: parent, position };
     try {
       const b = await api.createBookmark(docId, input);
@@ -893,7 +1136,16 @@ export default function App() {
   remoteRef.current = (c: TabChange) => {
     const d = docRef.current;
     if (!d || c.docId !== d.id) {
-      void refreshLibrary().catch(() => undefined); // keeps page counts and "unsaved" dots current
+      // Keeps page counts and "unsaved" dots current, and follows a rename or delete of the open file.
+      void refreshLibrary().then((lib) => {
+        const cur = docRef.current;
+        if (!cur || c.docId) return;
+        const now = lib.documents.find((x) => x.id === cur.id);
+        if (!now) {
+          closeDocument();
+          toast(`“${cur.title}” was deleted in another tab, so it was closed here.`);
+        } else if (now.path !== cur.path) applyDocRecord(now);
+      }, () => undefined);
       return;
     }
     if (c.file) {
@@ -991,16 +1243,19 @@ export default function App() {
         openLeft();
         requestAnimationFrame(() => document.querySelector<HTMLInputElement>("[data-panel-filter]")?.focus());
       });
+    if (is("undo")) return run(() => void history.undo());
+    if (is("redo")) return run(() => void history.redo());
     if (!docRef.current) return;
+    // HTML and Markdown have no pages: page keys, page tools, Get text, pictures, new PDFs and
+    // bookmarks are for PDFs. Their keys (arrows, Home, End…) then scroll the text as usual.
+    if (!isPaged(docRef.current.kind) && PAGED_ONLY.some(is)) return;
 
     const zoomIn = () => setZoom((z) => ZOOM_STEPS.find((s) => s > z + 0.001) ?? z);
     const zoomOut = () => setZoom((z) => [...ZOOM_STEPS].reverse().find((s) => s < z - 0.001) ?? z);
     const fit = (z: number | null | undefined) => z && changeZoom(z);
     const go = (p: number) => viewerRef.current?.goToPage(p);
 
-    if (is("undo")) run(() => void history.undo());
-    else if (is("redo")) run(() => void history.redo());
-    else if (is("save")) run(() => hasUnsavedChanges(docRef.current!) && !busy && void saveToFile());
+    if (is("save")) run(() => hasUnsavedChanges(docRef.current!) && !busy && void saveToFile());
     else if (is("zoomIn")) run(zoomIn);
     else if (is("zoomOut")) run(zoomOut);
     else if (is("zoomReset")) run(() => setZoom(1));
@@ -1024,6 +1279,12 @@ export default function App() {
       });
     else if (is("addBookmark")) run(() => void addBookmark());
     else if (is("bookmarks")) run(() => (setLeftTab("bookmarks"), openLeft()));
+    else if (is("renameFile"))
+      run(() => {
+        setLeftTab("files");
+        openLeft();
+        setFileRename({ id: docRef.current!.id, nonce: Date.now() });
+      });
     else if (is("deletePage")) run(() => setPageOp({ kind: "delete" }));
     else if (is("deletePages")) run(() => setPageOp({ kind: "delete", preset: "" }));
     else if (is("insertBlank")) run(() => setPageOp({ kind: "blank" }));
@@ -1077,6 +1338,9 @@ export default function App() {
     }
   };
 
+  /** Sources for page edits and new PDFs: files with pages. */
+  const pagedDocuments = useMemo(() => documents.filter((d) => isPaged(d.kind)), [documents]);
+
   const course = useMemo(() => {
     if (!doc) return null;
     const parts = doc.relPath.split("/");
@@ -1104,6 +1368,10 @@ export default function App() {
       activeId={doc?.id ?? null}
       scanning={scanning}
       onOpen={(d) => requestOpen(d)}
+      onRename={(d, name) => void renameFile(d, name)}
+      onDelete={(d) => void deleteFile(d)}
+      renameRequest={fileRename}
+      onRenameRequestDone={() => setFileRename(null)}
       onRescan={rescan}
       onOpenSettings={() => setShowSettings(true)}
     />
@@ -1126,7 +1394,7 @@ export default function App() {
     </button>
   );
   // With a PDF open, the left column switches between the library and that PDF's bookmarks.
-  const library = doc ? (
+  const library = doc && isPaged(doc.kind) ? (
     <div className="flex h-full min-h-0 flex-col">
       <div role="tablist" className="flex shrink-0 gap-1 border-b border-line px-2">
         {tab("files", "Files", <Library className="size-4" />, "files")}
@@ -1169,6 +1437,7 @@ export default function App() {
       key={doc?.id}
       page={page}
       pageCount={pageCount}
+      paged={!doc || isPaged(doc.kind)}
       resources={resources}
       annotations={annotations}
       noteHighlights={noteHighlights}
@@ -1213,7 +1482,7 @@ export default function App() {
             <span className="max-w-64 truncate text-ink-3" title={doc.relPath}>{doc.title}</span>
           </div>
         )}
-        <div className="mx-auto flex min-w-0 flex-1 justify-center px-2">
+        <div className="mx-auto flex min-w-0 flex-1 justify-end px-2 sm:justify-center">
           <SearchBox documents={documents} onOpenDocument={(d, p) => requestOpen(d, p)} />
         </div>
         <IconButton label={withKey("Screenshot part of the window", "snip")} onClick={() => setSnipping(true)}>
@@ -1277,6 +1546,7 @@ export default function App() {
                 penWidth={penWidth}
                 onPenWidth={setPenWidth}
                 dirty={hasUnsavedChanges(doc)}
+                kind={doc.kind}
                 annotationCount={annotations.length + bookmarks.length}
                 saving={busy === "save"}
                 onSaveToFile={saveToFile}
@@ -1304,6 +1574,7 @@ export default function App() {
                 undoing={history.running}
               />
               <div className="min-h-0 flex-1">
+                {isPaged(doc.kind) ? (
                 <PdfViewer
                   key={doc.id}
                   ref={viewerRef}
@@ -1323,6 +1594,24 @@ export default function App() {
                   onUpdateAnnotation={updateAnnotation}
                   onQuoteToNote={quoteToNote}
                 />
+                ) : (
+                  <TextDocViewer
+                    key={doc.id}
+                    ref={viewerRef}
+                    doc={doc}
+                    zoom={zoom}
+                    initialTop={startTop}
+                    highlights={textHighlights}
+                    tool={tool}
+                    color={highlightColor}
+                    onLoaded={onTextLoaded}
+                    onScrollTop={onTextScroll}
+                    onCreateHighlight={createTextHighlight}
+                    onUpdateHighlight={updateTextHighlight}
+                    onDeleteHighlights={deleteTextHighlights}
+                    onQuoteToNote={(text) => quoteToNote(1, text)}
+                  />
+                )}
               </div>
             </>
           ) : (
@@ -1368,6 +1657,7 @@ export default function App() {
 
       {doc && (
         <StatusBar
+          paged={isPaged(doc.kind)}
           page={page}
           pageCount={pageCount}
           zoom={zoom}
@@ -1397,13 +1687,13 @@ export default function App() {
         />
       )}
 
-      {pageOp && doc && (
+      {pageOp && doc && canEditFile(doc.kind) && (
         <PageOpsDialog
           op={pageOp}
           doc={doc}
           page={page}
           pageCount={pageCount}
-          documents={documents}
+          documents={pagedDocuments}
           busy={busy === "pages"}
           onClose={() => setPageOp(null)}
           resources={resources}
@@ -1468,7 +1758,7 @@ export default function App() {
           doc={doc}
           page={page}
           pageCount={pageCount}
-          documents={documents}
+          documents={pagedDocuments}
           bookmarks={bookmarks}
           onClose={() => setPdfTool(null)}
           onCreated={() => void refreshLibrary().catch(toastError)}
@@ -1608,7 +1898,7 @@ function Welcome({
         ) : (
           <>
             <p className="mt-2 text-sm text-ink-2">
-              {docCount} PDF{docCount === 1 ? "" : "s"} in your library. Pick one on the left, or search with <kbd className="rounded border border-line px-1 text-xs">Ctrl K</kbd>.
+              {docCount} file{docCount === 1 ? "" : "s"} in your library. Pick one on the left, or search with <kbd className="rounded border border-line px-1 text-xs">Ctrl K</kbd>.
             </p>
             {recent.length > 0 && (
               <ul className="mt-4 space-y-1 text-left">
@@ -1619,7 +1909,7 @@ function Welcome({
                       <li key={r.documentId}>
                         <button className={cx("flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-hover")} onClick={() => onOpen(d)}>
                           <span className="truncate font-medium">{d.title}</span>
-                          <span className="ml-auto shrink-0 text-xs text-ink-3">page {r.page}</span>
+                          {isPaged(d.kind) && <span className="ml-auto shrink-0 text-xs text-ink-3">page {r.page}</span>}
                         </button>
                       </li>
                     )

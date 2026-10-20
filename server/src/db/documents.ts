@@ -1,5 +1,6 @@
 import type { DB } from "./index.js";
 import type { DocumentRecord } from "../types.js";
+import { kindOf } from "../library/fileKinds.js";
 
 interface Row {
   id: string;
@@ -23,6 +24,7 @@ interface Row {
 function map(r: Row): DocumentRecord {
   return {
     id: r.id,
+    kind: kindOf(r.path),
     directoryId: r.directory_id,
     path: r.path,
     relPath: r.rel_path,
@@ -134,4 +136,22 @@ export function updateDocumentFileState(
 
 export function deleteDocument(db: DB, id: string): boolean {
   return Number(db.prepare("DELETE FROM documents WHERE id = ?").run(id).changes) > 0;
+}
+
+/** After StudySpace renamed the file in its folder (the content, size and mtime stay the same). */
+export function renameDocumentRow(db: DB, id: string, d: Pick<DocumentRecord, "path" | "relPath" | "title">): void {
+  db.prepare(`UPDATE documents SET path = ?, rel_path = ?, title = ?, updated_at = ${NOW} WHERE id = ?`).run(d.path, d.relPath, d.title, id);
+}
+
+export function setDocumentMissing(db: DB, id: string, missing: boolean): void {
+  db.prepare(`UPDATE documents SET missing = ?, updated_at = ${NOW} WHERE id = ?`).run(missing ? 1 : 0, id);
+}
+
+/** A deleted file was put back at its old path. */
+export function markDocumentPresent(db: DB, id: string, s: { size: number; mtimeMs: number }): void {
+  db.prepare(`UPDATE documents SET missing = 0, size = ?, mtime_ms = ?, last_seen_at = ${NOW}, updated_at = ${NOW} WHERE id = ?`).run(
+    s.size,
+    s.mtimeMs,
+    id,
+  );
 }

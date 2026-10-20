@@ -335,7 +335,7 @@ export function BookmarksPanel(p: Props) {
                     {editing !== b.id && (
                       <>
                         <span className="ml-1 shrink-0 text-[11px] tabular-nums text-ink-3 group-hover:hidden group-focus-visible:hidden">{b.page}</span>
-                        <span className="hidden shrink-0 items-center group-hover:flex group-focus-visible:flex">
+                        <span className="hidden shrink-0 items-center group-hover:flex group-focus-visible:flex [@media(hover:none)]:flex">
                           <button
                             tabIndex={-1}
                             className="grid size-6 place-items-center rounded text-ink-3 hover:bg-panel hover:text-ink"

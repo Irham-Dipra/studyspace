@@ -4,6 +4,8 @@
  * Uses BroadcastChannel (same browser, same origin); without it every tab still works on its own.
  */
 
+import { uuid } from "./uuid";
+
 export interface TabChange {
   /** The document that changed, or null for library-wide changes (folders, rescans). */
   docId: string | null;
@@ -12,7 +14,7 @@ export interface TabChange {
   from: string;
 }
 
-const TAB_ID = crypto.randomUUID();
+const TAB_ID = uuid();
 const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("studyspace") : null;
 
 export function announceChange(docId: string | null, file: boolean): void {
@@ -32,7 +34,7 @@ export function onRemoteChange(listener: (change: TabChange) => void): () => voi
 export function classifyMutation(url: string): { scope: "doc" | "library"; file: boolean } | null {
   // Reading position and page counts are per tab / self-healing; AI calls create resources via their own response.
   if (/\/progress$|\/meta$/.test(url)) return null;
-  if (/^\/directories|^\/library\/scan|^\/pdf-tools\//.test(url)) return { scope: "library", file: false };
+  if (/^\/directories|^\/library\/scan|^\/pdf-tools\/|\/(rename|trash|restore)$/.test(url)) return { scope: "library", file: false };
   // OCR runs on a copy; only "Add to PDF" (apply) changes the file.
   if (/^\/ocr\/jobs\/[^/]+\/apply$/.test(url)) return { scope: "doc", file: true };
   if (/^\/ocr\/|\/ocr$/.test(url)) return null;

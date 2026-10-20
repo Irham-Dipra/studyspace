@@ -4,6 +4,8 @@ import { ChevronLeft, ChevronRight, Maximize, MoveHorizontal, ZoomIn, ZoomOut } 
 import { IconButton, selectAllOnFocus } from "./ui";
 
 interface Props {
+  /** False for HTML / Markdown: no pages, so only the zoom (text size) is shown. */
+  paged?: boolean;
   page: number;
   pageCount: number;
   zoom: number;
@@ -15,7 +17,7 @@ interface Props {
 
 const STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
 
-export function StatusBar({ page, pageCount, zoom, onPage, onZoom, onFitWidth, onFitPage }: Props) {
+export function StatusBar({ paged = true, page, pageCount, zoom, onPage, onZoom, onFitWidth, onFitPage }: Props) {
   const [draft, setDraft] = useState(String(page));
   useEffect(() => setDraft(String(page)), [page]);
 
@@ -29,45 +31,49 @@ export function StatusBar({ page, pageCount, zoom, onPage, onZoom, onFitWidth, o
 
   return (
     <footer className="flex h-11 shrink-0 items-center gap-2 border-t border-line bg-panel px-2 text-sm sm:px-3">
-      <div className="flex items-center gap-1.5">
-        <span className="hidden text-ink-3 sm:inline">Page</span>
-        <input
-          aria-label="Current page"
-          title={withKey("Go to page", "goToPage")}
-          className="h-7 w-12 rounded-md sm:w-14 border border-line bg-subtle text-center tabular-nums outline-none focus:border-accent"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
-          onFocus={selectAllOnFocus}
-          onBlur={commit}
-          onKeyDown={(e) => e.key === "Enter" && (e.currentTarget.blur(), commit())}
-          inputMode="numeric"
-          disabled={!pageCount}
-        />
-        <span className="whitespace-nowrap tabular-nums text-ink-3">/ {pageCount || "–"}</span>
-      </div>
+      {paged && (
+        <>
+          <div className="flex items-center gap-1.5">
+            <span className="hidden text-ink-3 sm:inline">Page</span>
+            <input
+              aria-label="Current page"
+              title={withKey("Go to page", "goToPage")}
+              className="h-7 w-12 rounded-md sm:w-14 border border-line bg-subtle text-center tabular-nums outline-none focus:border-accent"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
+              onFocus={selectAllOnFocus}
+              onBlur={commit}
+              onKeyDown={(e) => e.key === "Enter" && (e.currentTarget.blur(), commit())}
+              inputMode="numeric"
+              disabled={!pageCount}
+            />
+            <span className="whitespace-nowrap tabular-nums text-ink-3">/ {pageCount || "–"}</span>
+          </div>
 
-      <div className="mx-auto flex items-center gap-1">
-        <button
-          className="flex h-8 items-center gap-1 rounded-md px-2 text-ink-2 hover:bg-hover hover:text-ink disabled:opacity-40"
-          onClick={() => onPage(page - 1)}
-          disabled={page <= 1}
-          title={withKey("Previous page", "prevPage")}
-        >
-          <ChevronLeft className="size-4" />
-          <span className="hidden md:inline">Previous Page</span>
-        </button>
-        <button
-          className="flex h-8 items-center gap-1 rounded-md px-2 text-ink-2 hover:bg-hover hover:text-ink disabled:opacity-40"
-          onClick={() => onPage(page + 1)}
-          disabled={!pageCount || page >= pageCount}
-          title={withKey("Next page", "nextPage")}
-        >
-          <span className="hidden md:inline">Next Page</span>
-          <ChevronRight className="size-4" />
-        </button>
-      </div>
+          <div className="mx-auto flex items-center gap-1">
+            <button
+              className="flex h-8 items-center gap-1 rounded-md px-2 text-ink-2 hover:bg-hover hover:text-ink disabled:opacity-40"
+              onClick={() => onPage(page - 1)}
+              disabled={page <= 1}
+              title={withKey("Previous page", "prevPage")}
+            >
+              <ChevronLeft className="size-4" />
+              <span className="hidden md:inline">Previous Page</span>
+            </button>
+            <button
+              className="flex h-8 items-center gap-1 rounded-md px-2 text-ink-2 hover:bg-hover hover:text-ink disabled:opacity-40"
+              onClick={() => onPage(page + 1)}
+              disabled={!pageCount || page >= pageCount}
+              title={withKey("Next page", "nextPage")}
+            >
+              <span className="hidden md:inline">Next Page</span>
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
+        </>
+      )}
 
-      <div className="flex items-center gap-0.5">
+      <div className={`flex items-center gap-0.5${paged ? "" : " ml-auto"}`}>
         <IconButton label={withKey("Zoom out", "zoomOut")} onClick={zoomOut}>
           <ZoomOut className="size-4" />
         </IconButton>
@@ -87,12 +93,16 @@ export function StatusBar({ page, pageCount, zoom, onPage, onZoom, onFitWidth, o
         <IconButton label={withKey("Zoom in", "zoomIn")} onClick={zoomIn}>
           <ZoomIn className="size-4" />
         </IconButton>
-        <IconButton label={withKey("Fit width", "fitWidth")} onClick={onFitWidth} className="hidden sm:inline-flex">
-          <MoveHorizontal className="size-4" />
-        </IconButton>
-        <IconButton label={withKey("Fit page", "fitPage")} onClick={onFitPage} className="hidden sm:inline-flex">
-          <Maximize className="size-4" />
-        </IconButton>
+        {paged && (
+          <>
+            <IconButton label={withKey("Fit width", "fitWidth")} onClick={onFitWidth}>
+              <MoveHorizontal className="size-4" />
+            </IconButton>
+            <IconButton label={withKey("Fit page", "fitPage")} onClick={onFitPage} className="hidden sm:inline-flex">
+              <Maximize className="size-4" />
+            </IconButton>
+          </>
+        )}
       </div>
     </footer>
   );

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Annotation, NormPoint, NormRect } from "../../lib/types";
 import type { AnnotationInput } from "../../lib/api";
-import { hitTest, simplifyPath, type Tool } from "./geometry";
+import { HIGHLIGHT_OPACITY, hitTest, simplifyPath, type Tool } from "./geometry";
 
 interface Props {
   page: number;
@@ -94,7 +94,7 @@ export function AnnotationOverlay({ page, width, height, annotations, tool, colo
     if (!bigEnough(a, b)) return;
     const rect = { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(b[0] - a[0]), h: Math.abs(b[1] - a[1]) };
     if (tool === "ocr") onRegion?.(page, rect);
-    else onCreate({ page, kind: "area", color, opacity: 0.35, rects: [rect] });
+    else onCreate({ page, kind: "area", color, opacity: HIGHLIGHT_OPACITY, rects: [rect] });
   };
 
   const onPointerUp = () => {
@@ -122,6 +122,9 @@ export function AnnotationOverlay({ page, width, height, annotations, tool, colo
       height={height}
       style={{
         zIndex: interactive ? 4 : 1,
+        // Multiply on the whole layer, so it blends with the page under it: text stays black under a
+        // highlight. (On an inner <g> it only blended inside this layer and covered the text.)
+        mixBlendMode: "multiply",
         pointerEvents: interactive ? "auto" : "none",
         cursor: tool === "pen" || tool === "ocr" ? "crosshair" : tool === "area" ? "cell" : tool === "eraser" ? "pointer" : undefined,
         touchAction: interactive ? "none" : undefined,
@@ -152,9 +155,9 @@ export function AnnotationOverlay({ page, width, height, annotations, tool, colo
               ))}
           </g>
         ) : (
-          <g key={a.id} style={{ mixBlendMode: "multiply" }}>
+          <g key={a.id}>
             {a.rects.map((r, i) => (
-              <rect key={i} x={r.x * width} y={r.y * height} width={r.w * width} height={r.h * height} fill={a.color} fillOpacity={Math.min(0.85, a.opacity + 0.1)} rx={2} />
+              <rect key={i} x={r.x * width} y={r.y * height} width={r.w * width} height={r.h * height} fill={a.color} fillOpacity={Math.min(0.85, a.opacity)} rx={2} />
             ))}
             {selectedId === a.id &&
               a.rects.map((r, i) => (

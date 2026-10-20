@@ -31,6 +31,7 @@ import { HIGHLIGHT_COLORS, PEN_COLORS, type Tool } from "./geometry";
 import type { TextPreset } from "../GetTextDialog";
 import { isTyping, keyOf, matches, withKey, type ShortcutId } from "../../lib/shortcuts";
 import { IconButton, Kbd, KeyHint, cx } from "../ui";
+import { canEditFile, isPaged, type DocumentKind } from "../../lib/types";
 
 interface Props {
   tool: Tool;
@@ -40,6 +41,11 @@ interface Props {
   penWidth: number;
   onPenWidth: (w: number) => void;
   dirty: boolean;
+  /**
+   * Slides can't be edited, so page edits and OCR are left out. HTML and Markdown have no pages, so
+   * they get only the text tools (select, highlight).
+   */
+  kind: DocumentKind;
   annotationCount: number;
   saving: boolean;
   onSaveToFile: () => void;
@@ -75,6 +81,9 @@ const TOOLS: { id: Tool; label: string; icon: typeof Highlighter }[] = [
   { id: "eraser", label: "Eraser", icon: Eraser },
   { id: "ocr", label: "Get text from a region: click two corners", icon: ScanText },
 ];
+
+/** The tools for text that flows (HTML, Markdown): the others draw on pages. */
+const TEXT_TOOLS = new Set<Tool>(["select", "highlight"]);
 
 const PEN_WIDTHS = [
   { w: 0.0015, label: "Fine" },
@@ -115,7 +124,13 @@ export function ViewerToolbar(p: Props) {
         setMenu(null); // the app's shortcut for this key (if any) still runs
       }
     };
-    const dismiss = () => setMenu(null);
+    // The menu is placed from the button's position, so it closes when the window gets wider or
+    // narrower. Not on height changes: a phone's address bar and keyboard change only the height.
+    let width = window.innerWidth;
+    const dismiss = () => {
+      if (window.innerWidth !== width) setMenu(null);
+      width = window.innerWidth;
+    };
     window.addEventListener("mousedown", close);
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("resize", dismiss);
@@ -126,6 +141,9 @@ export function ViewerToolbar(p: Props) {
     };
   }, [menu]);
 
+  const editable = canEditFile(p.kind);
+  const paged = isPaged(p.kind);
+  const tools = paged ? TOOLS : TOOLS.filter((t) => TEXT_TOOLS.has(t.id));
   const colors = p.tool === "pen" ? PEN_COLORS : HIGHLIGHT_COLORS;
   const showColors = p.tool === "highlight" || p.tool === "area" || p.tool === "pen";
 
@@ -134,9 +152,9 @@ export function ViewerToolbar(p: Props) {
   keysRef.current = (e: KeyboardEvent) => {
     if (e.defaultPrevented || isTyping(e) || document.querySelector('[role="dialog"]')) return;
     if (e.key === "Escape") return p.onTool("select");
-    const tool = TOOLS.find((t) => matches(e, t.id));
+    const tool = tools.find((t) => matches(e, t.id));
     if (tool) return p.onTool(tool.id);
-    if (matches(e, "pageTools")) {
+    if (paged && matches(e, "pageTools")) {
       e.preventDefault();
       return openMenu(true);
     }
@@ -185,7 +203,7 @@ export function ViewerToolbar(p: Props) {
         <Redo2 className="size-4" />
       </IconButton>
       <div className="mx-1 h-5 w-px shrink-0 bg-line" />
-      {TOOLS.map((t) => (
+      {tools.map((t) => (
         <IconButton key={t.id} label={withKey(t.label, t.id)} active={p.tool === t.id} onClick={() => p.onTool(t.id)}>
           <t.icon className="size-4" />
         </IconButton>
@@ -235,46 +253,61 @@ export function ViewerToolbar(p: Props) {
             <Kbd className="hidden border-warn/30 bg-transparent text-warn lg:inline">{keyOf("save")}</Kbd>
           </button>
         )}
-        {!p.dirty && !p.saving && p.annotationCount > 0 && <span className="hidden px-1 text-[11px] text-ink-3 md:inline">Saved in PDF</span>}
-        <IconButton label={withKey("Copy this page as an image", "copyPage")} onClick={p.onCopyPage}>
-          <Copy className="size-4" />
-        </IconButton>
-        <IconButton label={withKey("Delete this page", "deletePage")} className="hover:text-danger" onClick={p.onDeletePage}>
-          <FileMinus2 className="size-4" />
-        </IconButton>
-        <button
-          ref={menuButton}
-          aria-haspopup="menu"
-          aria-expanded={!!menu}
-          title={withKey("Page tools", "pageTools")}
-          onClick={() => openMenu(false)}
-          className={cx(
-            "flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium",
-            menu ? "bg-accent-soft text-accent" : "text-ink-2 hover:bg-hover hover:text-ink",
-          )}
-        >
-          <Wrench className="size-4" />
-          <span className="hidden md:inline">Page tools</span>
-          <KeyHint id="pageTools" className="hidden md:inline" />
-        </button>
-        {menu && (
+        {editable && !p.dirty && !p.saving && p.annotationCount > 0 && <span className="hidden px-1 text-[11px] text-ink-3 md:inline">Saved in PDF</span>}
+        {paged && (
+          <IconButton label={withKey("Copy this page as an image", "copyPage")} onClick={p.onCopyPage}>
+            <Copy className="size-4" />
+          </IconButton>
+        )}
+        {editable && (
+          <IconButton label={withKey("Delete this page", "deletePage")} className="hover:text-danger" onClick={p.onDeletePage}>
+            <FileMinus2 className="size-4" />
+          </IconButton>
+        )}
+        {paged && (
+          <button
+            ref={menuButton}
+            aria-haspopup="menu"
+            aria-expanded={!!menu}
+            title={withKey("Page tools", "pageTools")}
+            onClick={() => openMenu(false)}
+            className={cx(
+              "flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium",
+              menu ? "bg-accent-soft text-accent" : "text-ink-2 hover:bg-hover hover:text-ink",
+            )}
+          >
+            <Wrench className="size-4" />
+            <span className="hidden md:inline">Page tools</span>
+            <KeyHint id="pageTools" className="hidden md:inline" />
+          </button>
+        )}
+        {menu && paged && (
           <div
             ref={menuRef}
             role="menu"
             aria-label="Page tools"
-            className="ss-scroll fixed z-50 max-h-[calc(100vh-7rem)] w-[min(38rem,calc(100vw-16px))] overflow-y-auto rounded-lg border border-line bg-panel p-1.5 shadow-xl"
+            className="ss-scroll fixed z-50 max-h-[calc(100dvh-7rem)] w-[min(38rem,calc(100vw-16px))] overflow-y-auto rounded-lg border border-line bg-panel p-1.5 shadow-xl"
             style={{ top: menu.top, right: menu.right }}
           >
             <div className="grid gap-x-2 sm:grid-cols-2">
               <div>
-                {heading("Edit this PDF", "Ctrl+Z undoes")}
-                {item("insertBlank", <FilePlus2 className={ic} />, "Insert blank page", p.onInsertBlank)}
-                {item("insertFrom", <Files className={ic} />, "Insert pages from a PDF…", p.onInsertFrom)}
-                {item("replace", <Replace className={ic} />, "Replace this page…", p.onReplace)}
-                {item("turn", <RotateCw className={ic} />, "Turn pages…", p.onRotate)}
-                {item("move", <ArrowDownUp className={ic} />, "Move pages…", p.onMove)}
-                {item("deletePage", <FileMinus2 className="size-4 shrink-0" />, "Delete this page…", p.onDeletePage, true)}
-                {item("deletePages", <Trash2 className="size-4 shrink-0" />, "Delete several pages…", p.onDeletePages, true)}
+                {!editable ? (
+                  <>
+                    {heading("Slides")}
+                    <p className="px-2 pb-2 text-xs text-ink-3">Slides can't be edited here. Extract pages makes a PDF you can edit.</p>
+                  </>
+                ) : (
+                  <>
+                    {heading("Edit this PDF", "Ctrl+Z undoes")}
+                    {item("insertBlank", <FilePlus2 className={ic} />, "Insert blank page", p.onInsertBlank)}
+                    {item("insertFrom", <Files className={ic} />, "Insert pages from a PDF…", p.onInsertFrom)}
+                    {item("replace", <Replace className={ic} />, "Replace this page…", p.onReplace)}
+                    {item("turn", <RotateCw className={ic} />, "Turn pages…", p.onRotate)}
+                    {item("move", <ArrowDownUp className={ic} />, "Move pages…", p.onMove)}
+                    {item("deletePage", <FileMinus2 className="size-4 shrink-0" />, "Delete this page…", p.onDeletePage, true)}
+                    {item("deletePages", <Trash2 className="size-4 shrink-0" />, "Delete several pages…", p.onDeletePages, true)}
+                  </>
+                )}
                 {heading("New PDFs", "original unchanged")}
                 {item("extract", <FileOutput className={ic} />, "Extract pages…", p.onExtract)}
                 {item("split", <Scissors className={ic} />, "Split this PDF…", p.onSplit)}
@@ -291,11 +324,15 @@ export function ViewerToolbar(p: Props) {
                 {item("textPages", <FileText className={ic} />, "Choose pages…", () => p.onGetText({ mode: "range", method: "text" }))}
                 {item("textAll", <FileText className={ic} />, "Whole PDF", () => p.onGetText({ mode: "all", method: "text", auto: true }))}
                 {item("textSection", <FileText className={ic} />, "A bookmark's section…", () => p.onGetText({ mode: "bookmark", method: "text" }))}
-                {heading("OCR", "for scans")}
-                {item("ocrPage", <ScanText className={ic} />, "This page", () => p.onGetText({ mode: "this", method: "ocr", auto: true }))}
-                {item("ocrPages", <ScanText className={ic} />, "Choose pages…", () => p.onGetText({ mode: "range", method: "ocr" }))}
-                {item("ocrAll", <ScanText className={ic} />, "Whole PDF…", () => p.onGetText({ mode: "all", method: "ocr" }))}
-                {item("ocrSection", <ScanText className={ic} />, "A bookmark's section…", () => p.onGetText({ mode: "bookmark", method: "ocr" }))}
+                {editable && (
+                  <>
+                    {heading("OCR", "for scans")}
+                    {item("ocrPage", <ScanText className={ic} />, "This page", () => p.onGetText({ mode: "this", method: "ocr", auto: true }))}
+                    {item("ocrPages", <ScanText className={ic} />, "Choose pages…", () => p.onGetText({ mode: "range", method: "ocr" }))}
+                    {item("ocrAll", <ScanText className={ic} />, "Whole PDF…", () => p.onGetText({ mode: "all", method: "ocr" }))}
+                    {item("ocrSection", <ScanText className={ic} />, "A bookmark's section…", () => p.onGetText({ mode: "bookmark", method: "ocr" }))}
+                  </>
+                )}
               </div>
             </div>
             <p className="mt-1 border-t border-line px-2 pb-0.5 pt-1.5 text-[11px] leading-snug text-ink-3">

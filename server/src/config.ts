@@ -17,9 +17,29 @@ export interface OcrConfig {
   language: string;
 }
 
+export interface SlidesConfig {
+  /** LibreOffice executable; empty means look for `soffice`, then `libreoffice`, on the PATH. */
+  soffice: string;
+  /**
+   * Where LibreOffice reads and writes while converting; empty means pick one. A snap LibreOffice
+   * can't see /tmp or hidden folders like ~/.local, so it then gets ~/snap/libreoffice/common.
+   */
+  workDir: string;
+}
+
 export interface AppConfig {
+  /** 127.0.0.1 = this computer only; 0.0.0.0 = also other devices on the Wi-Fi (they need the password). */
   host: string;
   port: number;
+  /**
+   * Lets other devices (a phone over Wi-Fi or Tailscale) log in. Empty = only this computer can use
+   * StudySpace. Requests from this computer itself never need it.
+   */
+  password: string;
+  /** Extra host names other devices may use (the LAN IPs, this computer's name and *.ts.net always work). */
+  allowedHosts: string[];
+  /** Writes must carry the X-StudySpace header (stops other websites). Only tests turn it off. */
+  requireCsrfHeader: boolean;
   /** Directory holding the SQLite database and edit backups. Never inside the web root. */
   dataDir: string;
   /** Directories added to the library on first start (only when no directory is configured yet). */
@@ -31,16 +51,25 @@ export interface AppConfig {
    * under <dataDir>/history, which doubles as a backup. 0 disables undo for file edits.
    */
   historyLimit: number;
+  /** The desktop Trash that deleted library files go to (freedesktop.org layout). */
+  trashDir: string;
   /** Optional path to the built frontend, served statically in production mode. */
   webDistDir?: string;
   ai: AIConfig;
   ocr: OcrConfig;
+  slides: SlidesConfig;
 }
 
 function defaultDataDir(): string {
   const xdg = process.env.XDG_DATA_HOME;
   const base = xdg && path.isAbsolute(xdg) ? xdg : path.join(os.homedir(), ".local", "share");
   return path.join(base, "studyspace");
+}
+
+function defaultTrashDir(): string {
+  const xdg = process.env.XDG_DATA_HOME;
+  const base = xdg && path.isAbsolute(xdg) ? xdg : path.join(os.homedir(), ".local", "share");
+  return path.join(base, "Trash");
 }
 
 function expandHome(p: string): string {
@@ -61,15 +90,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
     host: env.STUDYSPACE_HOST ?? "127.0.0.1",
     port: Number.parseInt(env.STUDYSPACE_PORT ?? env.PORT ?? "4317", 10),
+    password: env.STUDYSPACE_PASSWORD ?? "",
+    allowedHosts: list(env.STUDYSPACE_ALLOWED_HOSTS, ",").map((h) => h.toLowerCase()),
+    requireCsrfHeader: true,
     dataDir: path.resolve(expandHome(env.STUDYSPACE_DATA_DIR ?? defaultDataDir())),
     seedLibraryDirs: list(env.STUDYSPACE_LIBRARY_DIRS, path.delimiter).map((d) => path.resolve(expandHome(d))),
     seedExcludes: list(env.STUDYSPACE_EXCLUDES, ","),
     historyLimit: Number.isFinite(historyLimit) && historyLimit >= 0 ? historyLimit : 10,
+    trashDir: env.STUDYSPACE_TRASH_DIR ? path.resolve(expandHome(env.STUDYSPACE_TRASH_DIR)) : defaultTrashDir(),
     webDistDir: env.STUDYSPACE_WEB_DIST,
     ocr: {
       ocrmypdf: env.STUDYSPACE_OCRMYPDF || "ocrmypdf",
       tesseract: env.STUDYSPACE_TESSERACT || "tesseract",
       language: env.STUDYSPACE_OCR_LANG || "eng",
+    },
+    slides: {
+      soffice: env.STUDYSPACE_SOFFICE || "",
+      workDir: env.STUDYSPACE_CONVERT_DIR ? path.resolve(expandHome(env.STUDYSPACE_CONVERT_DIR)) : "",
     },
     ai: {
       provider: (env.AI_PROVIDER ?? "none").toLowerCase(),

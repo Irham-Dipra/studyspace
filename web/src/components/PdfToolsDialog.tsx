@@ -4,6 +4,7 @@ import { api, type CreatePdfsRequest, type LibraryFolder } from "../lib/api";
 import { openPdf, parsePageList } from "../lib/pdf";
 import { buildBookmarkTree, readOutline, type BookmarkTreeNode } from "../lib/outline";
 import type { Bookmark, DocumentRecord } from "../lib/types";
+import { uuid } from "../lib/uuid";
 import { Button, Field, Modal, NumberInput, cx, inputCls, selectAllOnFocus } from "./ui";
 
 export type PdfTool = "extract" | "split" | "merge";
@@ -98,7 +99,7 @@ export function PdfToolsDialog(p: Props) {
   const [renamed, setRenamed] = useState<Record<number, string>>({});
 
   // ---- Merge ---------------------------------------------------------------------------
-  const [items, setItems] = useState<MergeItem[]>([{ key: crypto.randomUUID(), doc: p.doc, pages: "" }]);
+  const [items, setItems] = useState<MergeItem[]>([{ key: uuid(), doc: p.doc, pages: "" }]);
   const [mergeName, setMergeName] = useState(cleanName(`Merged - ${p.doc.title}`));
   const [query, setQuery] = useState("");
 
@@ -474,7 +475,7 @@ export function PdfToolsDialog(p: Props) {
                     <button
                       className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] hover:bg-hover"
                       title={d.relPath}
-                      onClick={() => setItems((xs) => [...xs, { key: crypto.randomUUID(), doc: d, pages: "" }])}
+                      onClick={() => setItems((xs) => [...xs, { key: uuid(), doc: d, pages: "" }])}
                     >
                       <Plus className="size-3.5 shrink-0 text-ink-3" />
                       <span className="truncate">{d.relPath}</span>

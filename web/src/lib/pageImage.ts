@@ -1,3 +1,4 @@
+import { notify } from "./notify";
 import type { PDFDocumentProxy } from "./pdf";
 import type { NormRect } from "./types";
 
@@ -38,11 +39,26 @@ export async function renderRegionPng(pdf: PDFDocumentProxy, pageNumber: number,
 /** Pages copied to the clipboard: sharp enough to read when pasted, small enough to paste quickly. */
 export const COPY_QUALITY = { dpi: 200, maxSide: 3000 };
 
+/** Browsers only allow copying on https or on the computer itself, not over http://192.168…. */
+export const COPY_NEEDS_HTTPS =
+  "Copying doesn't work over the plain Wi-Fi address (http). Use the https (Tailscale) address, or your phone's own Copy.";
+
+/** Copies text, or says why it can't (instead of failing silently). */
+export async function copyText(text: string): Promise<void> {
+  if (!navigator.clipboard?.writeText) return notify(window.isSecureContext ? "This browser can't copy text here." : COPY_NEEDS_HTTPS, "error");
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    notify(`Couldn't copy: ${(e as Error).message}`, "error");
+  }
+}
+
 /**
  * Puts an image (and optionally HTML) on the clipboard. Pass promises for work still in progress: the
  * browser then still counts the key press or click that asked for the copy.
  */
 export async function copyToClipboard(png: Promise<Blob> | Blob, html?: Promise<Blob> | Blob): Promise<void> {
+  if (!window.isSecureContext) throw new Error(COPY_NEEDS_HTTPS);
   if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
     throw new Error("This browser can't copy images to the clipboard. Use Save as PNG instead.");
   }

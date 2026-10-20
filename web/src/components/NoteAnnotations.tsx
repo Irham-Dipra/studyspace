@@ -1,7 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Copy, Highlighter, MessageSquare, Trash2, X } from "lucide-react";
+import { Copy, Highlighter, MessageSquare, MessageSquarePlus, Trash2, X } from "lucide-react";
 import { selectionToAnchor } from "../lib/noteAnchors";
-import type { NoteHighlight } from "../lib/types";
+import { copyText } from "../lib/pageImage";
+import { belowSelection, useTouchSelection } from "../lib/touchSelection";
+import { isTyping, matches } from "../lib/shortcuts";
+import type { NoteHighlight, TextAnchoredHighlight } from "../lib/types";
 import { HIGHLIGHT_COLORS } from "./viewer/geometry";
 import { Markdown } from "./Markdown";
 import { Button, cx } from "./ui";
@@ -33,7 +36,7 @@ export function NoteBody({ resourceId, content, highlights, onPopover, onRemoveH
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const shown = new Set([...el.querySelectorAll<HTMLElement>("mark[data-hl]")].map((m) => m.dataset.hl));
+    const shown = new Set([...el.querySelectorAll<HTMLElement>("[data-hl]")].map((m) => m.dataset.hl));
     const gone = highlights.filter((h) => !shown.has(h.id)).map((h) => h.id);
     setMissing((prev) => (prev.length === gone.length && prev.every((id, i) => id === gone[i]) ? prev : gone));
   }, [content, highlights]);
@@ -49,10 +52,15 @@ export function NoteBody({ resourceId, content, highlights, onPopover, onRemoveH
         const anchor = selectionToAnchor(el, sel.getRangeAt(0));
         if (anchor) return onPopover({ kind: "selection", x: clientX, y: clientY, resourceId, anchor });
       }
-      const mark = target.closest<HTMLElement>("mark[data-hl]");
+      const mark = target.closest<HTMLElement>("[data-hl]");
       if (mark?.dataset.hl) onPopover({ kind: "highlight", x: clientX, y: clientY, highlightId: mark.dataset.hl });
     }, 0);
   };
+
+  useTouchSelection(ref, (range) => {
+    const anchor = ref.current && selectionToAnchor(ref.current, range);
+    if (anchor) onPopover({ kind: "selection", ...belowSelection(range), resourceId, anchor });
+  });
 
   const commented = highlights.filter((h) => h.comment.trim() && !missing.includes(h.id));
 
@@ -98,18 +106,23 @@ export function NoteBody({ resourceId, content, highlights, onPopover, onRemoveH
 
 interface PopoverProps {
   popover: NotePopover;
-  highlights: NoteHighlight[];
+  highlights: TextAnchoredHighlight[];
   defaultColor: string;
   onClose: () => void;
   /** Replace the current popover (e.g. open the comment box of a highlight just created). */
   onSwitch: (p: NotePopover) => void;
-  onCreate: (resourceId: string, anchor: Anchor, color: string) => Promise<NoteHighlight | undefined>;
+  onCreate: (resourceId: string, anchor: Anchor, color: string) => Promise<TextAnchoredHighlight | undefined>;
   onUpdate: (id: string, patch: { color?: string; comment?: string }) => void;
   onDelete: (id: string) => void;
+  /** Offers "Note": the selected text into a new note (documents; inside a note it isn't offered). */
+  onQuote?: (text: string) => void;
 }
 
-/** Floating bar for a text selection inside a note, or the menu of an existing note highlight. */
-export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwitch, onCreate, onUpdate, onDelete }: PopoverProps) {
+/**
+ * Floating bar for a text selection inside a note (or an HTML / Markdown document), or the menu of an
+ * existing highlight there.
+ */
+export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwitch, onCreate, onUpdate, onDelete, onQuote }: PopoverProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const highlight = popover.kind === "highlight" ? highlights.find((h) => h.id === popover.highlightId) : undefined;
   const [comment, setComment] = useState(highlight?.comment ?? "");
@@ -120,10 +133,55 @@ export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwi
     setEditing(popover.kind === "highlight" && !!popover.editComment);
   }, [popover, highlight?.comment]);
 
+  const highlightWith = async (color: string) => {
+    if (popover.kind !== "selection") return;
+    await onCreate(popover.resourceId, popover.anchor, color);
+    window.getSelection()?.removeAllRanges();
+    onClose();
+  };
+
+  // The bar's keys, as on a PDF (lib/shortcuts.ts): 1–5 colour, N note, Delete removes.
+  const keysRef = useRef<(e: KeyboardEvent) => boolean>(() => false);
+  keysRef.current = (e: KeyboardEvent) => {
+    if (editing || isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return false;
+    const digit = /^(?:Digit|Numpad)([1-5])$/.exec(e.code);
+    const color = digit ? HIGHLIGHT_COLORS[Number(digit[1]) - 1] : undefined;
+    if (popover.kind === "selection") {
+      if (color) {
+        void highlightWith(color);
+        return true;
+      }
+      if (onQuote && matches(e, "selNote")) {
+        onQuote(popover.anchor.quote);
+        window.getSelection()?.removeAllRanges();
+        onClose();
+        return true;
+      }
+    } else if (highlight) {
+      if (color) {
+        onUpdate(highlight.id, { color });
+        onClose();
+        return true;
+      }
+      if (matches(e, "selDelete")) {
+        onDelete(highlight.id);
+        onClose();
+        return true;
+      }
+    }
+    return false;
+  };
+
   // Esc or a click elsewhere closes it.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape") {
+        if (keysRef.current(e)) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        return;
+      }
       e.stopPropagation();
       window.getSelection()?.removeAllRanges();
       onClose();
@@ -157,15 +215,11 @@ export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwi
 
   return (
     <div ref={boxRef} className="fixed z-50 w-max max-w-[300px] rounded-lg border border-line bg-panel p-1 shadow-lg" style={style} onMouseDown={(e) => e.target === e.currentTarget && e.preventDefault()}>
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         {popover.kind === "selection" ? (
           <>
             <Highlighter className="mx-1 size-4 shrink-0 text-ink-3" />
-            {swatches(null, async (c) => {
-              await onCreate(popover.resourceId, popover.anchor, c);
-              window.getSelection()?.removeAllRanges();
-              onClose();
-            })}
+            {swatches(null, (c) => void highlightWith(c))}
             <div className="mx-1 h-5 w-px shrink-0 bg-line" />
             <PopButton
               icon={<MessageSquare className="size-4" />}
@@ -177,11 +231,22 @@ export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwi
                 else onClose();
               }}
             />
+            {onQuote && (
+              <PopButton
+                icon={<MessageSquarePlus className="size-4" />}
+                label="Note"
+                onClick={() => {
+                  onQuote(popover.anchor.quote);
+                  window.getSelection()?.removeAllRanges();
+                  onClose();
+                }}
+              />
+            )}
             <PopButton
               icon={<Copy className="size-4" />}
               label="Copy"
               onClick={() => {
-                void navigator.clipboard?.writeText(popover.anchor.quote);
+                void copyText(popover.anchor.quote);
                 onClose();
               }}
             />

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { isWithin } from "./pathGuard.js";
+import { LIBRARY_EXTENSION, isLibraryFile } from "./fileKinds.js";
 
 export interface ScannedFile {
   absPath: string;
@@ -33,8 +34,8 @@ export function isExcluded(relDir: string, excludes: string[]): boolean {
   return false;
 }
 
-/** Recursively finds PDF files under `root`. Does not follow directory symlinks (avoids loops/escapes). */
-export async function scanForPdfs(root: string, excludes: string[] = []): Promise<ScannedFile[]> {
+/** Recursively finds PDF and slide files under `root`. Does not follow directory symlinks (avoids loops/escapes). */
+export async function scanForDocuments(root: string, excludes: string[] = []): Promise<ScannedFile[]> {
   const realRoot = await fs.realpath(root);
   const out: ScannedFile[] = [];
 
@@ -52,7 +53,7 @@ export async function scanForPdfs(root: string, excludes: string[] = []): Promis
       if (entry.isDirectory()) {
         if (ALWAYS_SKIP.has(entry.name) || isExcluded(rel, excludes)) continue;
         await walk(abs, rel);
-      } else if ((entry.isFile() || entry.isSymbolicLink()) && entry.name.toLowerCase().endsWith(".pdf")) {
+      } else if ((entry.isFile() || entry.isSymbolicLink()) && isLibraryFile(entry.name)) {
         try {
           const real = entry.isSymbolicLink() ? await fs.realpath(abs) : abs;
           if (entry.isSymbolicLink() && !isWithin(realRoot, real)) continue; // symlink escaping the root
@@ -72,5 +73,5 @@ export async function scanForPdfs(root: string, excludes: string[] = []): Promis
 }
 
 export function titleFromPath(p: string): string {
-  return path.basename(p).replace(/\.pdf$/i, "");
+  return path.basename(p).replace(LIBRARY_EXTENSION, "");
 }

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { Eye, Pencil } from "lucide-react";
 import type { ResourceInput } from "../lib/api";
+import { cleanPasted } from "../lib/pasteClean";
 import { RESOURCE_TYPE_LABEL, type Resource, type ResourceScope, type ResourceType } from "../lib/types";
 import { Markdown } from "./Markdown";
 import { Button, NumberInput, cx, inputCls } from "./ui";
@@ -8,6 +9,8 @@ import { Button, NumberInput, cx, inputCls } from "./ui";
 interface Props {
   page: number;
   pageCount: number;
+  /** False for documents without pages (HTML, Markdown): notes are then for the whole document. */
+  paged?: boolean;
   initial?: Resource;
   defaults?: Partial<ResourceInput>;
   onSave: (input: ResourceInput) => Promise<void>;
@@ -23,9 +26,9 @@ const SCOPES: { id: ResourceScope; label: string }[] = [
   { id: "document", label: "Whole document" },
 ];
 
-export function ResourceEditor({ page, pageCount, initial, defaults, onSave, onCancel, onDirtyChange }: Props) {
+export function ResourceEditor({ page, pageCount, paged = true, initial, defaults, onSave, onCancel, onDirtyChange }: Props) {
   const [type, setType] = useState<ResourceType>(initial?.type ?? defaults?.type ?? "note");
-  const [scope, setScope] = useState<ResourceScope>(initial?.scope ?? defaults?.scope ?? "page");
+  const [scope, setScope] = useState<ResourceScope>(paged ? (initial?.scope ?? defaults?.scope ?? "page") : "document");
   const [start, setStart] = useState<number>(initial?.pageStart ?? defaults?.pageStart ?? page);
   const [end, setEnd] = useState<number>(initial?.pageEnd ?? defaults?.pageEnd ?? page);
   const [title, setTitle] = useState(initial?.title ?? defaults?.title ?? "");
@@ -34,6 +37,7 @@ export function ResourceEditor({ page, pageCount, initial, defaults, onSave, onC
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pasteNote, setPasteNote] = useState<string | null>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
 
   const snapshot = JSON.stringify([type, scope, start, end, title, content, url]);
@@ -52,6 +56,43 @@ export function ResourceEditor({ page, pageCount, initial, defaults, onSave, onC
     }
   }, [initial]);
 
+  // AI answers: drop the chat before the start mark and the [cite: n] tags. The clean text is set
+  // through React, not execCommand (Firefox left the raw paste in), so Ctrl+Z is handled here.
+  const pasteUndo = useRef<{ before: string; after: string; caret: number } | null>(null);
+  const caretTo = useRef<number | null>(null);
+  useEffect(() => {
+    const el = contentRef.current;
+    if (el && caretTo.current !== null) el.setSelectionRange(caretTo.current, caretTo.current);
+    caretTo.current = null;
+  }, [content]);
+
+  const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const raw = e.clipboardData.getData("text/plain");
+    const { text, cutChars, citations } = cleanPasted(raw);
+    if (text === raw) return setPasteNote(null);
+    e.preventDefault();
+    const el = e.currentTarget;
+    const before = el.value;
+    const after = before.slice(0, el.selectionStart) + text + before.slice(el.selectionEnd);
+    pasteUndo.current = { before, after, caret: el.selectionStart };
+    caretTo.current = el.selectionStart + text.length;
+    setContent(after);
+    const parts = [cutChars ? "cut the text before the start mark" : "", citations ? `removed ${citations} citation${citations > 1 ? "s" : ""}` : ""];
+    setPasteNote(`Pasted: ${parts.filter(Boolean).join(", ")}. Ctrl+Z takes the paste back.`);
+  };
+
+  const onContentKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    const u = pasteUndo.current;
+    if (!u || ["Control", "Meta", "Shift", "Alt"].includes(e.key)) return;
+    if (e.key.toLowerCase() === "z" && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && content === u.after) {
+      e.preventDefault();
+      caretTo.current = u.caret;
+      setContent(u.before);
+      setPasteNote(null);
+    }
+    pasteUndo.current = null;
+  };
+
   const submit = async () => {
     setError(null);
     if (type === "link" && !url.trim()) return setError("A link needs a URL.");
@@ -68,7 +109,8 @@ export function ResourceEditor({ page, pageCount, initial, defaults, onSave, onC
         pageStart: scope === "document" ? null : start,
         pageEnd: scope === "document" ? null : scope === "page" ? start : end,
         title: title.trim(),
-        content,
+        // Also on save: catches text that came in without a paste event (drag, old notes being edited).
+        content: cleanPasted(content).text,
         url: url.trim() || null,
       });
     } catch (err) {
@@ -142,55 +184,61 @@ export function ResourceEditor({ page, pageCount, initial, defaults, onSave, onC
             placeholder={type === "pyq" ? "Paste the question, year and your answer… (Markdown, $math$ supported)" : "Write in Markdown… $E = mc^2$ works too"}
             value={content}
             onChange={(e) => setContent(e.target.value)}
+            onPaste={onPaste}
+            onKeyDown={onContentKey}
             rows={6}
           />
         )}
       </div>
 
-      <div className="mt-2">
-        <div className="flex rounded-md border border-line p-0.5 text-xs">
-          {SCOPES.map((s) => (
-            <button
-              type="button"
-              key={s.id}
-              onClick={() => {
-                setScope(s.id);
-                if (s.id === "range" && end < start) setEnd(start);
-              }}
-              className={cx("flex-1 rounded px-2 py-1 font-medium", scope === s.id ? "bg-accent text-accent-ink" : "text-ink-2 hover:bg-hover")}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-        {scope !== "document" && (
-          <div className="mt-2 flex items-center gap-2 text-xs text-ink-2">
-            <span>{scope === "page" ? "Page" : "From"}</span>
-            <NumberInput
-              aria-label={scope === "page" ? "Page" : "First page"}
-              min={1}
-              max={pageCount || undefined}
-              className={cx(inputCls, "h-7 w-20")}
-              value={start}
-              onChange={setStart}
-            />
-            {scope === "range" && (
-              <>
-                <span>to</span>
-                <NumberInput
-                  aria-label="Last page"
-                  min={1}
-                  max={pageCount || undefined}
-                  className={cx(inputCls, "h-7 w-20")}
-                  value={end}
-                  onChange={setEnd}
-                />
-              </>
-            )}
-            {pageCount > 0 && <span className="text-ink-3">of {pageCount}</span>}
+      {paged && (
+        <div className="mt-2">
+          <div className="flex rounded-md border border-line p-0.5 text-xs">
+            {SCOPES.map((s) => (
+              <button
+                type="button"
+                key={s.id}
+                onClick={() => {
+                  setScope(s.id);
+                  if (s.id === "range" && end < start) setEnd(start);
+                }}
+                className={cx("flex-1 rounded px-2 py-1 font-medium", scope === s.id ? "bg-accent text-accent-ink" : "text-ink-2 hover:bg-hover")}
+              >
+                {s.label}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
+          {scope !== "document" && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-ink-2">
+              <span>{scope === "page" ? "Page" : "From"}</span>
+              <NumberInput
+                aria-label={scope === "page" ? "Page" : "First page"}
+                min={1}
+                max={pageCount || undefined}
+                className={cx(inputCls, "h-7 w-20")}
+                value={start}
+                onChange={setStart}
+              />
+              {scope === "range" && (
+                <>
+                  <span>to</span>
+                  <NumberInput
+                    aria-label="Last page"
+                    min={1}
+                    max={pageCount || undefined}
+                    className={cx(inputCls, "h-7 w-20")}
+                    value={end}
+                    onChange={setEnd}
+                  />
+                </>
+              )}
+              {pageCount > 0 && <span className="text-ink-3">of {pageCount}</span>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {pasteNote && !preview && <p className="mt-1 text-[11px] text-ink-3">{pasteNote}</p>}
 
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}
 

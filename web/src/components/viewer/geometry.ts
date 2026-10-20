@@ -3,6 +3,8 @@ import type { Annotation, NormPoint, NormRect } from "../../lib/types";
 export type Tool = "select" | "highlight" | "area" | "pen" | "eraser" | "ocr";
 
 export const HIGHLIGHT_COLORS = ["#ffd54f", "#81c784", "#64b5f6", "#f48fb1", "#ff8a65"];
+/** Strength of new text and area highlights (was 0.4 / 0.35: too strong to read through). */
+export const HIGHLIGHT_OPACITY = 0.3;
 export const PEN_COLORS = ["#e53935", "#1e88e5", "#43a047", "#212121", "#8e24aa"];
 
 /** Merges per-glyph-run client rects into one rect per text line. Inputs are in page pixels. */

@@ -3,17 +3,32 @@ import type { NoteHighlight } from "./types";
 /**
  * Anchoring for highlights inside notes.
  *
- * A note's "text" is the concatenation of all rendered text nodes, skipping KaTeX output (formulas
- * can't be partially highlighted). The same definition is used on the browser DOM (to capture a
- * selection) and on the HTML tree before React renders it (to draw the <mark>s), so offsets agree.
+ * A note's "text" is the concatenation of all rendered text nodes, with each formula counted as its
+ * TeX between dollars (`$x^2$`, see `mathToken`): a formula is highlighted whole or not at all. The
+ * same definition is used on the browser DOM (to capture a selection) and on the HTML tree before
+ * React renders it (to draw the highlights), so offsets agree.
+ * Highlights saved before 2026-10-19 left formulas out of their quote; `legacyText` finds those.
  * Highlights are stored as quote + a little surrounding context and re-found on every render, which
  * keeps them attached to the right words even after the note is edited.
  */
 
 export const CONTEXT_CHARS = 32;
 
-/** Collapses whitespace runs to one space and remembers where each normalised char came from. */
+let lastText: string | null = null;
+let lastNormal: { norm: string; map: number[] } = { norm: "", map: [] };
+
+/**
+ * Collapses whitespace runs to one space and remembers where each normalised char came from. Every
+ * highlight is looked up in the same text, so the last result is kept (a long document has many).
+ */
 function normalise(text: string): { norm: string; map: number[] } {
+  if (text === lastText) return lastNormal;
+  lastNormal = normaliseText(text);
+  lastText = text;
+  return lastNormal;
+}
+
+function normaliseText(text: string): { norm: string; map: number[] } {
   let norm = "";
   const map: number[] = [];
   let inSpace = false;
@@ -63,7 +78,10 @@ export function locateQuote(text: string, h: Pick<NoteHighlight, "quote" | "pref
   return [map[best], map[best + quote.length - 1] + 1];
 }
 
-/** True for elements whose text must be skipped (rendered formulas). */
+/** What a formula counts as in a note's text. */
+export const mathToken = (tex: string) => `$${tex.trim()}$`;
+
+/** True for rendered formulas (KaTeX output), which count as one `mathToken`. */
 export const isMathClass = (className: unknown): boolean => {
   const list = Array.isArray(className) ? className : typeof className === "string" ? className.split(/\s+/) : [];
   return list.includes("katex") || list.includes("katex-display");
@@ -71,25 +89,58 @@ export const isMathClass = (className: unknown): boolean => {
 
 // ---- DOM side: turning a selection into a highlight ------------------------------
 
-/** Text nodes of a rendered note, in order, excluding formulas. */
-export function domTextNodes(container: Element): Text[] {
-  const out: Text[] = [];
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) => (n.parentElement?.closest(".katex, .katex-display") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+/** A piece of a rendered note's text: a text node, or a whole formula. */
+type Unit = { node: Text; text: string } | { math: Element; text: string };
+
+const texOf = (math: Element) => math.querySelector('annotation[encoding="application/x-tex"]')?.textContent ?? math.textContent ?? "";
+
+/** The outermost formula element containing `node`, if any. */
+const mathAround = (node: Node): Element | null => {
+  const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+  return el?.closest(".katex-display") ?? el?.closest(".katex") ?? null;
+};
+
+/** The pieces of a rendered note's text, in order. */
+export function domUnits(container: Element): Unit[] {
+  const out: Unit[] = [];
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
+    acceptNode: (n) => {
+      if (n.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
+      const el = n as Element;
+      // A formula is one piece; its insides are skipped.
+      if (el.classList.contains("katex-display") || el.classList.contains("katex")) {
+        out.push({ math: el, text: mathToken(texOf(el)) });
+        return NodeFilter.FILTER_REJECT;
+      }
+      return NodeFilter.FILTER_SKIP;
+    },
   });
-  for (let n = walker.nextNode(); n; n = walker.nextNode()) out.push(n as Text);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) out.push({ node: n as Text, text: (n as Text).data });
   return out;
 }
 
-/** Character offset (in the note's text) of a DOM boundary point. */
-function boundaryOffset(nodes: Text[], node: Node, offset: number): number {
+/**
+ * Character offset (in the note's text) of a DOM boundary point. A point inside a formula moves to
+ * the formula's start (`side` "start") or end, so a selection always takes whole formulas.
+ */
+function boundaryOffset(units: Unit[], node: Node, offset: number, side: "start" | "end"): number {
+  const math = mathAround(node);
+  let acc = 0;
+  if (math) {
+    for (const u of units) {
+      if ("math" in u && u.math === math) return side === "start" ? acc : acc + u.text.length;
+      acc += u.text.length;
+    }
+    acc = 0;
+  }
   const point = document.createRange();
   point.setStart(node, offset);
   point.collapse(true);
-  let acc = 0;
-  for (const t of nodes) {
-    if (t === node) return acc + offset;
-    if (point.comparePoint(t, t.length) <= 0) acc += t.length; // whole node lies before the point
+  for (const u of units) {
+    if ("node" in u && u.node === node) return acc + offset;
+    // Whole piece lies before the point.
+    const before = "node" in u ? point.comparePoint(u.node, u.node.length) <= 0 : point.comparePoint(u.math, u.math.childNodes.length) <= 0;
+    if (before) acc += u.text.length;
     else break;
   }
   return acc;
@@ -98,10 +149,10 @@ function boundaryOffset(nodes: Text[], node: Node, offset: number): number {
 /** Converts the current selection inside `container` into a quote with context, or null if empty. */
 export function selectionToAnchor(container: Element, range: Range): Pick<NoteHighlight, "quote" | "prefix" | "suffix"> | null {
   if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) return null;
-  const nodes = domTextNodes(container);
-  const text = nodes.map((n) => n.data).join("");
-  let start = boundaryOffset(nodes, range.startContainer, range.startOffset);
-  let end = boundaryOffset(nodes, range.endContainer, range.endOffset);
+  const units = domUnits(container);
+  const text = units.map((u) => u.text).join("");
+  let start = boundaryOffset(units, range.startContainer, range.startOffset, "start");
+  let end = boundaryOffset(units, range.endContainer, range.endOffset, "end");
   while (start < end && /\s/.test(text[start])) start++;
   while (end > start && /\s/.test(text[end - 1])) end--;
   if (end <= start) return null;

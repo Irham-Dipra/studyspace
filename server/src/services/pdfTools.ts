@@ -14,7 +14,7 @@ import { fingerprintFile } from "../library/fingerprint.js";
 import { isWithin, resolveInsideRoots } from "../library/pathGuard.js";
 import { ALWAYS_SKIP, isExcluded } from "../library/scanner.js";
 import { composePdf, loadPdf, writeOutline, type OutlineItem } from "../pdf/operations.js";
-import { resolveDocumentFile } from "./documentEditor.js";
+import { resolveReadablePdf } from "./documentEditor.js";
 import { writeFileAtomic } from "./fileWriter.js";
 import { HttpError, type Directory, type DocumentRecord } from "../types.js";
 
@@ -140,7 +140,7 @@ function carryBookmarks(nodes: BookmarkNode[], pageMap: Map<number, number>): Ou
  * them to the library. The source files are only read. The new files get the copied pages' notes,
  * highlights and bookmarks as asked.
  */
-export async function createPdfs(db: DB, req: CreateRequest): Promise<CreateResult> {
+export async function createPdfs(db: DB, req: CreateRequest, dataDir: string): Promise<CreateResult> {
   if (!req.outputs.length) throw new HttpError(400, "Nothing to create.");
   if (req.outputs.length > MAX_OUTPUTS) throw new HttpError(400, `At most ${MAX_OUTPUTS} files at once.`);
   const { dir, relDir } = await resolveFolder(db, req.folder, req.newFolder);
@@ -152,7 +152,7 @@ export async function createPdfs(db: DB, req: CreateRequest): Promise<CreateResu
   for (const o of req.outputs) {
     for (const s of o.segments) {
       if (sources.has(s.documentId)) continue;
-      const { doc, file } = resolveDocumentFile(db, s.documentId);
+      const { doc, file } = resolveReadablePdf(db, dataDir, s.documentId);
       sources.set(s.documentId, { doc, pdf: await loadPdf(await fs.readFile(file)) });
     }
   }

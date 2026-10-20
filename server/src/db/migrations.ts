@@ -228,4 +228,35 @@ export const migrations: Migration[] = [
       CREATE INDEX idx_document_history_document ON document_history(document_id, created_at);
     `,
   },
+  {
+    version: 8,
+    name: "sessions_text_highlights_scroll",
+    up: `
+      -- Logins from other devices (a phone over Wi-Fi or Tailscale). Only a hash of each cookie's
+      -- token is kept, so the database alone can't be used to log in.
+      CREATE TABLE sessions (
+        token_hash   TEXT PRIMARY KEY,
+        user_agent   TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        last_seen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        expires_at   TEXT NOT NULL
+      );
+      -- Highlights on the text of HTML and Markdown documents. They have no pages, and their text
+      -- reflows, so they are anchored like note highlights: quote + surrounding context.
+      CREATE TABLE document_highlights (
+        id          TEXT PRIMARY KEY,
+        document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        color       TEXT NOT NULL,
+        quote       TEXT NOT NULL CHECK (length(quote) > 0),
+        prefix      TEXT NOT NULL DEFAULT '',
+        suffix      TEXT NOT NULL DEFAULT '',
+        comment     TEXT NOT NULL DEFAULT '',
+        created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      CREATE INDEX idx_document_highlights_document ON document_highlights(document_id);
+      -- Where you were in a document without pages: 0 = top, 1 = bottom.
+      ALTER TABLE reading_progress ADD COLUMN top REAL;
+    `,
+  },
 ];

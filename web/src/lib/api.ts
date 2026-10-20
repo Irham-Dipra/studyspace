@@ -13,6 +13,7 @@ import type {
   ResourceScope,
   ResourceType,
   ScanResult,
+  TextHighlight,
 } from "./types";
 
 export interface OcrStatus {
@@ -51,12 +52,26 @@ export function setMutationListener(fn: MutationListener | null): void {
   mutationListener = fn;
 }
 
+let authListener: (() => void) | null = null;
+
+/** Called when the server asks for the password (a phone whose login ran out, or was logged out). */
+export function setAuthListener(fn: (() => void) | null): void {
+  authListener = fn;
+}
+
+/**
+ * Sent with every request. The server refuses writes without it: a custom header can't be sent by
+ * another website's form or plain fetch, so those can't change anything here.
+ */
+const CSRF_HEADER = { "X-StudySpace": "1" };
+
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api${url}`, {
     method,
-    headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+    headers: body !== undefined ? { ...CSRF_HEADER, "Content-Type": "application/json" } : CSRF_HEADER,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  if (res.status === 401 && !url.startsWith("/auth/")) authListener?.();
   if (res.ok && method !== "GET") mutationListener?.(method, url);
   if (res.status === 204) return undefined as T;
   const text = await res.text();
@@ -134,12 +149,29 @@ export type EditResult = DocumentRecord & { editId: string | null };
 /** What happens to notes whose pages are all deleted: removed with the page, or kept as whole-document notes. */
 export type OrphanPolicy = "delete" | "document";
 
+export interface AuthStatus {
+  /** Opened on this computer (127.0.0.1 / localhost): no password needed. */
+  local: boolean;
+  loggedIn: boolean;
+  /** A password is set in .env, so other devices can log in. */
+  passwordSet: boolean;
+}
+
 export const api = {
+  authStatus: () => req<AuthStatus>("GET", "/auth/status"),
+  login: (password: string) => req<AuthStatus>("POST", "/auth/login", { password }),
+  logout: () => req<void>("POST", "/auth/logout"),
+
   config: () => req<AppConfigInfo>("GET", "/config"),
 
   library: () => req<{ directories: Directory[]; documents: DocumentRecord[] }>("GET", "/library"),
   scan: () => req<ScanResult>("POST", "/library/scan"),
   recent: () => req<(ReadingProgress & { title: string })[]>("GET", "/recent"),
+  /** Renames the file in its folder; the extension is kept. */
+  renameFile: (id: string, name: string) => req<DocumentRecord>("POST", `/documents/${id}/rename`, { name }),
+  /** Moves the file to the desktop Trash. Notes etc. are kept, so `restoreFile` brings it all back. */
+  trashFile: (id: string) => req<{ trashName: string }>("POST", `/documents/${id}/trash`),
+  restoreFile: (id: string, trashName: string) => req<DocumentRecord>("POST", `/documents/${id}/restore`, { trashName }),
   search: (q: string) =>
     req<{ documents: DocumentRecord[]; resources: (Resource & { documentTitle: string })[] }>(
       "GET",
@@ -158,11 +190,23 @@ export const api = {
     ),
 
   document: (id: string) => req<DocumentRecord & { progress: ReadingProgress | null }>("GET", `/documents/${id}`),
+  /** Slides: waits until LibreOffice has turned them into a PDF (the first time takes up to a minute). */
+  convert: (id: string) => req<{ ready: true }>("POST", `/documents/${id}/convert`),
   fileUrl: (d: Pick<DocumentRecord, "id" | "fingerprint">) =>
     `/api/documents/${d.id}/file?v=${encodeURIComponent(d.fingerprint)}`,
   setPageCount: (id: string, pageCount: number) => req<DocumentRecord>("PATCH", `/documents/${id}/meta`, { pageCount }),
-  saveProgress: (id: string, page: number, zoom: number) =>
-    req<ReadingProgress>("PUT", `/documents/${id}/progress`, { page, zoom }),
+  /** `top` (0..1, how far down) is for documents without pages; PDFs leave it out. */
+  saveProgress: (id: string, page: number, zoom: number, top?: number) =>
+    req<ReadingProgress>("PUT", `/documents/${id}/progress`, { page, zoom, ...(top !== undefined && { top }) }),
+  /** The text of an HTML or Markdown document. */
+  fileText: async (d: Pick<DocumentRecord, "id" | "fingerprint">): Promise<string> => {
+    const res = await fetch(api.fileUrl(d), { headers: CSRF_HEADER });
+    if (res.status === 401) authListener?.();
+    if (!res.ok) throw new ApiError(res.status, ((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? res.statusText);
+    return res.text();
+  },
+  /** A picture next to a Markdown file, by its path relative to the file. */
+  assetUrl: (docId: string, rel: string) => `/api/documents/${docId}/asset?path=${encodeURIComponent(rel)}`,
 
   resources: (docId: string) => req<Resource[]>("GET", `/documents/${docId}/resources`),
   createResource: (docId: string, body: ResourceInput) => req<Resource>("POST", `/documents/${docId}/resources`, body),
@@ -177,6 +221,15 @@ export const api = {
   updateNoteHighlight: (id: string, body: { color?: string; comment?: string }) =>
     req<NoteHighlight>("PATCH", `/note-highlights/${id}`, body),
   deleteNoteHighlight: (id: string) => req<void>("DELETE", `/note-highlights/${id}`),
+
+  textHighlights: (docId: string) => req<TextHighlight[]>("GET", `/documents/${docId}/text-highlights`),
+  createTextHighlight: (
+    docId: string,
+    body: { id?: string; color: string; quote: string; prefix?: string; suffix?: string; comment?: string },
+  ) => req<TextHighlight>("POST", `/documents/${docId}/text-highlights`, body),
+  updateTextHighlight: (id: string, body: { color?: string; comment?: string }) =>
+    req<TextHighlight>("PATCH", `/text-highlights/${id}`, body),
+  deleteTextHighlight: (id: string) => req<void>("DELETE", `/text-highlights/${id}`),
 
   annotations: (docId: string) => req<Annotation[]>("GET", `/documents/${docId}/annotations`),
   createAnnotation: (docId: string, body: AnnotationInput) =>
@@ -218,7 +271,8 @@ export const api = {
   applyOcr: (jobId: string, fingerprint: string) => req<EditResult>("POST", `/ocr/jobs/${jobId}/apply`, { fingerprint }),
   discardOcr: (jobId: string) => req<void>("DELETE", `/ocr/jobs/${jobId}`),
   ocrImage: async (png: Blob): Promise<string> => {
-    const res = await fetch("/api/ocr/image", { method: "POST", headers: { "Content-Type": "image/png" }, body: png });
+    const res = await fetch("/api/ocr/image", { method: "POST", headers: { ...CSRF_HEADER, "Content-Type": "image/png" }, body: png });
+    if (res.status === 401) authListener?.();
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new ApiError(res.status, data?.error ?? res.statusText);
     return (data as { text: string }).text;

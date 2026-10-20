@@ -66,6 +66,8 @@ npm run typecheck  # server + web
 | SQLite database | `~/.local/share/studyspace/studyspace.db` (or `$XDG_DATA_HOME/studyspace/`, or `STUDYSPACE_DATA_DIR`) |
 | Previous versions of PDFs StudySpace edited (undo history, doubles as backup) | `~/.local/share/studyspace/history/<document-id>/` (last 10 per PDF) |
 | Your PDFs | Stay where they are. They are never copied into the app. |
+| Files deleted from the library | The desktop Trash, `~/.local/share/Trash/` (or `STUDYSPACE_TRASH_DIR`), so the file manager can restore them |
+| Logins of other devices | The `sessions` table (only a hash of each cookie's token) |
 
 The database is never placed inside the web root. The **Settings** dialog shows the exact path.
 
@@ -76,9 +78,14 @@ The database is never placed inside the web root. The **Settings** dialog shows 
 | `STUDYSPACE_LIBRARY_DIRS` | – | Folders added on first start (separate several with `:`). Later changes go through Settings. |
 | `STUDYSPACE_EXCLUDES` | – | Comma-separated folder names or relative paths to skip, e.g. `Offllines` |
 | `STUDYSPACE_DATA_DIR` | `~/.local/share/studyspace` | Database + backups |
-| `STUDYSPACE_HOST` / `STUDYSPACE_PORT` | `127.0.0.1` / `4317` | API address (localhost only by default) |
+| `STUDYSPACE_HOST` / `STUDYSPACE_PORT` | `127.0.0.1` / `4317` | Address. `127.0.0.1` = this computer only; `0.0.0.0` = also devices on the same Wi-Fi (they must log in). |
+| `STUDYSPACE_PASSWORD` | – | Lets other devices (a phone over Wi-Fi or Tailscale) log in. Without it only this computer can use StudySpace. This computer never needs it. |
+| `STUDYSPACE_ALLOWED_HOSTS` | – | Extra host names other devices may use, comma-separated. This computer's IP addresses and name, `localhost` and `*.ts.net` always work. |
 | `STUDYSPACE_OCR_LANG` | `eng` | Tesseract language(s) for OCR, e.g. `eng+ben` (install `tesseract-ocr-ben`). |
 | `STUDYSPACE_OCRMYPDF` / `STUDYSPACE_TESSERACT` | `ocrmypdf` / `tesseract` | OCR programs. Install with `sudo apt install ocrmypdf tesseract-ocr`. OCR only runs when you ask for it. |
+| `STUDYSPACE_SOFFICE` | `soffice`, else `libreoffice` | LibreOffice, which turns slides (`.pptx`, `.ppt`) into a PDF when they are first opened. |
+| `STUDYSPACE_TRASH_DIR` | `~/.local/share/Trash` (or `$XDG_DATA_HOME/Trash`) | Where files deleted in the library go (freedesktop.org Trash layout: `files/` and `info/`). |
+| `STUDYSPACE_CONVERT_DIR` | snap: `~/snap/libreoffice/common/studyspace`; else `<dataDir>/convert-tmp` | Where LibreOffice works on a copy of the slides. A snap LibreOffice can't read `/tmp` or hidden folders. |
 | `STUDYSPACE_HISTORY_LIMIT` | `10` | Undoable file edits kept per PDF (each keeps the previous file version). `0` disables undo for page edits / Save to PDF. |
 | `AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL` | `none` | Optional AI integration (see below) |
 
@@ -86,6 +93,8 @@ Real environment variables override `.env`.
 
 ## Using it
 
+- **On a phone:** set `STUDYSPACE_PASSWORD`, then either `STUDYSPACE_HOST=0.0.0.0` and `http://<this computer's IP>:4317` on the same Wi-Fi, or `tailscale serve --bg 4317` and the `https://….ts.net` address from anywhere. The phone uses the built app on 4317, so run `npm run build` after updates. Step by step: [docs/PHONE_SETUP.md](docs/PHONE_SETUP.md).
+- **HTML pages and Markdown files:** `.html`/`.htm` (e.g. a Claude artifact saved from claude.ai) and `.md`/`.markdown` files are listed with the PDFs. They open as text that flows, with no pages; you can highlight their text and keep notes on them, and the file itself is never changed. An HTML page runs in a sandboxed frame (scripts allowed, no access to StudySpace or its storage).
 - **Several PDFs at once:** Ctrl+click (or middle-click) a library entry to open it in a new browser tab. Tabs notify each other through `BroadcastChannel` and re-read whatever another tab changed. File edits reload the PDF, and edits are fingerprint-checked so a stale tab can never overwrite a newer file.
 - **Unsaved work:** opening another PDF in the same tab asks first when highlights or bookmarks aren't saved into the file or a note is half written (Save to PDF and open / Open without saving / Stay here).
 - **Notes & resources:** one combined list per page, grouped by type. Every card is open when a PDF is opened, with a **Close / Expand** button right after its title. Use **+ Add note or resource** in the right panel. Pick a type (Personal Note, Summary, PYQ, AI Explanation, External Link) and a scope:
@@ -97,6 +106,7 @@ Real environment variables override `.env`.
 - **Annotate notes:** select text inside an expanded note or resource to highlight it or add a comment. Highlights are stored separately (`note_highlights` table) and anchored by quote and context, so the note's Markdown is never modified.
 - **Select text** to get a small menu: highlight it in a colour, quote it into a new note, or copy it.
 - **Tools** (toolbar or keys): `V` select · `H` highlight text · `A` highlight an area · `P` pen · `E` eraser · `Esc` back to select. Click an existing highlight to recolour it, delete it, or turn it into a note.
+- **Slides:** `.pptx` and `.ppt` files show in the library (with a slides icon) next to PDFs. The first time one opens, LibreOffice turns a copy of it into a PDF (about 30–60 s), kept in `<dataDir>/converted/` and made again only when the slides change; after that it opens at once. Notes, highlights, drawings, bookmarks, Get text and pictures work as on a PDF. The slides file is never changed: page edits, Save to PDF and OCR are off, and *Extract pages* makes an editable PDF.
 - **Save to PDF:** highlights and drawings are stored instantly in the database. **Save to PDF** writes them into the original file as standard PDF Highlight/Ink annotations, so Okular, Evince, Acrobat and browsers show them too. Saving again replaces StudySpace's earlier annotations instead of duplicating them, and annotations from other tools are left untouched.
 - **Page tools:** the 🗑 button (or `Shift+Delete`) deletes the current page, and 🔧 offers *insert blank pages*, *insert pages from another PDF*, *replace this page* (with pages of any library PDF, one for one, so page numbers and notes stay put), *turn pages*, *move pages* and *delete several pages*. These rewrite the original file. Notes, ranges, highlights and your reading position stay with their content as page numbers shift. Notes that belonged only to a deleted page are **never moved onto another page**: they are removed with it (undo brings them back), or kept as whole-document notes if you choose that in the dialog.
 - **New PDFs:** 🔧 → *Extract pages to a new PDF* (optionally removing them from the original), *Split this PDF* (every N pages, by page ranges, or by chapter bookmarks) and *Merge PDFs* (any library PDFs and page lists, in your order, with a bookmark per source). New files go into a library folder you pick, never overwrite existing files, show up in the library at once, and bring along the copied pages' notes, highlights and bookmarks. The source PDFs are only read.
@@ -154,7 +164,7 @@ In the browser, a per-document undo stack also covers notes and annotations. Del
 
 ### Database schema
 
-`schema_migrations`, `directories`, `documents`, `resources`, `resource_pages`, `annotations`, `reading_progress`, `document_history`, `note_highlights`. Migrations live in `server/src/db/migrations.ts`:
+`schema_migrations`, `directories`, `documents`, `resources`, `resource_pages`, `annotations`, `reading_progress` (with `top` for documents without pages), `document_history`, `note_highlights`, `bookmarks`, `document_highlights` (text highlights on HTML / Markdown), `sessions` (other devices' logins). Migrations live in `server/src/db/migrations.ts`:
 - They are append-only and applied in order.
 - Each runs in its own transaction and is rolled back completely on failure.
 - The server refuses to open a database created by a newer version.
@@ -175,13 +185,23 @@ The browser extracts the page text with PDF.js, the server calls the provider, a
 
 All endpoints live under `/api`.
 
+**Access**
+- Requests from this computer (sent from 127.0.0.1 to `localhost` / `127.0.0.1`) need no login. Anything else (Wi-Fi, `tailscale serve`) needs the `ss_session_<port>` cookie from logging in.
+- Every write (any method but GET/HEAD/OPTIONS) must carry the header `X-StudySpace: 1`. Other websites can't send it, so they can't change anything here.
+- The `Host` must be a name of this computer (stops DNS rebinding); see `STUDYSPACE_ALLOWED_HOSTS`.
+- `GET /auth/status` → `{ local, loggedIn, passwordSet }`; `POST /auth/login` `{ password }` (5 wrong tries a minute per client, then 429); `POST /auth/logout`.
+- Adding, changing or browsing folders (`/directories` writes, `/fs/browse`) works only on this computer.
+
 **Library and folders**
 - `GET /library`, `POST /library/scan`, `GET /search?q=`, `GET /recent`
 - `GET|POST /directories`, `PATCH|DELETE /directories/:id`, `GET /fs/browse?path=`
 
 **Documents**
-- `GET /documents/:id`, `GET /documents/:id/file` (stream), `PATCH /documents/:id/meta`
-- `GET|PUT /documents/:id/progress`
+- `GET /documents/:id`, `GET /documents/:id/file` (stream; slides are served as their converted PDF; HTML as `text/html` with `Content-Security-Policy: sandbox`, Markdown as `text/markdown`), `PATCH /documents/:id/meta`
+- `GET /documents/:id/asset?path=img/x.png`: a picture next to a Markdown file (pictures only, in its folder or below; sent sandboxed)
+- `POST /documents/:id/convert` (slides: turn them into a PDF if needed and wait; `{ ready: true }`)
+- `POST /documents/:id/rename` `{ name }` (same folder, the extension is kept; refuses a name that's taken), `POST /documents/:id/trash` (to the desktop Trash, `{ trashName }`; the row is kept as missing, with its notes), `POST /documents/:id/restore` `{ trashName }` (puts it back if its place is free)
+- `GET|PUT /documents/:id/progress` `{ page, zoom, top? }` (`top`: how far down an HTML / Markdown document, 0–1; left out, the stored one is kept)
 
 **Resources**
 - `GET /documents/:id/resources[?page=N]`, `POST /documents/:id/resources`
@@ -190,6 +210,10 @@ All endpoints live under `/api`.
 **Highlights inside notes**
 - `GET /documents/:id/note-highlights`, `POST /resources/:id/highlights` `{ color, quote, prefix, suffix, comment }`
 - `PATCH|DELETE /note-highlights/:id`
+
+**Highlights on HTML / Markdown documents** (anchored the same way: quote + context)
+- `GET|POST /documents/:id/text-highlights` `{ id?, color, quote, prefix, suffix, comment }`
+- `PATCH|DELETE /text-highlights/:id`
 
 **Annotations**
 - `GET|POST /documents/:id/annotations`, `PATCH|DELETE /annotations/:id`

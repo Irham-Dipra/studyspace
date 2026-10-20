@@ -11,7 +11,7 @@ import {
   updateDocumentLocation,
 } from "../db/documents.js";
 import { fingerprintFile } from "./fingerprint.js";
-import { scanForPdfs, titleFromPath, type ScannedFile } from "./scanner.js";
+import { scanForDocuments, titleFromPath, type ScannedFile } from "./scanner.js";
 
 export interface SyncResult {
   scanned: number;
@@ -46,7 +46,7 @@ async function doSync(db: DB): Promise<SyncResult> {
   const seenPaths = new Set<string>();
   for (const dir of dirs) {
     try {
-      for (const f of await scanForPdfs(dir.path, dir.excludes)) {
+      for (const f of await scanForDocuments(dir.path, dir.excludes)) {
         // Nested roots: the first root to claim a file wins.
         if (seenPaths.has(f.absPath)) continue;
         seenPaths.add(f.absPath);

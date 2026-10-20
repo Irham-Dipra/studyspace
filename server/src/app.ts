@@ -25,6 +25,12 @@ import {
   updateNoteHighlight,
 } from "./db/noteHighlights.js";
 import { getProgress, recentDocuments, saveProgress } from "./db/progress.js";
+import {
+  createDocumentHighlight,
+  deleteDocumentHighlight,
+  listDocumentHighlights,
+  updateDocumentHighlight,
+} from "./db/documentHighlights.js";
 import { syncLibrary } from "./library/sync.js";
 import {
   insertBlank,
@@ -37,11 +43,17 @@ import {
   rotateDocumentPages,
   undoEdit,
   resolveDocumentFile,
+  notPagesMessage,
   saveAnnotationsToFile,
   type EditorOptions,
 } from "./services/documentEditor.js";
 import { createPdfs, listLibraryFolders } from "./services/pdfTools.js";
+import { renameDocument, restoreDocument, trashDocument } from "./services/fileOps.js";
+import { createAuth } from "./auth.js";
 import { INSTALL_HINT, OcrJobs, ocrImage, ocrStatus, publicJob } from "./services/ocr.js";
+import { SlideConverter } from "./services/slides.js";
+import { canEditFile, isLibraryFile, isPaged, type DocumentKind } from "./library/fileKinds.js";
+import { resolveInsideRoots } from "./library/pathGuard.js";
 import { ANNOTATION_KINDS, HttpError, RESOURCE_SCOPES, RESOURCE_TYPES } from "./types.js";
 
 export interface AppDeps {
@@ -107,6 +119,24 @@ const directoryCreate = z.object({
 
 const fp = z.string().optional();
 
+const FILE_TYPES: Record<DocumentKind, string> = {
+  pdf: "application/pdf",
+  slides: "application/pdf",
+  html: "text/html; charset=utf-8",
+  markdown: "text/markdown; charset=utf-8",
+};
+
+const IMAGE_TYPES: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".avif": "image/avif",
+  ".bmp": "image/bmp",
+  ".svg": "image/svg+xml",
+};
+
 function param(req: Request, name: string): string {
   const v = req.params[name];
   return Array.isArray(v) ? v[0] : (v as string);
@@ -116,19 +146,28 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
   const app = express();
   const editor: EditorOptions = { dataDir: config.dataDir, historyLimit: config.historyLimit };
   const ocrJobs = new OcrJobs(config.dataDir, config.ocr);
+  const slides = new SlideConverter(config.dataDir, config.slides);
+  const auth = createAuth(db, config);
   app.disable("x-powered-by");
+  app.use(auth.checkHost);
   app.use(express.json({ limit: "5mb" }));
 
   const api = express.Router();
+  api.use(auth.checkCsrf);
 
   api.get("/health", (_req, res) => {
     res.json({ ok: true });
   });
 
-  api.get("/config", (_req, res) => {
+  api.use(auth.router);
+  api.use(auth.requireLogin);
+
+  api.get("/config", (req, res) => {
+    // Where the files are on this computer is no business of other devices.
+    const local = auth.isLocal(req);
     res.json({
-      dataDir: config.dataDir,
-      databasePath: path.join(config.dataDir, "studyspace.db"),
+      ...(local && { dataDir: config.dataDir, databasePath: path.join(config.dataDir, "studyspace.db") }),
+      local,
       historyLimit: config.historyLimit,
       ai: { provider: ai.id, enabled: ai.enabled, message: ai.statusMessage },
     });
@@ -139,7 +178,7 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
     res.json(listDirectories(db));
   });
 
-  api.post("/directories", async (req, res) => {
+  api.post("/directories", auth.localOnly, async (req, res) => {
     const body = directoryCreate.parse(req.body);
     const abs = path.resolve(body.path.replace(/^~(?=$|\/)/, process.env.HOME ?? "~"));
     let real: string;
@@ -159,7 +198,7 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
     res.status(201).json({ directory: dir, scan });
   });
 
-  api.patch("/directories/:id", async (req, res) => {
+  api.patch("/directories/:id", auth.localOnly, async (req, res) => {
     const body = z
       .object({ label: z.string().max(200).optional(), excludes: z.array(z.string()).optional(), enabled: z.boolean().optional() })
       .parse(req.body);
@@ -169,7 +208,7 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
     res.json({ directory: dir, scan });
   });
 
-  api.delete("/directories/:id", async (req, res) => {
+  api.delete("/directories/:id", auth.localOnly, async (req, res) => {
     if (!deleteDirectory(db, Number(param(req, "id")))) throw new HttpError(404, "Directory not found");
     // Documents are kept (marked missing) so notes survive if the directory is re-added later.
     await syncLibrary(db);
@@ -177,7 +216,7 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
   });
 
   /** Lists sub-directories of a path so the settings UI can offer a folder picker. Directories only. */
-  api.get("/fs/browse", (req, res) => {
+  api.get("/fs/browse", auth.localOnly, (req, res) => {
     const requested = typeof req.query.path === "string" && req.query.path ? req.query.path : (process.env.HOME ?? "/");
     const abs = path.resolve(requested);
     let entries: fs.Dirent[];
@@ -190,7 +229,7 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
       .filter((e) => e.isDirectory() && !e.name.startsWith("."))
       .map((e) => ({ name: e.name, path: path.join(abs, e.name) }))
       .sort((a, b) => a.name.localeCompare(b.name));
-    const pdfCount = entries.filter((e) => e.isFile() && e.name.toLowerCase().endsWith(".pdf")).length;
+    const pdfCount = entries.filter((e) => e.isFile() && isLibraryFile(e.name)).length;
     res.json({ path: abs, parent: path.dirname(abs) === abs ? null : path.dirname(abs), dirs, pdfCount });
   });
 
@@ -232,18 +271,63 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
     res.json({ ...doc, progress: getProgress(db, doc.id) ?? null });
   });
 
-  /** Streams the PDF straight from its location on disk (supports HTTP Range requests). */
-  api.get("/documents/:id/file", (req, res, next) => {
+  /**
+   * Turns slides into a PDF (LibreOffice) if that hasn't been done for this version yet, and waits
+   * for it. The viewer calls this before loading the file, so it can say what's happening.
+   */
+  api.post("/documents/:id/convert", async (req, res) => {
     const { doc, file } = resolveDocumentFile(db, param(req, "id"));
+    if (doc.kind === "slides") await slides.convert(doc, file);
+    res.json({ ready: true });
+  });
+
+  /**
+   * Streams the file straight from its location on disk (supports HTTP Range requests). Slides are
+   * served as the PDF they were turned into. HTML is sent sandboxed: opened directly, an artifact's
+   * scripts must not run as StudySpace (the viewer shows it in a sandboxed frame instead).
+   */
+  api.get("/documents/:id/file", async (req, res, next) => {
+    const { doc, file: original } = resolveDocumentFile(db, param(req, "id"));
+    const file = doc.kind === "slides" ? await slides.convert(doc, original) : original;
+    const name = doc.kind === "slides" ? `${doc.title}.pdf` : path.basename(doc.path);
     res.sendFile(
       file,
       {
         dotfiles: "allow",
         headers: {
-          "Content-Type": "application/pdf",
-          "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(path.basename(doc.path))}`,
+          "Content-Type": FILE_TYPES[doc.kind],
+          "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(name)}`,
           "Cache-Control": "private, no-cache",
           "X-Content-Type-Options": "nosniff",
+          ...(!isPaged(doc.kind) && { "Content-Security-Policy": "sandbox" }),
+        },
+      },
+      (err) => {
+        if (err && !res.headersSent) next(err);
+      },
+    );
+  });
+
+  /** A picture next to a Markdown file (`![](img/x.png)`): only pictures, only in its folder or below. */
+  api.get("/documents/:id/asset", (req, res, next) => {
+    const rel = typeof req.query.path === "string" ? req.query.path : "";
+    const { file } = resolveDocumentFile(db, param(req, "id"));
+    const dir = path.dirname(file);
+    const target = path.resolve(dir, rel);
+    const type = IMAGE_TYPES[path.extname(target).toLowerCase()];
+    if (!rel || !type) throw new HttpError(400, "Only pictures next to the document can be shown.");
+    const real = resolveInsideRoots(target, [dir]);
+    if (!real) throw new HttpError(404, "Picture not found");
+    res.sendFile(
+      real,
+      {
+        dotfiles: "allow",
+        headers: {
+          "Content-Type": type,
+          "Cache-Control": "private, max-age=300",
+          "X-Content-Type-Options": "nosniff",
+          // An SVG opened on its own could otherwise run scripts as StudySpace.
+          "Content-Security-Policy": "sandbox",
         },
       },
       (err) => {
@@ -259,15 +343,30 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
     res.json(getDocument(db, doc.id));
   });
 
+  // ---- Rename / delete the file (deleting moves it to the desktop Trash; undo puts it back) ----
+  api.post("/documents/:id/rename", async (req, res) => {
+    const body = z.object({ name: z.string().max(1000) }).parse(req.body);
+    res.json(await renameDocument(db, param(req, "id"), body.name));
+  });
+
+  api.post("/documents/:id/trash", async (req, res) => {
+    res.json(await trashDocument(db, config.trashDir, param(req, "id")));
+  });
+
+  api.post("/documents/:id/restore", async (req, res) => {
+    const body = z.object({ trashName: z.string().min(1).max(1000) }).parse(req.body);
+    res.json(await restoreDocument(db, config.trashDir, param(req, "id"), body.trashName));
+  });
+
   api.get("/documents/:id/progress", (req, res) => {
     const doc = requireDoc(param(req, "id"));
-    res.json(getProgress(db, doc.id) ?? { documentId: doc.id, page: 1, zoom: 1, updatedAt: null });
+    res.json(getProgress(db, doc.id) ?? { documentId: doc.id, page: 1, zoom: 1, top: null, updatedAt: null });
   });
 
   api.put("/documents/:id/progress", (req, res) => {
-    const body = z.object({ page, zoom: z.number().min(0.1).max(8) }).parse(req.body);
+    const body = z.object({ page, zoom: z.number().min(0.1).max(8), top: z.number().min(0).max(1).nullish() }).parse(req.body);
     const doc = requireDoc(param(req, "id"));
-    res.json(saveProgress(db, doc.id, body.page, body.zoom));
+    res.json(saveProgress(db, doc.id, body.page, body.zoom, body.top));
   });
 
   // ---- Resources ---------------------------------------------------------
@@ -349,6 +448,34 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
 
   api.delete("/note-highlights/:id", (req, res) => {
     if (!deleteNoteHighlight(db, param(req, "id"))) throw new HttpError(404, "Highlight not found");
+    res.status(204).end();
+  });
+
+  // ---- Highlights on the text of HTML / Markdown documents ----------------
+  api.get("/documents/:id/text-highlights", (req, res) => {
+    const doc = requireDoc(param(req, "id"));
+    res.json(listDocumentHighlights(db, doc.id));
+  });
+
+  api.post("/documents/:id/text-highlights", (req, res) => {
+    const doc = requireDoc(param(req, "id"));
+    const body = noteHighlightCreate.parse(req.body);
+    try {
+      res.status(201).json(createDocumentHighlight(db, doc.id, body));
+    } catch (err) {
+      throw new HttpError(409, (err as Error).message);
+    }
+  });
+
+  api.patch("/text-highlights/:id", (req, res) => {
+    const body = z.object({ color: color.optional(), comment: z.string().max(20000).optional() }).parse(req.body);
+    const h = updateDocumentHighlight(db, param(req, "id"), body);
+    if (!h) throw new HttpError(404, "Highlight not found");
+    res.json(h);
+  });
+
+  api.delete("/text-highlights/:id", (req, res) => {
+    if (!deleteDocumentHighlight(db, param(req, "id"))) throw new HttpError(404, "Highlight not found");
     res.status(204).end();
   });
 
@@ -499,7 +626,7 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
         bookmarkPerSource: z.boolean().default(false),
       })
       .parse(req.body);
-    res.status(201).json(await createPdfs(db, body));
+    res.status(201).json(await createPdfs(db, body, config.dataDir));
   });
 
   api.get("/documents/:id/history", (req, res) => {
@@ -520,6 +647,8 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
   api.post("/documents/:id/ocr", async (req, res) => {
     const body = z.object({ pages: z.array(page).min(1).max(5000), fingerprint: fp }).parse(req.body);
     const { doc, file } = resolveDocumentFile(db, param(req, "id"));
+    if (doc.kind === "slides") throw new HttpError(400, "Slides already have their text, so OCR isn't needed. Use Get text.");
+    if (!canEditFile(doc.kind)) throw new HttpError(400, notPagesMessage(doc));
     if (body.fingerprint && body.fingerprint !== doc.fingerprint) {
       throw new HttpError(409, "The PDF changed on disk since it was opened. Reload it and try again.");
     }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUp, Bot, Database, Folder, FolderPlus, Loader2, Trash2 } from "lucide-react";
+import { ArrowUp, Bot, Database, Folder, FolderPlus, Loader2, LogOut, Trash2 } from "lucide-react";
 import { api } from "../lib/api";
 import type { AppConfigInfo, Directory } from "../lib/types";
 import { Button, Field, IconButton, Modal, cx, inputCls } from "./ui";
@@ -24,10 +24,45 @@ export function SettingsDialog({ directories, config, onClose, onChanged, onErro
   const [busy, setBusy] = useState(false);
   const [browser, setBrowser] = useState<Awaited<ReturnType<typeof api.browse>> | null>(null);
 
+  // Another device (a phone) may read the library but not change its folders.
+  const local = config?.local !== false;
   const browse = (p?: string) => api.browse(p).then(setBrowser, (e: Error) => onError(e.message));
   useEffect(() => {
-    if (directories.length === 0) void browse();
+    if (directories.length === 0 && local) void browse();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const logout = async () => {
+    try {
+      await api.logout();
+    } finally {
+      window.location.reload();
+    }
+  };
+
+  if (!local) {
+    return (
+      <Modal title="Settings" onClose={onClose}>
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-3">Library folders</h3>
+          <ul className="space-y-1 text-sm">
+            {directories.map((d) => (
+              <li key={d.id} className={cx("flex items-center gap-2", !d.enabled && "opacity-60")}>
+                <Folder className="size-4 shrink-0 text-ink-3" />
+                <span className="truncate">{d.label}</span>
+                {!d.enabled && <span className="text-xs text-ink-3">(off)</span>}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-ink-3">Folders can be added or changed on the computer itself.</p>
+        </section>
+        <section className="mt-5 border-t border-line pt-4">
+          <Button onClick={() => void logout()}>
+            <LogOut className="size-4" /> Log out of this device
+          </Button>
+        </section>
+      </Modal>
+    );
+  }
 
   const add = async () => {
     if (!path.trim()) return;
@@ -37,7 +72,7 @@ export function SettingsDialog({ directories, config, onClose, onChanged, onErro
       setPath("");
       setExcludes("");
       setBrowser(null);
-      onChanged(`Added ${r.directory.label}: ${r.scan.scanned} PDFs found`);
+      onChanged(`Added ${r.directory.label}: ${r.scan.scanned} files found`);
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -89,7 +124,7 @@ export function SettingsDialog({ directories, config, onClose, onChanged, onErro
                 ))}
                 {browser.dirs.length === 0 && <li className="px-2.5 py-1 text-xs text-ink-3">No subfolders</li>}
               </ul>
-              {browser.pdfCount > 0 && <p className="border-t border-line px-2.5 py-1 text-[11px] text-ink-3">{browser.pdfCount} PDFs directly in this folder</p>}
+              {browser.pdfCount > 0 && <p className="border-t border-line px-2.5 py-1 text-[11px] text-ink-3">{browser.pdfCount} PDFs, slides, HTML or Markdown files directly in this folder</p>}
             </div>
           )}
           <div className="mt-2">
@@ -109,7 +144,7 @@ export function SettingsDialog({ directories, config, onClose, onChanged, onErro
         <section className="mt-5 grid gap-3 sm:grid-cols-2">
           <div className="rounded-lg bg-subtle p-3 text-xs">
             <div className="mb-1 flex items-center gap-1.5 font-semibold"><Database className="size-3.5" /> Data</div>
-            <p className="break-all font-mono text-ink-2">{config.databasePath}</p>
+            {config.databasePath && <p className="break-all font-mono text-ink-2">{config.databasePath}</p>}
             <p className="mt-1 text-ink-3">
               The last {config.historyLimit} file edit{config.historyLimit === 1 ? "" : "s"} per PDF can be undone; their previous versions are kept in the
               <span className="font-mono"> history</span> folder next to the database.

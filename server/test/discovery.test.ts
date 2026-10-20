@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import request from "supertest";
 import { afterAll, describe, expect, it } from "vitest";
-import { isExcluded, scanForPdfs } from "../src/library/scanner.js";
+import { isExcluded, scanForDocuments } from "../src/library/scanner.js";
 import { resolveInsideRoots } from "../src/library/pathGuard.js";
 import { fingerprintFile } from "../src/library/fingerprint.js";
 import { cleanupTempDirs, createTestContext, tempDir, writePdf } from "./helpers.js";
@@ -24,7 +24,7 @@ async function makeLibrary() {
 describe("file discovery", () => {
   it("finds PDFs recursively, skipping hidden, node_modules and excluded folders", async () => {
     const root = await makeLibrary();
-    const files = await scanForPdfs(root, ["Offllines"]);
+    const files = await scanForDocuments(root, ["Offllines"]);
     expect(files.map((f) => f.relPath)).toEqual(["CSE 301/Books/Ross.PDF", "CSE 301/Chapter 1.pdf", "CSE 309/Slides.pdf"]);
     expect(files[0].size).toBeGreaterThan(0);
   });
@@ -43,7 +43,7 @@ describe("file discovery", () => {
     await writePdf(path.join(outside, "outside.pdf"), 1);
     fs.symlinkSync(path.join(outside, "outside.pdf"), path.join(root, "link.pdf"));
     fs.symlinkSync(outside, path.join(root, "linked-dir"));
-    expect(await scanForPdfs(root)).toEqual([]);
+    expect(await scanForDocuments(root)).toEqual([]);
   });
 
   it("fingerprints by content, independent of the file name", async () => {

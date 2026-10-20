@@ -7,9 +7,22 @@ import { normalizeMath } from "../lib/math";
 import { rehypeNoteStructure } from "../lib/rehypeNoteStructure";
 import { rehypeNoteHighlights } from "../lib/rehypeNoteHighlights";
 import { rehypePdfMarks } from "../lib/rehypePdfMarks";
-import type { NoteHighlight } from "../lib/types";
+import { rehypeBreaks } from "../lib/rehypeBreaks";
+import { repairTables } from "../lib/tableRepair";
+import type { TextAnchoredHighlight } from "../lib/types";
 
-const NO_HIGHLIGHTS: NoteHighlight[] = [];
+const NO_HIGHLIGHTS: TextAnchoredHighlight[] = [];
+
+/** A link or picture address that points at a file next to the document (not a web address). */
+const isRelative = (src: string) => !!src && !/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(src);
+
+const safeDecode = (s: string) => {
+  try {
+    return decodeURI(s); // "my%20pic.png" → "my pic.png"
+  } catch {
+    return s;
+  }
+};
 
 /** Smallest scale a display equation is shrunk to before it scrolls sideways instead. */
 const MIN_FIT = 0.6;
@@ -28,19 +41,42 @@ function fitEquations(root: HTMLElement) {
   }
 }
 
+interface Props {
+  children: string;
+  highlights?: TextAnchoredHighlight[];
+  /** Notes get their headings and lead-ins coloured (rehypeNoteStructure); whole documents don't. */
+  structure?: boolean;
+  /** Where a picture next to the file is loaded from (Markdown documents); notes have none. */
+  assetUrl?: (src: string) => string;
+}
+
 /**
  * Renders note content as GitHub-flavoured Markdown with math: $…$, $$…$$, \(…\) and \[…\].
- * Raw HTML is not rendered. `highlights` are drawn as <mark>s over the rendered text.
+ * Raw HTML is shown as text, except `<br>` (rehypeBreaks). Tables broken over several lines, as
+ * copied from Gemini, are mended first (repairTables). `highlights` are drawn as <mark>s over the
+ * rendered text.
  */
-export const Markdown = memo(function Markdown({ children, highlights = NO_HIGHLIGHTS }: { children: string; highlights?: NoteHighlight[] }) {
+export const Markdown = memo(function Markdown({ children, highlights = NO_HIGHLIGHTS, structure = true, assetUrl }: Props) {
   const rehypePlugins = useMemo(
-    () => [
-      rehypePdfMarks,
-      [rehypeKatex, { throwOnError: false, strict: "ignore" }],
-      rehypeNoteStructure,
-      [rehypeNoteHighlights, { highlights }],
-    ] as Parameters<typeof ReactMarkdown>[0]["rehypePlugins"],
-    [highlights],
+    () =>
+      [
+        rehypeBreaks,
+        rehypePdfMarks,
+        [rehypeKatex, { throwOnError: false, strict: "ignore" }],
+        ...(structure ? [rehypeNoteStructure] : []),
+        [rehypeNoteHighlights, { highlights }],
+      ] as Parameters<typeof ReactMarkdown>[0]["rehypePlugins"],
+    [highlights, structure],
+  );
+  const components = useMemo<Parameters<typeof ReactMarkdown>[0]["components"]>(
+    () => ({
+      // Links within the page stay in the tab; everything else opens a new one.
+      a: ({ node: _n, ...p }) => (p.href?.startsWith("#") ? <a {...p} /> : <a {...p} target="_blank" rel="noreferrer noopener" />),
+      img: ({ node: _n, src, ...p }) => (
+        <img {...p} src={assetUrl && typeof src === "string" && isRelative(src) ? assetUrl(safeDecode(src)) : src} loading="lazy" />
+      ),
+    }),
+    [assetUrl],
   );
   const ref = useRef<HTMLDivElement>(null);
   // Refit after every render, whenever the panel is resized, and when fonts finish loading.
@@ -71,9 +107,9 @@ export const Markdown = memo(function Markdown({ children, highlights = NO_HIGHL
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={rehypePlugins}
-        components={{ a: ({ node: _n, ...p }) => <a {...p} target="_blank" rel="noreferrer noopener" /> }}
+        components={components}
       >
-        {normalizeMath(children)}
+        {normalizeMath(repairTables(children))}
       </ReactMarkdown>
     </div>
   );
