@@ -77,8 +77,125 @@ function findClose(text: string, open: number): number {
   return -1;
 }
 
+/**
+ * Wraps LaTeX written without delimiters ("the n^{\text{th}} moment", "X \sim \text{Bern}(p)") in `$…$`.
+ * Copying a rendered answer out of Gemini gives the formulas' source with no `$` around them, which
+ * Markdown would print as plain text. A run starts at a word that can only be TeX (a command, `x^2`,
+ * `M_X`) and takes in the symbols, numbers and one- or two-letter names next to it, stopping at
+ * ordinary words. Existing math and escaped dollars are left alone. Run after escapeCurrency.
+ */
+export function wrapBareLatex(text: string): string {
+  const math = /\$\$[\s\S]+?\$\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]|(?<!\\)\$[^$\n]+?(?<!\\)\$/;
+  const parts = text.split(new RegExp(`(${math.source})`, "g"));
+  return parts
+    .map((part, i) => {
+      if (i % 2 === 1) return part;
+      // A piece after a formula on the same line has no list marker to skip.
+      const startsLine = i === 0 || parts[i - 1].endsWith("\n");
+      return part
+        .split("\n")
+        .map((line, j) => wrapLine(line, j > 0 || startsLine))
+        .join("\n");
+    })
+    .join("");
+}
+
+const LINE_PREFIX = /^[ \t]*(?:>[ \t]?)*(?:#{1,6}[ \t]+|(?:[*+-]|\d{1,9}[.)])[ \t]+)?/;
+/** Only TeX looks like this: a command, a power (`x^2`, `)^2`) or a one-letter subscript (`M_X`, `x_{n}`). */
+const TEX = /\\[a-zA-Z]+|[A-Za-z0-9)\]}]\^|(?:^|[^A-Za-z])[A-Za-z]_[A-Za-z0-9{\\]|[)}]_|_\{/;
+/** Symbols, numbers and short names that may sit inside a formula ("=", "(z", "2tz", "E(X)"). */
+const MATHY = /^[A-Za-z0-9()[\]{}=+\-<>,.:;!'/]+$/;
+const NOT_MATH = /[*|$"`]|:\/\/|<\/?[a-z]|^[A-Za-z]:\\/i;
+const SHORT_WORDS = new Set(
+  "of is in to as be by on at if or an it we so no do up us my me he am go vs ie eg ok".split(" "),
+);
+
+/** 2: TeX, 1: may join a formula next to it, 0: ends it (an ordinary word). */
+function texKind(token: string): 0 | 1 | 2 {
+  if (NOT_MATH.test(token)) return 0;
+  if (TEX.test(token)) return 2;
+  if (!MATHY.test(token)) return 0;
+  const words = token.match(/[A-Za-z]+/g) ?? [];
+  return words.every((w) => w.length === 1 || (w.length === 2 && !SHORT_WORDS.has(w.toLowerCase()))) ? 1 : 0;
+}
+
+/** Words of a line split on spaces outside braces, so `\text{ and }` stays one word. Bold `**` is split off. */
+function texTokens(s: string): { start: number; end: number; kind: 0 | 1 | 2 }[] {
+  const out: { start: number; end: number; kind: 0 | 1 | 2 }[] = [];
+  const push = (start: number, end: number) => {
+    const word = s.slice(start, end);
+    const lead = /^\*+/.exec(word)?.[0].length ?? 0;
+    const trail = /\*+$/.exec(word.slice(lead))?.[0].length ?? 0;
+    if (lead) out.push({ start, end: start + lead, kind: 0 });
+    if (end - trail > start + lead) out.push({ start: start + lead, end: end - trail, kind: texKind(s.slice(start + lead, end - trail)) });
+    if (trail) out.push({ start: end - trail, end, kind: 0 });
+  };
+  let depth = 0;
+  let start = -1;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (/\s/.test(ch) && depth <= 0) {
+      if (start !== -1) push(start, i);
+      start = -1;
+      depth = 0;
+      continue;
+    }
+    if (start === -1) start = i;
+    if (ch === "\\") i++;
+    else if (ch === "{") depth++;
+    else if (ch === "}") depth--;
+  }
+  if (start !== -1) push(start, s.length);
+  return out;
+}
+
+function wrapLine(line: string, startsLine: boolean): string {
+  if (!/[\\^_]/.test(line)) return line;
+  const head = startsLine ? LINE_PREFIX.exec(line)![0] : "";
+  const body = line.slice(head.length);
+  const tokens = texTokens(body);
+  let out = "";
+  let at = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].kind === 0) continue;
+    let j = i;
+    let tex = false;
+    for (; j < tokens.length && tokens[j].kind > 0; j++) {
+      if (tokens[j].kind === 2) tex = true;
+      // "(n = 2): E(X^2)": a word ending a clause ends the formula too.
+      if (/[^\\][.:;]$/.test(body.slice(tokens[j].start, tokens[j].end))) {
+        j++;
+        break;
+      }
+    }
+    if (tex) {
+      const from = tokens[i].start;
+      const to = tokens[j - 1].end;
+      const [lead, core, tail] = trimFormula(body.slice(from, to));
+      out += body.slice(at, from) + lead + (TEX.test(core) ? `$${core}$` : core) + tail;
+      at = to;
+    }
+    i = j - 1;
+  }
+  return head + out + body.slice(at);
+}
+
+/** Moves sentence punctuation and unmatched outer brackets out of a formula: "(n \ge 3):" → "(", …, "):". */
+function trimFormula(s: string): [string, string, string] {
+  let lead = "";
+  let tail = "";
+  for (;;) {
+    const open = (s.match(/\(/g) ?? []).length - (s.match(/\)/g) ?? []).length;
+    if (/^[,.:;]/.test(s)) [lead, s] = [lead + s[0], s.slice(1)];
+    else if (/[^\\][,.:;]$/.test(s)) [s, tail] = [s.slice(0, -1), s.slice(-1) + tail];
+    else if (open > 0 && s.startsWith("(")) [lead, s] = [lead + "(", s.slice(1)];
+    else if (open < 0 && s.endsWith(")")) [s, tail] = [s.slice(0, -1), ")" + tail];
+    else return [lead, s, tail];
+  }
+}
+
 function convertText(text: string): string {
-  text = escapeCurrency(text);
+  text = wrapBareLatex(escapeCurrency(text));
   const lines = text.split("\n");
   // Inside table rows everything must stay on one line: use inline math (display style for \[ \] and $$ $$).
   const tableFixed = lines.map((line) =>

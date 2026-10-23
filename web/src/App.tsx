@@ -40,6 +40,7 @@ import { GetTextDialog, type TextRequest } from "./components/GetTextDialog";
 import { PdfToolsDialog, type PdfTool } from "./components/PdfToolsDialog";
 import { PageHalvesDialog } from "./components/PageHalvesDialog";
 import { PageImagesDialog } from "./components/PageImagesDialog";
+import { SelectedFilesDialog } from "./components/SelectedFilesDialog";
 import { SnipOverlay } from "./components/SnipOverlay";
 import { captureWindowRegion, type ScreenRect } from "./lib/snip";
 import { COPY_QUALITY, canvasToPng, copyToClipboard, renderRegion } from "./lib/pageImage";
@@ -198,6 +199,9 @@ export default function App() {
   const [halvesOpen, setHalvesOpen] = useState(false);
   /** The "save pages as pictures" window. */
   const [picturesOpen, setPicturesOpen] = useState(false);
+  /** Files picked in the library, and the window for their pictures & text. */
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(() => new Set());
+  const [selectedOpen, setSelectedOpen] = useState(false);
   /** Choosing a part of the window for a screenshot. */
   const [snipping, setSnipping] = useState(false);
   /** Bumped to close all / expand all notes in the notes panel. */
@@ -1253,13 +1257,14 @@ export default function App() {
     if (is("search")) return; // handled by the search box
     if (is("snip") && !document.querySelector('[role="dialog"]')) return run(() => setSnipping(true));
     // Dialogs have their own keys (Esc, Enter...).
-    if (showSettings || showHelp || pageOp || pendingOpen || textRequest || pdfTool || halvesOpen || picturesOpen || document.querySelector('[role="dialog"]')) return;
+    if (showSettings || showHelp || pageOp || pendingOpen || textRequest || pdfTool || halvesOpen || picturesOpen || selectedOpen || document.querySelector('[role="dialog"]')) return;
 
     // Work with or without an open PDF.
     const openLeft = () => (isDesktopRef.current ? setLeftOpen(true) : setMobilePanel("left"));
     if (is("settings")) return run(() => setShowSettings(true));
     if (is("theme")) return run(toggleTheme);
     if (is("rescan")) return run(() => void rescan());
+    if (is("selectedFiles")) return run(openSelected);
     if (is("toggleLeft")) return run(() => (isDesktopRef.current ? setLeftOpen((o) => !o) : setMobilePanel((m) => (m === "left" ? null : "left"))));
     if (is("toggleRight")) return run(() => (isDesktopRef.current ? setRightOpen((o) => !o) : setMobilePanel((m) => (m === "right" ? null : "right"))));
     if (is("files")) return run(() => (setLeftTab("files"), openLeft()));
@@ -1363,6 +1368,22 @@ export default function App() {
     }
   };
 
+  /** The picked files, in the library's order (files that went away or have no pages drop out). */
+  const selectedDocs = useMemo(
+    () =>
+      documents
+        .filter((d) => selectedFiles.has(d.id) && isPaged(d.kind) && !d.missing)
+        .sort((a, b) => (a.directoryId ?? 0) - (b.directoryId ?? 0) || a.relPath.localeCompare(b.relPath, undefined, { numeric: true, sensitivity: "base" })),
+    [documents, selectedFiles],
+  );
+  function openSelected() {
+    if (selectedDocs.length) return setSelectedOpen(true);
+    setLeftTab("files");
+    if (isDesktopRef.current) setLeftOpen(true);
+    else setMobilePanel("left");
+    toast("Select files first, in the files list: Space or the box beside a file (Shift+click for a run of files).");
+  }
+
   /** Sources for page edits and new PDFs: files with pages. */
   const pagedDocuments = useMemo(() => documents.filter((d) => isPaged(d.kind)), [documents]);
 
@@ -1399,6 +1420,9 @@ export default function App() {
       onRenameRequestDone={() => setFileRename(null)}
       onRescan={rescan}
       onOpenSettings={() => setShowSettings(true)}
+      selected={selectedFiles}
+      onSelect={setSelectedFiles}
+      onOpenSelected={openSelected}
     />
   );
 
@@ -1822,6 +1846,8 @@ export default function App() {
           onDone={(m) => toast(m, "success")}
         />
       )}
+
+      {selectedOpen && <SelectedFilesDialog docs={selectedDocs} onClose={() => setSelectedOpen(false)} />}
 
       {textRequest && doc && (
         <GetTextDialog

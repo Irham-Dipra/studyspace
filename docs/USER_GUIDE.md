@@ -69,6 +69,7 @@ The two `☰` buttons in the top bar (or the **`[`** and **`]`** keys) hide and 
   - **Ctrl+Z** right away puts it back where it was, with everything. (If the deleted file was open, it closes; press Ctrl+Z before opening another PDF, since each PDF has its own undo.)
   - Later, restore it from the Trash in your file manager, then click **⟳ Rescan**: its notes come back too.
 - **Keyboard in the file list:** press **`/`**, then **↓** to step into the list. **↑/↓** move between files and folders, **→/←** open and close folders, **Enter** opens.
+- **Several files at once:** select files (the box beside a file, Shift+click, or **`Space`**), then **`Shift+F`** gets each one's pictures or text from one window. See *Pictures and text of several files at once* (§4).
 - **Rescan (⟳):** click after you add, rename or move PDFs on disk. Renamed or moved files keep all their notes. StudySpace recognises them by content, not by name.
 - An orange dot next to a file means it has highlights that are not yet saved into the PDF file (see §7).
 - **Unsaved work when switching PDFs:** if the PDF you're leaving has unsaved work, StudySpace asks before opening another one in the same tab. That covers highlights not yet saved into the file and a note you're still writing. The choices are:
@@ -192,6 +193,30 @@ Press **`Q`**, or click the ✂ crop button at the top right (also in 🔧 → *
 
 While you type the pages, the letter keys (`F`, `R`, `C`) still work, since page lists only use digits, `-` and `,`. Format and sharpness are remembered.
 
+### Pictures and text of several files at once
+
+Pick several PDFs (or slides) in the library, then get each one's pictures or text from one window, instead of opening each file and pressing `Shift+S` or `Shift+A`.
+
+1. **Select the files** in the library (left panel):
+   - click the small box to the left of a file (it shows when you point at the file, and on every file once one is selected);
+   - **Shift+click** a file selects every file from the last one you picked down to it;
+   - with the keyboard: **`Space`** selects or unselects the file you're on; on a folder, it selects all its files. **`Shift+↑` / `Shift+↓`** select while moving. **`Ctrl+A`** selects all the files showing (with a filter typed, just its matches). **`Esc`** unselects all.
+
+   The bottom of the library shows *"3 selected"*, with **Pictures & text…** and ✕ (unselect all). HTML and Markdown files have no pages, so they can't be selected.
+2. **Press `Shift+F`** (anywhere, even with no PDF open), or click **Pictures & text…**. The *Selected files* window lists the files.
+3. **For each file, click Pictures or Text** (or move with **↑ / ↓** and press **`P`** or **`T`**). Each is the whole file:
+   - **Pictures:** every page as a picture, in one `.zip` (a one-page file gives one picture), like `Shift+S` → *Whole PDF*.
+   - **Text:** the file's text as a `.md` (Markdown) or `.txt` file, like `Shift+A`, then *Download*.
+
+   You don't have to wait: click the next one straight away. Downloads are done one at a time, in the order you asked for them, and each row shows *waiting…*, the pages done, then ✓. ✕ (or **`Del`**) cancels a file's waiting or running downloads.
+
+**Choices at the top** (they apply to what you ask for next): picture format PNG / JPEG (**`F`**) and sharpness (**`R`**), as in *Save pages as pictures*; text as Markdown or plain text (**`M`**), your highlights marked as `==text==` (**`H`**) and your notes included (**`I`**), as in the *Get text* window. These are remembered, and shared with those windows.
+
+**Good to know:**
+- The text comes from the PDF's own text. Scanned pages have none: the row says how many there are. OCR them from the file itself (`Shift+W`).
+- Nothing in your files changes.
+- Closing the window (**Esc**) cancels the downloads that haven't finished. The selection stays, so `Shift+F` brings the window back.
+
 ## 5. Notes and resources (right panel)
 
 The right panel shows **only what belongs to the current page**, plus anything attached to the whole document. It updates as you scroll.
@@ -238,7 +263,7 @@ Empty groups are hidden. The number next to *Page resources* is how many items a
 **Formatting.** Content is written in Markdown:
 - `**bold**`, `*italic*`, `# Heading`, `- bullet`, `1. numbered`
 - `> quote`, `` `code` ``, tables
-- **Tables copied from Gemini** often have each row broken over several lines, with `<br>` for the line breaks inside a cell. They are shown as proper tables, with those line breaks. A wide table scrolls sideways in the notes panel.
+- **Tables copied from Gemini** often have each row broken over several lines (sometimes every cell on a line of its own), with `<br>` for the line breaks inside a cell. They are shown as proper tables, with those line breaks. A wide table scrolls sideways in the notes panel.
 
 **Math (LaTeX).** A formula has to be wrapped in math delimiters. Both styles work, so you can paste from ChatGPT or a LaTeX document as-is:
 
@@ -251,7 +276,8 @@ Empty groups are hidden. The number next to *Page resources* is how many items a
 - **Chains with several `=` signs** (like `a = b = c`) are shown one step per line, lined up on the `=`. If the left side is long, it gets its own line and the steps are indented under it.
 - **Equations wider than the notes panel are shrunk to fit.** Very long ones that would get too small scroll sideways instead. Making the right panel wider shows them larger.
 - Math works inside table cells too, including absolute values like `$|x|$`.
-- Commands without delimiters are plain text: `3 \times 2` shows the words `\times`, because nothing marks it as math.
+- **Formulas without `$` are found too.** Text copied from a Gemini answer (select and copy) has its formulas but no `$` around them, like `the n^{\text{th}} moment` or `X \sim \text{Bern}(p)`. Anything that can only be LaTeX (a command like `\frac`, a power like `x^2`, a subscript like `M_X`) is shown as math, together with the symbols and one-letter names next to it. Ordinary words end the formula, so `random variable X` stays text.
+- Equations that stood on their own line in Gemini are **not** in a selected copy at all (you see an empty line). Use Gemini's copy button instead: it keeps every formula, with `$`.
 - Prices like `$100` show as plain text, even with two of them in one sentence. If one is still read as math, type `\$5`.
 
 Use **Preview** to check how it looks.
@@ -614,6 +640,7 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `Shift+D` | Dark / light mode |
 | `,` | Settings (study folders, note colours) |
 | `Shift+L` | Rescan the library folders |
+| `Shift+F` | Pictures & text of the files selected in the files list… |
 
 **Panels**
 
@@ -790,6 +817,25 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `Enter` | Open the file / folder |
 | `F2` | Rename the file |
 | `Del` | Delete the file (to the Trash; asks first) |
+| `Space` | Select / unselect the file (on a folder: all its files) |
+| `Shift+↑` / `Shift+↓` | Select while moving up / down |
+| `Shift+Click` | Select every file from the last one picked to this one |
+| `Ctrl+A` | Select all the files showing (the filter's matches) |
+| `Esc` | Unselect all |
+
+**In the selected-files window**
+
+| Keys | Action |
+| --- | --- |
+| `↑` / `↓` | Previous / next file |
+| `P` | Save the file's pages as pictures (.zip) |
+| `T` | Download the file's text (.md / .txt) |
+| `Del` | Cancel the file's waiting or running downloads |
+| `F` | Pictures: PNG ⇄ JPEG |
+| `R` | Pictures: sharpness 100 → 150 → 200 → 300 dpi |
+| `M` | Text: Markdown ⇄ plain text |
+| `H` | Text: mark my highlights as ==text== on / off |
+| `I` | Text: include my notes on / off |
 
 **In dialogs & editors**
 

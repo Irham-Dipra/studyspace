@@ -3,7 +3,7 @@ import { Check, Copy, Download, Images, Loader2 } from "lucide-react";
 import type { PDFDocumentProxy } from "../lib/pdf";
 import { parsePageList } from "../lib/pdf";
 import { canvasToBlob, copyToClipboard, downloadBlob, renderRegion } from "../lib/pageImage";
-import { ZipWriter } from "../lib/zip";
+import { PICTURE_DPIS as DPIS, loadPicturePrefs, makePictures, mbPerPage, savePicturePrefs, type PictureFormat as Format } from "../lib/pictures";
 import { isTyping, matches, type ShortcutId } from "../lib/shortcuts";
 import { Button, KeyHint, Modal, cx, inputCls, selectAllOnFocus } from "./ui";
 
@@ -18,37 +18,10 @@ interface Props {
 }
 
 type Mode = "this" | "range" | "all";
-type Format = "png" | "jpeg";
-const DPIS = [100, 150, 200, 300];
-
-/** Remembered choices (format and sharpness). */
-const PREFS_KEY = "ss-picture-prefs";
-const loadPrefs = (): { format: Format; dpi: number } => {
-  try {
-    const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") as { format?: Format; dpi?: number };
-    return { format: p.format === "jpeg" ? "jpeg" : "png", dpi: DPIS.includes(p.dpi ?? 0) ? p.dpi! : 150 };
-  } catch {
-    return { format: "png", dpi: 150 };
-  }
-};
-
-const safeName = (s: string) => s.replace(/[\u0000-\u001f\u007f/\\:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "page";
-
-/** "3", "3-5", "3, 5-7" for file names. */
-function pagesText(pages: number[]): string {
-  const runs: string[] = [];
-  for (let i = 0; i < pages.length; i++) {
-    let j = i;
-    while (j + 1 < pages.length && pages[j + 1] === pages[j] + 1) j++;
-    runs.push(i === j ? `${pages[i]}` : `${pages[i]}-${pages[j]}`);
-    i = j;
-  }
-  return runs.length > 3 ? `${runs.slice(0, 3).join(", ")}…` : runs.join(", ");
-}
 
 /** Saves one page as a picture, or several as one .zip (each page its own picture). */
 export function PageImagesDialog(p: Props) {
-  const prefs = useRef(loadPrefs());
+  const prefs = useRef(loadPicturePrefs());
   const [mode, setMode] = useState<Mode>("this");
   const [range, setRange] = useState(String(p.page));
   const [format, setFormat] = useState<Format>(prefs.current.format);
@@ -58,13 +31,7 @@ export function PageImagesDialog(p: Props) {
   const abortRef = useRef<AbortController | null>(null);
   const rangeRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ format, dpi }));
-    } catch {
-      /* storage unavailable */
-    }
-  }, [format, dpi]);
+  useEffect(() => savePicturePrefs({ format, dpi }), [format, dpi]);
   useEffect(() => () => abortRef.current?.abort(), []);
 
   let pages: number[] = [];
@@ -75,18 +42,7 @@ export function PageImagesDialog(p: Props) {
   } catch (e) {
     error = (e as Error).message;
   }
-  // Rough size per page: a 200 dpi PNG of a text page is about 0.5 MB, a JPEG about a third of that.
-  const mbPerPage = (format === "png" ? 0.5 : 0.18) * (dpi / 200) ** 2;
-  const estimate = pages.length * mbPerPage;
-
-  const render = async (pdf: PDFDocumentProxy, n: number) => {
-    const canvas = await renderRegion(pdf, n, undefined, { dpi, maxSide: Math.round((dpi / 72) * 1400) });
-    const blob = await canvasToBlob(canvas, format === "png" ? "image/png" : "image/jpeg", 0.9);
-    canvas.width = canvas.height = 0; // free the pixels now
-    return blob;
-  };
-  const ext = format === "png" ? "png" : "jpg";
-  const base = safeName(p.title);
+  const estimate = pages.length * mbPerPage(format, dpi);
 
   const save = async () => {
     const pdf = p.getPdf();
@@ -94,23 +50,13 @@ export function PageImagesDialog(p: Props) {
     const ac = (abortRef.current = new AbortController());
     setWorking({ done: 0, total: pages.length });
     try {
-      if (pages.length === 1) {
-        downloadBlob(await render(pdf, pages[0]), `${base} - p${pages[0]}.${ext}`);
-        p.onDone(`Saved page ${pages[0]} as a picture`);
-      } else {
-        const zip = new ZipWriter();
-        const width = String(Math.max(...pages)).length;
-        for (const [i, n] of pages.entries()) {
-          if (ac.signal.aborted) return;
-          zip.add(`${base} - p${String(n).padStart(width, "0")}.${ext}`, new Uint8Array(await (await render(pdf, n)).arrayBuffer()));
-          setWorking({ done: i + 1, total: pages.length });
-        }
-        downloadBlob(zip.finish(), `${base} - pages ${pagesText(pages)} (${ext}).zip`);
-        p.onDone(`Saved ${pages.length} pages as pictures in one .zip`);
-      }
+      const { blob, name } = await makePictures(pdf, pages, { format, dpi, base: p.title }, (done, total) => setWorking({ done, total }), ac.signal);
+      if (ac.signal.aborted) return;
+      downloadBlob(blob, name);
+      p.onDone(pages.length === 1 ? `Saved page ${pages[0]} as a picture` : `Saved ${pages.length} pages as pictures in one .zip`);
       p.onClose();
     } catch (e) {
-      p.onError(e);
+      if ((e as Error)?.name !== "AbortError") p.onError(e);
     } finally {
       if (!ac.signal.aborted) setWorking(null);
     }

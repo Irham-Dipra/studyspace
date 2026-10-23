@@ -23,6 +23,7 @@ export type ShortcutGroup =
   | "In the Save pictures window"
   | "In the bookmarks list"
   | "In the files list"
+  | "In the selected-files window"
   | "In dialogs & editors";
 
 export interface Shortcut {
@@ -43,6 +44,7 @@ export const SHORTCUTS = {
   theme: s("General", "Dark / light mode", "Shift+D"),
   settings: s("General", "Settings (study folders, note colours)", ","),
   rescan: s("General", "Rescan the library folders", "Shift+L"),
+  selectedFiles: s("General", "Pictures & text of the files selected in the files list…", "Shift+F"),
 
   // Panels
   toggleLeft: s("Panels", "Show / hide the left panel (files, bookmarks)", "["),
@@ -177,6 +179,22 @@ export const SHORTCUTS = {
   fileOpen: s("In the files list", "Open the file / folder", "Enter"),
   fileRename: s("In the files list", "Rename the file", "F2"),
   fileDelete: s("In the files list", "Delete the file (to the Trash; asks first)", "Delete"),
+  fileSelect: s("In the files list", "Select / unselect the file (on a folder: all its files)", " "),
+  fileSelectMove: s("In the files list", "Select while moving up / down", "Shift+ArrowUp", "Shift+ArrowDown"),
+  fileSelectRange: s("In the files list", "Select every file from the last one picked to this one", "Shift+Click"),
+  fileSelectAll: s("In the files list", "Select all the files showing (the filter's matches)", "Ctrl+A"),
+  fileUnselect: s("In the files list", "Unselect all", "Escape"),
+
+  // The selected-files window
+  sfMove: s("In the selected-files window", "Previous / next file", "ArrowUp", "ArrowDown"),
+  sfPictures: s("In the selected-files window", "Save the file's pages as pictures (.zip)", "P"),
+  sfText: s("In the selected-files window", "Download the file's text (.md / .txt)", "T"),
+  sfCancel: s("In the selected-files window", "Cancel the file's waiting or running downloads", "Delete"),
+  sfPicFormat: s("In the selected-files window", "Pictures: PNG ⇄ JPEG", "F"),
+  sfPicQuality: s("In the selected-files window", "Pictures: sharpness 100 → 150 → 200 → 300 dpi", "R"),
+  sfTextFormat: s("In the selected-files window", "Text: Markdown ⇄ plain text", "M"),
+  sfMarks: s("In the selected-files window", "Text: mark my highlights as ==text== on / off", "H"),
+  sfNotes: s("In the selected-files window", "Text: include my notes on / off", "I"),
 
   // Dialogs & editors
   confirm: s("In dialogs & editors", "Confirm a page dialog (in its first field)", "Enter"),
@@ -196,6 +214,7 @@ const KEY_NAMES: Record<string, string> = {
   ArrowDown: "↓",
   Escape: "Esc",
   Delete: "Del",
+  " ": "Space",
 };
 
 /** How a combination is written on screen, e.g. "Shift+R", "Ctrl+Del", "→". */
@@ -263,5 +282,6 @@ export const GROUP_ORDER: ShortcutGroup[] = [
   "In the Save pictures window",
   "In the bookmarks list",
   "In the files list",
+  "In the selected-files window",
   "In dialogs & editors",
 ];
