@@ -44,7 +44,7 @@ export const SHORTCUTS = {
   theme: s("General", "Dark / light mode", "Shift+D"),
   settings: s("General", "Settings (study folders, note colours)", ","),
   rescan: s("General", "Rescan the library folders", "Shift+L"),
-  selectedFiles: s("General", "Pictures & text of the files selected in the files list…", "Shift+F"),
+  selectedFiles: s("General", "Pictures, text & notes of the files selected in the files list…", "Shift+F"),
 
   // Panels
   toggleLeft: s("Panels", "Show / hide the left panel (files, bookmarks)", "["),
@@ -92,6 +92,7 @@ export const SHORTCUTS = {
   newNote: s("Notes & bookmarks", "New note for this page", "N"),
   toggleNotes: s("Notes & bookmarks", "Close all / expand all notes", "C"),
   addBookmark: s("Notes & bookmarks", "Bookmark this spot (selected text becomes its title)", "B"),
+  downloadNotes: s("Notes & bookmarks", "Download this file's notes (one .md file per note, in a .zip)", "Shift+N"),
   newTab: s("Notes & bookmarks", "Open a library PDF in a new browser tab", "Ctrl+Click"),
 
   // Page tools (they change the PDF; all undoable)
@@ -189,6 +190,7 @@ export const SHORTCUTS = {
   sfMove: s("In the selected-files window", "Previous / next file", "ArrowUp", "ArrowDown"),
   sfPictures: s("In the selected-files window", "Save the file's pages as pictures (.zip)", "P"),
   sfText: s("In the selected-files window", "Download the file's text (.md / .txt)", "T"),
+  sfNoteFiles: s("In the selected-files window", "Download the file's notes (one .md per note, in a .zip)", "N"),
   sfCancel: s("In the selected-files window", "Cancel the file's waiting or running downloads", "Delete"),
   sfPicFormat: s("In the selected-files window", "Pictures: PNG ⇄ JPEG", "F"),
   sfPicQuality: s("In the selected-files window", "Pictures: sharpness 100 → 150 → 200 → 300 dpi", "R"),

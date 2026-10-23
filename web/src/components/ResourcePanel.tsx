@@ -6,6 +6,7 @@ import {
   ChevronUp,
   ChevronsDownUp,
   ChevronsUpDown,
+  Download,
   ExternalLink,
   FileQuestion,
   Highlighter,
@@ -28,6 +29,7 @@ import {
 } from "../lib/types";
 import { NoteBody, NotePopovers, type Anchor, type NotePopover } from "./NoteAnnotations";
 import { ResourceEditor } from "./ResourceEditor";
+import { withKey } from "../lib/shortcuts";
 import { Button, IconButton, KeyHint, cx } from "./ui";
 
 export interface EditorRequest {
@@ -59,6 +61,8 @@ interface Props {
   onJump: (page: number) => void;
   /** Changes (a timestamp) when the "close all / expand all notes" key is pressed. */
   toggleAllRequest?: number;
+  /** Downloads all of this document's notes, one .md file each, in a .zip. */
+  onDownloadNotes?: () => void;
 }
 
 const TYPE_ICON: Record<ResourceType, typeof NotebookPen> = {
@@ -286,6 +290,11 @@ export function ResourcePanel(props: Props) {
             Page {page}
             {props.pageCount > 0 && <span className="font-normal text-ink-3"> / {props.pageCount}</span>}
           </span>
+        )}
+        {props.onDownloadNotes && props.resources.length > 0 && (
+          <IconButton label={withKey("Download all this file's notes (.md files in a .zip)", "downloadNotes")} className={cx("-my-1 -mr-2 size-7", !props.paged && "ml-auto")} onClick={props.onDownloadNotes}>
+            <Download className="size-4" />
+          </IconButton>
         )}
       </div>
 

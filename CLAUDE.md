@@ -3,7 +3,7 @@
 StudySpace is a local-first PDF study app: library on the left, PDF viewer in the middle, notes on the right.
 It reads the user's course PDFs in place from `/home/dipra/Buet/3-1` and works fully offline.
 
-Status as of **2026-10-23**. Items up to 29 are committed; item 30, the table fix of 2026-10-23 and item 31 are not yet. Other docs:
+Status as of **2026-10-23**. Everything up to item 32 is committed. Other docs:
 - [HANDOFF.md](HANDOFF.md): the long version, with the detailed history of every feature and the problems already solved.
 - [README.md](README.md): setup, configuration, the HTTP API and the schema.
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md): every feature, explained for the user.
@@ -114,6 +114,7 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. I
 | `lib/artifactFrame.js` | Plain JS put into an HTML document's sandboxed frame (`?raw`): selections → anchors, highlights painted with the CSS Custom Highlight API, keys and scroll sent out by `postMessage`. |
 | `lib/pdfToMarkdown.ts` | Page text → Markdown or plain text: headings by font size, lists, paragraphs, repeated headers/footers dropped. Also `==highlight==` marks, notes after pages (`afterPage`) and mid-page clips (`PageClip`). |
 | `lib/notesText.ts` | The user's notes as blocks of extracted text. |
+| `lib/notesZip.ts` | A file's notes as one `.md` per note in a `.zip` (`notesZip`, `noteMarkdown`): `Shift+N`, the notes panel's ⬇, and *Notes* in the `Shift+F` window. |
 | `lib/pageImage.ts`, `lib/snip.ts`, `lib/zip.ts` | Render pages and regions to images, the clipboard, window screenshots (`modern-screenshot`), and a minimal ZIP writer. |
 | `lib/pictures.ts` | Pages as pictures (one image, or a .zip): `makePictures`, the remembered format and sharpness. Used by `PageImagesDialog` and `SelectedFilesDialog`. |
 | `lib/tableRepair.ts` | Mends tables whose rows were broken over several lines (Gemini's copy), before rendering. |
@@ -125,7 +126,7 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. I
 | `components/ResourcePanel.tsx`, `ResourceEditor.tsx`, `NoteAnnotations.tsx`, `Markdown.tsx` | The notes column, the Markdown/KaTeX editor, and highlights or comments inside notes. |
 | `components/BookmarksPanel.tsx`, `LibraryPanel.tsx`, `SearchBox.tsx`, `StatusBar.tsx` | The left column (the files list also selects files: box, Shift+click, Space), search and the status bar. |
 | `components/LoginScreen.tsx` | `AuthGate`: the password screen for other devices. |
-| `components/*Dialog.tsx` | `GetTextDialog` (get text / OCR / bookmark sections / notes), `PageOpsDialog` (page edits), `PdfToolsDialog` (extract/split/merge), `PageImagesDialog`, `PageHalvesDialog`, `SelectedFilesDialog` (pictures / text of each selected file, queued; `Shift+F`), `HelpDialog` (generated from the shortcuts), `SettingsDialog` (folders, note colours), `UnsavedDialog`. |
+| `components/*Dialog.tsx` | `GetTextDialog` (get text / OCR / bookmark sections / notes), `PageOpsDialog` (page edits), `PdfToolsDialog` (extract/split/merge), `PageImagesDialog`, `PageHalvesDialog`, `SelectedFilesDialog` (pictures / text / notes of each selected file, queued; `Shift+F`), `HelpDialog` (generated from the shortcuts), `SettingsDialog` (folders, note colours), `UnsavedDialog`. |
 | `components/SnipOverlay.tsx`, `ui.tsx`, `index.css` | The window-screenshot overlay; shared UI (`Modal`, `Button`, `NumberInput`, `Kbd`, `KeyHint`, toasts); theme tokens and dark mode. |
 
 ### Conventions
@@ -179,7 +180,8 @@ Everything below is done and verified in the browser on scratch copies.
 27. Tables copied from Gemini (rows broken over several lines, `<br>` in cells, or each cell on its own line) render as tables in notes and Markdown files; note tables scroll sideways instead of breaking words. Checked with the user's pasted answers, in Chromium.
 29. Click a heading, bullet label or `==mark==` in a note to recolour just that one (menu like the highlight bar, keys 1–9 / 0 / Del; right-click the note title). Saved with the note (v9 `resources.styles`), undoable. Tested in Chromium only.
 30. Formulas pasted without `$` (a Gemini answer copied by selection: `n^{\text{th}}`, `X \sim \text{Bern}(p)`) render as math. Display equations are lost in such a copy and can't be recovered. Checked by rendering the user's text (no KaTeX errors); not yet looked at in the browser.
-31. Select several files in the library (box, Shift+click, Space, Ctrl+A) and press `Shift+F`: one window lists them, each with *Pictures* (whole file, .zip) and *Text* (.md / .txt); clicks queue up and download one at a time. Tested in Chromium only.
+31. Select several files in the library (box, Shift+click, Space, Ctrl+A) and press `Shift+F`: one window lists them, each with *Pictures* (whole file, .zip), *Text* (.md / .txt) and *Notes* (item 32); clicks queue up and download one at a time. Pictures and text only for files with pages. Tested in Chromium only.
+32. Download a file's notes as a .zip of Markdown files, one per note (`Shift+N`, or ⬇ in the notes panel); for several files, *Notes* (`N`) in the `Shift+F` window. Works for HTML and Markdown files too. Tested in Chromium only.
 28. Change the notes' default highlighter colours (title, heading levels, bullet header and label, `==marks==`) in Settings → Note colours; per browser, reset per colour or all. Tested in Chromium only.
 
 ## Change log
@@ -279,6 +281,12 @@ Everything below is done and verified in the browser on scratch copies.
   - Docs: user guide §3, §4, §12 (regenerated); HANDOFF 39.
   - Fixed while testing: the window now takes the focus, so ↓ / Esc / Del no longer reach the files list behind it.
   - Verified: typecheck, 102 tests, build (rebuilt `web/dist`); Chromium on scratch 4399/5199 (selection keys and clicks, 4 queued downloads checked on disk, cancel, phone layout, `Shift+S` unchanged). Real PDFs not touched by testing: `CSE 309 …/Compiler_CodeGen_RegAlloc_Opt_Revision_Notes.pdf` changed at 21:42, same size and time as the LaTeX `build/main.pdf` beside it, with no StudySpace history.
+- **2026-10-23:** committed item 30, the table fix and item 31 (`0ef3e7d`).
+- **2026-10-23: download notes as Markdown files (item 32, HANDOFF 40).**
+  - New: `web/src/lib/notesZip.ts`.
+  - Changed: `App.tsx` (`downloadNotes`, `Shift+N`, unpaged files kept in `selectedDocs`), `components/ResourcePanel.tsx` (⬇ in the header, `onDownloadNotes`), `components/SelectedFilesDialog.tsx` (*Notes* button and job, `WHATS`, pictures/text off for unpaged files, "1 page"), `components/LibraryPanel.tsx` (any file selectable, *Download…*), `lib/shortcuts.ts` (`downloadNotes`, `sfNoteFiles`).
+  - Docs: user guide §3, §4, §5, §12 (regenerated); README; HANDOFF 40.
+  - Verified: typecheck, 102 tests, build (rebuilt `web/dist`); Chromium on scratch 4399/5199 with seeded notes (zip contents and names checked on disk, Bengali title, toast without notes, Markdown row in the Shift+F window); the item 31 test still passes. Real PDFs unchanged during testing.
 
 ## Open questions for the user
 

@@ -69,7 +69,7 @@ The two `☰` buttons in the top bar (or the **`[`** and **`]`** keys) hide and 
   - **Ctrl+Z** right away puts it back where it was, with everything. (If the deleted file was open, it closes; press Ctrl+Z before opening another PDF, since each PDF has its own undo.)
   - Later, restore it from the Trash in your file manager, then click **⟳ Rescan**: its notes come back too.
 - **Keyboard in the file list:** press **`/`**, then **↓** to step into the list. **↑/↓** move between files and folders, **→/←** open and close folders, **Enter** opens.
-- **Several files at once:** select files (the box beside a file, Shift+click, or **`Space`**), then **`Shift+F`** gets each one's pictures or text from one window. See *Pictures and text of several files at once* (§4).
+- **Several files at once:** select files (the box beside a file, Shift+click, or **`Space`**), then **`Shift+F`** gets each one's pictures, text or notes from one window. See *Pictures, text and notes of several files at once* (§4).
 - **Rescan (⟳):** click after you add, rename or move PDFs on disk. Renamed or moved files keep all their notes. StudySpace recognises them by content, not by name.
 - An orange dot next to a file means it has highlights that are not yet saved into the PDF file (see §7).
 - **Unsaved work when switching PDFs:** if the PDF you're leaving has unsaved work, StudySpace asks before opening another one in the same tab. That covers highlights not yet saved into the file and a note you're still writing. The choices are:
@@ -193,20 +193,23 @@ Press **`Q`**, or click the ✂ crop button at the top right (also in 🔧 → *
 
 While you type the pages, the letter keys (`F`, `R`, `C`) still work, since page lists only use digits, `-` and `,`. Format and sharpness are remembered.
 
-### Pictures and text of several files at once
+### Pictures, text and notes of several files at once
 
-Pick several PDFs (or slides) in the library, then get each one's pictures or text from one window, instead of opening each file and pressing `Shift+S` or `Shift+A`.
+Pick several files in the library, then get each one's pictures, text or notes from one window, instead of opening each file and pressing `Shift+S`, `Shift+A` or `Shift+N`.
 
 1. **Select the files** in the library (left panel):
    - click the small box to the left of a file (it shows when you point at the file, and on every file once one is selected);
    - **Shift+click** a file selects every file from the last one you picked down to it;
    - with the keyboard: **`Space`** selects or unselects the file you're on; on a folder, it selects all its files. **`Shift+↑` / `Shift+↓`** select while moving. **`Ctrl+A`** selects all the files showing (with a filter typed, just its matches). **`Esc`** unselects all.
 
-   The bottom of the library shows *"3 selected"*, with **Pictures & text…** and ✕ (unselect all). HTML and Markdown files have no pages, so they can't be selected.
-2. **Press `Shift+F`** (anywhere, even with no PDF open), or click **Pictures & text…**. The *Selected files* window lists the files.
-3. **For each file, click Pictures or Text** (or move with **↑ / ↓** and press **`P`** or **`T`**). Each is the whole file:
+   The bottom of the library shows *"3 selected"*, with **Download…** and ✕ (unselect all).
+2. **Press `Shift+F`** (anywhere, even with no PDF open), or click **Download…**. The *Selected files* window lists the files.
+3. **For each file, click Pictures, Text or Notes** (or move with **↑ / ↓** and press **`P`**, **`T`** or **`N`**). Each is the whole file:
    - **Pictures:** every page as a picture, in one `.zip` (a one-page file gives one picture), like `Shift+S` → *Whole PDF*.
    - **Text:** the file's text as a `.md` (Markdown) or `.txt` file, like `Shift+A`, then *Download*.
+   - **Notes:** all the file's notes, one `.md` file per note, in one `.zip`, like `Shift+N` (§5).
+
+   HTML pages and Markdown files have no pages, so only *Notes* works for them.
 
    You don't have to wait: click the next one straight away. Downloads are done one at a time, in the order you asked for them, and each row shows *waiting…*, the pages done, then ✓. ✕ (or **`Del`**) cancels a file's waiting or running downloads.
 
@@ -304,6 +307,15 @@ For the **note title**, right-click it (a plain click opens or closes the card).
 - **Edit:** hover over a card and click ✏. You can change everything, including type and scope.
 - **Delete:** click 🗑 and confirm. **`Ctrl+Z`** brings it back.
 - A note from a range that started on another page shows its scope (e.g. *Pages 20–30*). Click that label to jump to the first page.
+
+### Downloading your notes
+
+**`Shift+N`** (or the ⬇ button at the top of the notes panel) downloads every note of the open file in one `.zip`, with **one Markdown file per note**. This works for PDFs, slides, HTML pages and Markdown files.
+
+- Inside the zip is a folder *"Title - notes"*. The files are numbered in reading order: notes on the whole file first, then by page. Each is named after its place and its title, e.g. `03 - p12 - Superblock.md` or `01 - whole - Summary of chapter 2.md`. A note without a title is named after its first line.
+- Each file starts with the note's title as a heading, then a line saying what it is and where (*Summary · Pages 20–30 of "OS Lecture 4"*), then the link if it has one, then your text exactly as you wrote it (Markdown and `$…$` formulas included).
+- A file with no notes says so instead.
+- For several files at once, select them in the library and press `Shift+F`: each file has a **Notes** button there (see *Pictures, text and notes of several files at once*, §4).
 
 ### Highlighting and commenting inside your notes
 
@@ -640,7 +652,7 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `Shift+D` | Dark / light mode |
 | `,` | Settings (study folders, note colours) |
 | `Shift+L` | Rescan the library folders |
-| `Shift+F` | Pictures & text of the files selected in the files list… |
+| `Shift+F` | Pictures, text & notes of the files selected in the files list… |
 
 **Panels**
 
@@ -703,6 +715,7 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `N` | New note for this page |
 | `C` | Close all / expand all notes |
 | `B` | Bookmark this spot (selected text becomes its title) |
+| `Shift+N` | Download this file's notes (one .md file per note, in a .zip) |
 | `Ctrl+Click` | Open a library PDF in a new browser tab |
 
 **Page tools**
@@ -830,6 +843,7 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `↑` / `↓` | Previous / next file |
 | `P` | Save the file's pages as pictures (.zip) |
 | `T` | Download the file's text (.md / .txt) |
+| `N` | Download the file's notes (one .md per note, in a .zip) |
 | `Del` | Cancel the file's waiting or running downloads |
 | `F` | Pictures: PNG ⇄ JPEG |
 | `R` | Pictures: sharpness 100 → 150 → 200 → 300 dpi |

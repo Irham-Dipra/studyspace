@@ -1,22 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Check, FileText, Highlighter, Images, Loader2, NotebookText, Presentation, X } from "lucide-react";
+import { AlertTriangle, Check, FileCode2, FileText, FileType2, Highlighter, Images, Loader2, NotebookText, Presentation, StickyNote, X } from "lucide-react";
 import { api } from "../lib/api";
 import { openPdf, type PDFDocumentProxy } from "../lib/pdf";
 import { downloadBlob } from "../lib/pageImage";
 import { PICTURE_DPIS, loadPicturePrefs, makePictures, mbPerPage, safeName, savePicturePrefs, type PictureFormat } from "../lib/pictures";
 import { extractPages, type TextFormat } from "../lib/pdfToMarkdown";
 import { notesForText } from "../lib/notesText";
+import { notesZip } from "../lib/notesZip";
 import { isTyping, matches, type ShortcutId } from "../lib/shortcuts";
-import type { DocumentRecord, NormRect } from "../lib/types";
+import { isPaged, type DocumentRecord, type NormRect } from "../lib/types";
 import { Button, KeyHint, Modal, cx } from "./ui";
 
 interface Props {
-  /** The files selected in the library (PDFs and slides). */
+  /** The files selected in the library (pictures and text only for those with pages). */
   docs: DocumentRecord[];
   onClose: () => void;
 }
 
-type What = "pictures" | "text";
+type What = "pictures" | "text" | "notes";
+const WHATS: What[] = ["pictures", "text", "notes"];
+const WHAT_LABEL: Record<What, string> = { pictures: "Pictures", text: "Text", notes: "Notes" };
 
 interface Job {
   state: "waiting" | "working" | "done" | "failed";
@@ -98,7 +101,7 @@ async function fileText(pdf: PDFDocumentProxy, doc: DocumentRecord, c: TextChoic
 }
 
 /**
- * Pictures and text of several library files, from one window: each file has its own buttons, and
+ * Pictures, text and notes of several library files, from one window: each file has its own buttons, and
  * downloads asked for while another runs wait their turn (one file is open at a time).
  */
 export function SelectedFilesDialog({ docs, onClose }: Props) {
@@ -149,6 +152,14 @@ export function SelectedFilesDialog({ docs, onClose }: Props) {
     setJob(q.key, { state: "working", done: 0, total: doc.pageCount ?? 0 });
     let close: (() => void) | undefined;
     try {
+      // Notes need no PDF: they're StudySpace's own, one .md each.
+      if (what === "notes") {
+        const r = notesZip(doc.title, await api.resources(doc.id));
+        if (ac.signal.aborted) throw cancelled();
+        if (!r) throw new Error("This file has no notes yet.");
+        downloadBlob(r.blob, r.name);
+        return setJob(q.key, { state: "done", done: r.count, total: r.count, message: `Saved ${r.count} note${r.count === 1 ? "" : "s"} (.md files in a .zip)` });
+      }
       const opened = await openFile(doc, ac.signal);
       close = opened.close;
       const { pdf } = opened;
@@ -189,14 +200,14 @@ export function SelectedFilesDialog({ docs, onClose }: Props) {
 
   const ask = (doc: DocumentRecord, what: What) => {
     const key = jobKey(doc.id, what);
-    if (doc.missing || busy(key)) return;
+    if (doc.missing || busy(key) || (what !== "notes" && !isPaged(doc.kind))) return;
     queueRef.current.push({ key, doc, what, pictures: { format: picFormat, dpi }, text: { format: textFormat, marks, notes: withNotes }, ac: new AbortController() });
     setJob(key, { state: "waiting", done: 0, total: 0 });
     void pump();
   };
 
   const cancel = (doc: DocumentRecord) => {
-    for (const what of ["pictures", "text"] as const) {
+    for (const what of WHATS) {
       const key = jobKey(doc.id, what);
       const waiting = queueRef.current.find((q) => q.key === key);
       if (waiting) {
@@ -221,6 +232,7 @@ export function SelectedFilesDialog({ docs, onClose }: Props) {
     else if (e.key === "ArrowUp") setCur((c) => Math.max(0, c - 1));
     else if (is("sfPictures") && doc) ask(doc, "pictures");
     else if (is("sfText") && doc) ask(doc, "text");
+    else if (is("sfNoteFiles") && doc) ask(doc, "notes");
     else if (is("sfCancel") && doc) cancel(doc);
     else if (is("sfPicFormat")) setPicFormat((f) => (f === "png" ? "jpeg" : "png"));
     else if (is("sfPicQuality")) setDpi((d) => PICTURE_DPIS[(PICTURE_DPIS.indexOf(d) + 1) % PICTURE_DPIS.length]);
@@ -258,7 +270,7 @@ export function SelectedFilesDialog({ docs, onClose }: Props) {
 
   const jobLine = (what: What, j: Job | undefined) => {
     if (!j) return null;
-    const label = what === "pictures" ? "Pictures" : "Text";
+    const label = WHAT_LABEL[what];
     if (j.state === "waiting") return <span className="block text-ink-3">{label}: waiting…</span>;
     if (j.state === "working")
       return (
@@ -327,23 +339,32 @@ export function SelectedFilesDialog({ docs, onClose }: Props) {
 
         <ul ref={listRef} tabIndex={-1} aria-label="Selected files" className="ss-scroll outline-none max-h-[50vh] divide-y divide-line overflow-y-auto rounded-md border border-line">
           {docs.map((d, i) => {
-            const pics = jobs[jobKey(d.id, "pictures")];
-            const text = jobs[jobKey(d.id, "text")];
-            const running = [pics, text].some((j) => j && (j.state === "waiting" || j.state === "working"));
+            const rowJobs = WHATS.map((w) => [w, jobs[jobKey(d.id, w)]] as const).filter(([, j]) => j);
+            const running = rowJobs.some(([, j]) => j.state === "waiting" || j.state === "working");
+            const paged = isPaged(d.kind);
+            const noPages = paged ? undefined : "HTML and Markdown files have no pages: only their notes";
             const mb = d.pageCount ? d.pageCount * mbPerPage(picFormat, dpi) : null;
             const here = i === cur;
             const folder = d.relPath.split("/").slice(0, -1).join(" / ");
             return (
               <li key={d.id} data-row={i} className={cx("px-3 py-2", here && "bg-accent-soft")} onMouseDown={() => setCur(i)}>
                 <div className="flex flex-wrap items-center gap-2">
-                  {d.kind === "slides" ? <Presentation className="size-4 shrink-0 text-warn opacity-80" /> : <FileText className="size-4 shrink-0 opacity-70" />}
+                  {d.kind === "slides" ? (
+                    <Presentation className="size-4 shrink-0 text-warn opacity-80" />
+                  ) : d.kind === "html" ? (
+                    <FileCode2 className="size-4 shrink-0 text-sky-600 opacity-80 dark:text-sky-400" />
+                  ) : d.kind === "markdown" ? (
+                    <FileType2 className="size-4 shrink-0 text-emerald-600 opacity-80 dark:text-emerald-400" />
+                  ) : (
+                    <FileText className="size-4 shrink-0 opacity-70" />
+                  )}
                   <div className="min-w-[12rem] flex-1 basis-0">
                     <p className={cx("truncate text-[13px]", here ? "font-medium text-ink" : "text-ink-2")} title={d.relPath}>
                       {d.title}
                     </p>
                     <p className="truncate text-[11px] text-ink-3">
                       {folder && `${folder} · `}
-                      {d.missing ? "file missing" : d.pageCount ? `${d.pageCount} pages · pictures about ${mb! < 1 ? "1" : Math.round(mb!)} MB` : d.kind === "slides" ? "slides" : "PDF"}
+                      {d.missing ? "file missing" : !paged ? (d.kind === "html" ? "HTML page" : "Markdown") : d.pageCount ? `${d.pageCount} page${d.pageCount === 1 ? "" : "s"} · pictures about ${mb! < 1 ? "1" : Math.round(mb!)} MB` : d.kind === "slides" ? "slides" : "PDF"}
                     </p>
                   </div>
                   {running && (
@@ -351,26 +372,24 @@ export function SelectedFilesDialog({ docs, onClose }: Props) {
                       <X className="size-3.5" />
                     </button>
                   )}
-                  <Button size="sm" variant="secondary" disabled={d.missing} onClick={() => (setCur(i), ask(d, "pictures"))} title={`Save every page as a ${picFormat.toUpperCase()} picture, in one .zip`}>
+                  <Button size="sm" variant="secondary" disabled={d.missing || !paged} onClick={() => (setCur(i), ask(d, "pictures"))} title={noPages ?? `Save every page as a ${picFormat.toUpperCase()} picture, in one .zip`}>
                     <Images className="size-3.5" /> Pictures {here && <KeyHint id="sfPictures" />}
                   </Button>
-                  <Button size="sm" variant="secondary" disabled={d.missing} onClick={() => (setCur(i), ask(d, "text"))} title={`Download the whole file's text as .${textFormat === "markdown" ? "md" : "txt"}`}>
+                  <Button size="sm" variant="secondary" disabled={d.missing || !paged} onClick={() => (setCur(i), ask(d, "text"))} title={noPages ?? `Download the whole file's text as .${textFormat === "markdown" ? "md" : "txt"}`}>
                     <FileText className="size-3.5" /> Text {here && <KeyHint id="sfText" />}
                   </Button>
+                  <Button size="sm" variant="secondary" onClick={() => (setCur(i), ask(d, "notes"))} title="Download this file's notes: one .md file per note, in one .zip">
+                    <StickyNote className="size-3.5" /> Notes {here && <KeyHint id="sfNoteFiles" />}
+                  </Button>
                 </div>
-                {(pics || text) && (
-                  <div className="mt-1 space-y-0.5 pl-6 text-[11px]">
-                    {jobLine("pictures", pics)}
-                    {jobLine("text", text)}
-                  </div>
-                )}
+                {rowJobs.length > 0 && <div className="mt-1 space-y-0.5 pl-6 text-[11px]">{rowJobs.map(([w, j]) => <div key={w}>{jobLine(w, j)}</div>)}</div>}
                 {here && mb !== null && mb > 300 && <p className="mt-1 pl-6 text-[11px] text-warn">That's a lot of pictures: choose JPEG or a lower sharpness.</p>}
               </li>
             );
           })}
         </ul>
         <p className="text-[11px] text-ink-3">
-          Text comes from the PDF's own text layer, as with <KeyHint id="textAll" />; scanned pages need OCR, from the file itself. Pictures are the whole file, as with <KeyHint id="savePictures" /> → Whole PDF.
+          Text comes from the PDF's own text layer, as with <KeyHint id="textAll" />; scanned pages need OCR, from the file itself. Pictures are the whole file, as with <KeyHint id="savePictures" /> → Whole PDF. Notes come as one .md file per note, in a .zip, as with <KeyHint id="downloadNotes" />.
         </p>
       </div>
     </Modal>

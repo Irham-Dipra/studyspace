@@ -43,7 +43,8 @@ import { PageImagesDialog } from "./components/PageImagesDialog";
 import { SelectedFilesDialog } from "./components/SelectedFilesDialog";
 import { SnipOverlay } from "./components/SnipOverlay";
 import { captureWindowRegion, type ScreenRect } from "./lib/snip";
-import { COPY_QUALITY, canvasToPng, copyToClipboard, renderRegion } from "./lib/pageImage";
+import { COPY_QUALITY, canvasToPng, copyToClipboard, downloadBlob, renderRegion } from "./lib/pageImage";
+import { notesZip } from "./lib/notesZip";
 import { isTyping, matches, withKey, type ShortcutId } from "./lib/shortcuts";
 import { ResizeHandle } from "./components/ResizeHandle";
 import { IconButton, KeyHint, Toasts, cx, type ToastMsg } from "./components/ui";
@@ -1232,6 +1233,16 @@ export default function App() {
   };
 
   /** Copies the page you're reading to the clipboard as a picture. */
+  /** The open file's notes, one .md file per note, in one .zip. */
+  const downloadNotes = () => {
+    const d = docRef.current;
+    if (!d) return;
+    const r = notesZip(d.title, resources);
+    if (!r) return toast("This file has no notes yet.");
+    downloadBlob(r.blob, r.name);
+    toast(`Saved ${r.count} note${r.count === 1 ? "" : "s"} as .md files in one .zip`, "success");
+  };
+
   const copyPageImage = () => {
     const pdf = viewerRef.current?.getPdf();
     if (!pdf) return;
@@ -1308,6 +1319,7 @@ export default function App() {
         if (isDesktopRef.current) setRightOpen(true);
       });
     else if (is("addBookmark")) run(() => void addBookmark());
+    else if (is("downloadNotes")) run(downloadNotes);
     else if (is("bookmarks")) run(() => (setLeftTab("bookmarks"), openLeft()));
     else if (is("renameFile"))
       run(() => {
@@ -1368,11 +1380,11 @@ export default function App() {
     }
   };
 
-  /** The picked files, in the library's order (files that went away or have no pages drop out). */
+  /** The picked files, in the library's order (files that went away drop out). */
   const selectedDocs = useMemo(
     () =>
       documents
-        .filter((d) => selectedFiles.has(d.id) && isPaged(d.kind) && !d.missing)
+        .filter((d) => selectedFiles.has(d.id) && !d.missing)
         .sort((a, b) => (a.directoryId ?? 0) - (b.directoryId ?? 0) || a.relPath.localeCompare(b.relPath, undefined, { numeric: true, sensitivity: "base" })),
     [documents, selectedFiles],
   );
@@ -1503,6 +1515,7 @@ export default function App() {
       onDelete={deleteResource}
       onJump={goToPage}
       toggleAllRequest={notesToggle}
+      onDownloadNotes={downloadNotes}
     />
   );
 

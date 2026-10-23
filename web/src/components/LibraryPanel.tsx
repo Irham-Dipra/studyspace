@@ -50,7 +50,7 @@ interface Props {
   onRenameRequestDone: () => void;
   onRescan: () => void;
   onOpenSettings: () => void;
-  /** Files picked for the selected-files window (pictures & text of several files). */
+  /** Files picked for the selected-files window (pictures, text & notes of several files). */
   selected: Set<string>;
   onSelect: (ids: Set<string>) => void;
   onOpenSelected: () => void;
@@ -72,8 +72,8 @@ function KindIcon({ kind }: { kind: DocumentRecord["kind"] }) {
   return <FileText className="size-4 shrink-0 opacity-70" />;
 }
 const fileName = (d: DocumentRecord) => d.relPath.split("/").pop() ?? d.title;
-/** Files with pages can be picked for pictures & text of several files. */
-const selectable = (d: DocumentRecord) => isPaged(d.kind) && !d.missing;
+/** Any file on disk can be picked (pictures and text are then offered only for files with pages). */
+const selectable = (d: DocumentRecord) => !d.missing;
 
 /** The keys of the folders above a file, from the top down. */
 function folderKeys(d: DocumentRecord): string[] {
@@ -165,7 +165,7 @@ export function LibraryPanel(p: Props) {
     setEditing(d.id);
   }, [p.renameRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ---- Selecting files (for pictures & text of several files) ----------------------------------
+  // ---- Selecting files (for pictures, text & notes of several files) ---------------------------
   const { selected, onSelect } = p;
   const selectedCount = useMemo(() => documents.filter((d) => selected.has(d.id)).length, [documents, selected]);
   const setPicked = (ds: DocumentRecord[], on: boolean) => {
@@ -325,7 +325,7 @@ export function LibraryPanel(p: Props) {
                   className={rowCls}
                   style={{ paddingLeft: 22 + depth * 14 }}
                   onClick={(e) => openHere(e, d)}
-                  title={`${d.relPath}${KIND_NOTE[d.kind]}\nCtrl+click or middle-click to open in a new tab${selectable(d) ? `\nSpace or Shift+click to select (${keyOf("selectedFiles")}: pictures & text of the selected files)` : ""}`}
+                  title={`${d.relPath}${KIND_NOTE[d.kind]}\nCtrl+click or middle-click to open in a new tab${selectable(d) ? `\nSpace or Shift+click to select (${keyOf("selectedFiles")}: pictures, text & notes of the selected files)` : ""}`}
                 >
                   {selectable(d) && (
                     <button
@@ -459,8 +459,8 @@ export function LibraryPanel(p: Props) {
       {selectedCount > 0 && (
         <div className="flex items-center gap-2 border-t border-line px-3 py-2 text-xs">
           <span className="whitespace-nowrap text-ink-2">{selectedCount} selected</span>
-          <Button size="sm" variant="primary" className="ml-auto whitespace-nowrap" onClick={p.onOpenSelected}>
-            Pictures & text… <KeyHint id="selectedFiles" className="border-white/40 bg-white/10 text-white/80" />
+          <Button size="sm" variant="primary" className="ml-auto whitespace-nowrap" onClick={p.onOpenSelected} title="Pictures, text and notes of the selected files">
+            Download… <KeyHint id="selectedFiles" className="border-white/40 bg-white/10 text-white/80" />
           </Button>
           <IconButton label={withKey("Unselect all", "fileUnselect")} onClick={() => onSelect(new Set())}>
             <X className="size-4" />
