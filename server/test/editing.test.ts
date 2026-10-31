@@ -269,6 +269,43 @@ describe("saving annotations into the PDF", () => {
   });
 });
 
+describe("text boxes", () => {
+  it("updates a box's text, place and size, and saves it as a FreeText drawn upright on a turned page", async () => {
+    const { app, doc, file } = await setup(2);
+    const box = (
+      await request(app)
+        .post(`/api/documents/${doc.id}/annotations`)
+        .send({ page: 1, kind: "text", color: "#1e88e5", rects: [{ x: 0.1, y: 0.1, w: 0.4, h: 0.05 }], strokeWidth: 0.02, text: "Hello box — café ∑" })
+        .expect(201)
+    ).body;
+    expect(box.opacity).toBe(1);
+    const moved = (
+      await request(app).patch(`/api/annotations/${box.id}`).send({ rects: [{ x: 0.2, y: 0.3, w: 0.4, h: 0.06 }], strokeWidth: 0.03, text: "Line one\nLine two that is long enough to wrap inside the box" }).expect(200)
+    ).body;
+    expect(moved.rects[0].x).toBe(0.2);
+    expect(moved.strokeWidth).toBe(0.03);
+    await request(app).post(`/api/documents/${doc.id}/annotations`).send({ page: 2, kind: "text", color: "#000000", rects: [{ x: 0.1, y: 0.1, w: 0.3, h: 0.04 }], strokeWidth: 0.02, text: "On a turned page" }).expect(201);
+    await request(app).post(`/api/documents/${doc.id}/pages/rotate`).send({ pages: [2], angle: 90 }).expect(200);
+    await request(app).post(`/api/documents/${doc.id}/annotations/save`).send({}).expect(200);
+
+    const pdf = await PDFDocument.load(fs.readFileSync(file));
+    const annot = (n: number) => {
+      const annots = pdf.getPages()[n].node.lookupMaybe(PDFName.of("Annots"), PDFArray)!;
+      return pdf.context.lookup(annots.get(0), PDFDict);
+    };
+    const first = annot(0);
+    expect(String(first.get(PDFName.of("Subtype")))).toBe("/FreeText");
+    expect(first.lookup(PDFName.of("Contents"))!.toString()).toBeTruthy();
+    const ap = first.lookup(PDFName.of("AP"), PDFDict).lookup(PDFName.of("N")) as unknown as { getContentsString(): string; dict: PDFDict };
+    const ops = ap.getContentsString();
+    // Wrapped into several lines, each its own Tj.
+    expect((ops.match(/Tj/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect(String(ap.dict.get(PDFName.of("Matrix")))).toBe("[ 1 0 0 1 0 0 ]");
+    const turned = annot(1).lookup(PDFName.of("AP"), PDFDict).lookup(PDFName.of("N")) as unknown as { dict: PDFDict };
+    expect(String(turned.dict.get(PDFName.of("Matrix")))).toBe("[ 0 1 -1 0 0 0 ]");
+  });
+});
+
 describe("orphan policy and undo", () => {
   const seed = async (app: Parameters<typeof request>[0], docId: string) => {
     const add = async (body: object) => (await request(app).post(`/api/documents/${docId}/resources`).send(body).expect(201)).body;

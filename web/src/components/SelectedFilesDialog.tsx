@@ -6,7 +6,7 @@ import { downloadBlob } from "../lib/pageImage";
 import { PICTURE_DPIS, loadPicturePrefs, makePictures, mbPerPage, safeName, savePicturePrefs, type PictureFormat } from "../lib/pictures";
 import { extractPages, type TextFormat } from "../lib/pdfToMarkdown";
 import { notesForText } from "../lib/notesText";
-import { notesZip } from "../lib/notesZip";
+import { fetchNoteImages, notesZip } from "../lib/notesZip";
 import { isTyping, matches, type ShortcutId } from "../lib/shortcuts";
 import { isPaged, type DocumentRecord, type NormRect } from "../lib/types";
 import { Button, KeyHint, Modal, cx } from "./ui";
@@ -88,7 +88,7 @@ async function fileText(pdf: PDFDocumentProxy, doc: DocumentRecord, c: TextChoic
   const pages = allPages(pdf.numPages);
   const [annotations, notes] = await Promise.all([c.marks ? api.annotations(doc.id) : [], c.notes ? api.resources(doc.id) : []]);
   const highlights = new Map<number, NormRect[]>();
-  for (const a of annotations) if (a.kind !== "ink") highlights.set(a.page, [...(highlights.get(a.page) ?? []), ...a.rects]);
+  for (const a of annotations) if (a.kind === "highlight" || a.kind === "area") highlights.set(a.page, [...(highlights.get(a.page) ?? []), ...a.rects]);
   const n = c.notes ? notesForText(notes, pages, pdf.numPages, c.format) : null;
   const r = await extractPages(
     pdf,
@@ -154,7 +154,8 @@ export function SelectedFilesDialog({ docs, onClose }: Props) {
     try {
       // Notes need no PDF: they're StudySpace's own, one .md each.
       if (what === "notes") {
-        const r = notesZip(doc.title, await api.resources(doc.id));
+        const notes = await api.resources(doc.id);
+        const r = notesZip(doc.title, notes, await fetchNoteImages(notes));
         if (ac.signal.aborted) throw cancelled();
         if (!r) throw new Error("This file has no notes yet.");
         downloadBlob(r.blob, r.name);

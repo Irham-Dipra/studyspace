@@ -13,6 +13,7 @@ interface Row {
   mtime_ms: number;
   page_count: number | null;
   missing: number;
+  hidden: number;
   annotations_dirty: number;
   bookmarks_dirty: number;
   outline_imported: number;
@@ -34,6 +35,7 @@ function map(r: Row): DocumentRecord {
     mtimeMs: r.mtime_ms,
     pageCount: r.page_count,
     missing: r.missing === 1,
+    hidden: r.hidden === 1,
     annotationsDirty: r.annotations_dirty === 1,
     bookmarksDirty: r.bookmarks_dirty === 1,
     outlineImported: r.outline_imported === 1,
@@ -141,6 +143,13 @@ export function deleteDocument(db: DB, id: string): boolean {
 /** After StudySpace renamed the file in its folder (the content, size and mtime stay the same). */
 export function renameDocumentRow(db: DB, id: string, d: Pick<DocumentRecord, "path" | "relPath" | "title">): void {
   db.prepare(`UPDATE documents SET path = ?, rel_path = ?, title = ?, updated_at = ${NOW} WHERE id = ?`).run(d.path, d.relPath, d.title, id);
+}
+
+/** Hides files from the library list, or shows them again. Returns the ones that exist. */
+export function setDocumentsHidden(db: DB, ids: string[], hidden: boolean): DocumentRecord[] {
+  const stmt = db.prepare(`UPDATE documents SET hidden = ?, updated_at = ${NOW} WHERE id = ?`);
+  for (const id of ids) stmt.run(hidden ? 1 : 0, id);
+  return ids.map((id) => getDocument(db, id)).filter((d): d is DocumentRecord => !!d);
 }
 
 export function setDocumentMissing(db: DB, id: string, missing: boolean): void {

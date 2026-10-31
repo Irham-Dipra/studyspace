@@ -1,6 +1,17 @@
 import type { Annotation, NormPoint, NormRect } from "../../lib/types";
 
-export type Tool = "select" | "highlight" | "area" | "pen" | "eraser" | "ocr";
+/** "text": type a text box on the page; "marker": click a spot to pin a new note there. */
+export type Tool = "select" | "highlight" | "area" | "pen" | "eraser" | "ocr" | "text" | "marker";
+
+/** Text-box sizes (font size as a share of the page width): about 10, 13 and 18 pt on an A4 page. */
+export const TEXT_SIZES = [0.017, 0.022, 0.03];
+/**
+ * Text-box layout, the same as the server draws it into the PDF (server/src/pdf/operations.ts):
+ * padding and line height per font size, in Arial / Liberation Sans (Helvetica's metrics).
+ */
+export const TEXT_PAD = 0.2;
+export const TEXT_LINE = 1.2;
+export const TEXT_FONT = 'Arial, "Liberation Sans", Helvetica, sans-serif';
 
 export const HIGHLIGHT_COLORS = ["#ffd54f", "#81c784", "#64b5f6", "#f48fb1", "#ff8a65"];
 /** Strength of new text and area highlights (was 0.4 / 0.35: too strong to read through). */

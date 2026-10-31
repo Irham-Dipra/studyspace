@@ -162,3 +162,31 @@ export function selectionToAnchor(container: Element, range: Range): Pick<NoteHi
     suffix: text.slice(end, end + CONTEXT_CHARS),
   };
 }
+
+/**
+ * The DOM range of a saved quote inside a rendered note (null when its text is gone). Formulas are
+ * taken whole, as in `selectionToAnchor`.
+ */
+export function anchorToRange(container: Element, a: Pick<NoteHighlight, "quote" | "prefix" | "suffix">): Range | null {
+  const units = domUnits(container);
+  const at = locateQuote(units.map((u) => u.text).join(""), a);
+  if (!at) return null;
+  const range = document.createRange();
+  let acc = 0;
+  let started = false;
+  for (const u of units) {
+    const len = u.text.length;
+    if (!started && at[0] < acc + len) {
+      if ("node" in u) range.setStart(u.node, at[0] - acc);
+      else range.setStartBefore(u.math);
+      started = true;
+    }
+    if (started && at[1] <= acc + len) {
+      if ("node" in u) range.setEnd(u.node, at[1] - acc);
+      else range.setEndAfter(u.math);
+      return range;
+    }
+    acc += len;
+  }
+  return started ? range : null;
+}

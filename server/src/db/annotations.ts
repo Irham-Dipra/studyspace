@@ -71,7 +71,7 @@ export function createAnnotation(db: DB, documentId: string, a: AnnotationInput)
     a.page,
     a.kind,
     a.color,
-    a.opacity ?? (a.kind === "ink" ? 1 : 0.4),
+    a.opacity ?? (a.kind === "ink" || a.kind === "text" ? 1 : 0.4),
     JSON.stringify(a.rects ?? []),
     JSON.stringify(a.paths ?? []),
     a.strokeWidth ?? 0.003,
@@ -84,14 +84,21 @@ export function createAnnotation(db: DB, documentId: string, a: AnnotationInput)
 export function updateAnnotation(
   db: DB,
   id: string,
-  patch: Partial<Pick<AnnotationInput, "color" | "opacity" | "text">>,
+  patch: Partial<Pick<AnnotationInput, "color" | "opacity" | "text" | "rects" | "strokeWidth">>,
 ): Annotation | undefined {
   const cur = getAnnotation(db, id);
   if (!cur) return undefined;
   db.prepare(
-    `UPDATE annotations SET color = ?, opacity = ?, text = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+    `UPDATE annotations SET color = ?, opacity = ?, text = ?, rects = ?, stroke_width = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
      WHERE id = ?`,
-  ).run(patch.color ?? cur.color, patch.opacity ?? cur.opacity, patch.text ?? cur.text, id);
+  ).run(
+    patch.color ?? cur.color,
+    patch.opacity ?? cur.opacity,
+    patch.text ?? cur.text,
+    JSON.stringify(patch.rects ?? cur.rects),
+    patch.strokeWidth ?? cur.strokeWidth,
+    id,
+  );
   setAnnotationsDirty(db, cur.documentId, true);
   return getAnnotation(db, id);
 }

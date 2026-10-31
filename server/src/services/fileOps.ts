@@ -2,9 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { DB } from "../db/index.js";
 import { getDocument, getDocumentByPath, markDocumentPresent, renameDocumentRow, setDocumentMissing } from "../db/documents.js";
-import { listDirectories } from "../db/directories.js";
+import { getDirectory, listDirectories } from "../db/directories.js";
 import { resolveInsideRoots } from "../library/pathGuard.js";
-import { titleFromPath } from "../library/scanner.js";
+import { isExcluded, titleFromPath } from "../library/scanner.js";
 import { resolveDocumentFile, withLock } from "./documentEditor.js";
 import { HttpError, type DocumentRecord } from "../types.js";
 
@@ -46,6 +46,11 @@ export function renameDocument(db: DB, id: string, newName: string): Promise<Doc
     const { doc } = resolveDocumentFile(db, id);
     const name = checkName(newName, doc.path);
     if (name === path.basename(doc.path)) return doc;
+    const relPath = [...doc.relPath.split("/").slice(0, -1), name].join("/");
+    // Otherwise the file would vanish from the library on the next scan.
+    if (isExcluded(relPath, (doc.directoryId === null ? undefined : getDirectory(db, doc.directoryId))?.excludes ?? [])) {
+      throw new HttpError(400, `“${name}” is hidden by this library folder's settings. Pick another name.`);
+    }
     const target = path.join(path.dirname(doc.path), name);
     if (await exists(target)) {
       // A case-only rename on a case-insensitive disk finds the file itself.
@@ -57,7 +62,6 @@ export function renameDocument(db: DB, id: string, newName: string): Promise<Doc
       throw new HttpError(409, `“${name}” is the name of a deleted file whose notes StudySpace still keeps. Pick another name.`);
     }
     await fs.rename(doc.path, target);
-    const relPath = [...doc.relPath.split("/").slice(0, -1), name].join("/");
     renameDocumentRow(db, id, { path: target, relPath, title: titleFromPath(target) });
     return getDocument(db, id)!;
   });

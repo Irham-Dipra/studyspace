@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpenText, Bookmark as BookmarkIcon, ChevronRight, Crop, CircleHelp, Library, Moon, PanelLeft, PanelRight, Settings, Sun } from "lucide-react";
-import { api, ApiError, setMutationListener, type AnnotationInput, type BookmarkInput, type EditResult, type ResourceInput } from "./lib/api";
+import { BookOpenText, Bookmark as BookmarkIcon, ChevronRight, ChevronsDown, ChevronsUp, Crop, CircleHelp, Library, Moon, PanelLeft, PanelRight, Settings, Sun, X, Image as ImageIcon } from "lucide-react";
+import { api, ApiError, setMutationListener, uploadImage, type AnnotationInput, type AnnotationPatch, type BookmarkInput, type EditResult, type NoteMarkerInput, type ResourceInput } from "./lib/api";
 import { announceChange, classifyMutation, onRemoteChange, type TabChange } from "./lib/tabSync";
 import { useUndoHistory } from "./lib/undo";
 import { uuid } from "./lib/uuid";
@@ -16,8 +16,10 @@ import {
   type Directory,
   type DocumentRecord,
   type NoteHighlight,
+  type NoteMarker,
   type ReadingProgress,
   type Resource,
+  type ResourceScope,
   type TextHighlight,
 } from "./lib/types";
 import { buildBookmarkTree, currentBookmarkId, readOutline, type BookmarkTreeNode } from "./lib/outline";
@@ -26,10 +28,14 @@ import type { Anchor } from "./components/NoteAnnotations";
 import { LibraryPanel } from "./components/LibraryPanel";
 import { BookmarksPanel, type BookmarkPatch } from "./components/BookmarksPanel";
 import { ResourcePanel, type EditorRequest } from "./components/ResourcePanel";
+import { PicturePanel } from "./components/PicturePanel";
+import { PicturePagesDialog } from "./components/PicturePagesDialog";
+import { isPicture, picturesOnPage } from "./lib/notePictures";
 import { PdfViewer, MAX_ZOOM, MIN_ZOOM, type PdfViewerHandle } from "./components/viewer/PdfViewer";
 import { ViewerToolbar } from "./components/viewer/ViewerToolbar";
 import { TextDocViewer } from "./components/viewer/TextDocViewer";
-import { HIGHLIGHT_COLORS, PEN_COLORS, type Tool } from "./components/viewer/geometry";
+import { HIGHLIGHT_COLORS, PEN_COLORS, TEXT_SIZES, type Tool } from "./components/viewer/geometry";
+import type { PageMarker } from "./components/viewer/NoteMarkers";
 import { StatusBar, ZOOM_STEPS } from "./components/StatusBar";
 import { SearchBox } from "./components/SearchBox";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -41,13 +47,15 @@ import { PdfToolsDialog, type PdfTool } from "./components/PdfToolsDialog";
 import { PageHalvesDialog } from "./components/PageHalvesDialog";
 import { PageImagesDialog } from "./components/PageImagesDialog";
 import { SelectedFilesDialog } from "./components/SelectedFilesDialog";
+import { HiddenFilesDialog } from "./components/HiddenFilesDialog";
+import { OpenBesideDialog, SidePane, loadSide, saveSide, type SideState } from "./components/SidePane";
 import { SnipOverlay } from "./components/SnipOverlay";
 import { captureWindowRegion, type ScreenRect } from "./lib/snip";
 import { COPY_QUALITY, canvasToPng, copyToClipboard, downloadBlob, renderRegion } from "./lib/pageImage";
-import { notesZip } from "./lib/notesZip";
-import { isTyping, matches, withKey, type ShortcutId } from "./lib/shortcuts";
+import { fetchNoteImages, notesZip } from "./lib/notesZip";
+import { isTyping, keyOf, matches, withKey, type ShortcutId } from "./lib/shortcuts";
 import { ResizeHandle } from "./components/ResizeHandle";
-import { IconButton, KeyHint, Toasts, cx, type ToastMsg } from "./components/ui";
+import { IconButton, Kbd, KeyHint, Toasts, cx, type ToastMsg } from "./components/ui";
 
 function useMediaQuery(q: string) {
   const [match, setMatch] = useState(() => window.matchMedia(q).matches);
@@ -107,6 +115,8 @@ const PAGED_ONLY: ShortcutId[] = [
   "firstPage",
   "lastPage",
   "goToPage",
+  "historyBack",
+  "historyForward",
   "addBookmark",
   "bookmarks",
   "deletePage",
@@ -146,6 +156,7 @@ export default function App() {
   const [rightWidth, setRightWidth] = usePersistentState("ss-right-width", PANEL.right.default);
   const windowWidth = useWindowWidth();
   const [rightOpen, setRightOpen] = usePersistentState("ss-right-open", true);
+  const [barsHidden, setBarsHidden] = usePersistentState("ss-bars-hidden", false);
   const [mobilePanel, setMobilePanel] = useState<"left" | "right" | null>(null);
 
   const [directories, setDirectories] = useState<Directory[]>([]);
@@ -163,6 +174,8 @@ export default function App() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [noteHighlights, setNoteHighlights] = useState<NoteHighlight[]>([]);
+  /** Markers on the pages that open a note (at a passage of it). */
+  const [noteMarkers, setNoteMarkers] = useState<NoteMarker[]>([]);
   /** Highlights on the text of an HTML or Markdown document. */
   const [textHighlights, setTextHighlights] = useState<TextHighlight[]>([]);
   /** HTML / Markdown: how far down to open (0..1). */
@@ -178,6 +191,9 @@ export default function App() {
   const [tool, setTool] = useState<Tool>("select");
   const [highlightColor, setHighlightColor] = usePersistentState("ss-hl-color", HIGHLIGHT_COLORS[0]);
   const [penColor, setPenColor] = usePersistentState("ss-pen-color", PEN_COLORS[0]);
+  /** New text boxes: colour (pen colours; black by default) and size (one of TEXT_SIZES). */
+  const [textColor, setTextColor] = usePersistentState("ss-text-color", PEN_COLORS[3]);
+  const [textSize, setTextSize] = usePersistentState("ss-text-size", TEXT_SIZES[1]);
   const [penWidth, setPenWidth] = usePersistentState("ss-pen-width", 0.003);
 
   const [editorRequest, setEditorRequest] = useState<EditorRequest | null>(null);
@@ -200,9 +216,27 @@ export default function App() {
   const [halvesOpen, setHalvesOpen] = useState(false);
   /** The "save pages as pictures" window. */
   const [picturesOpen, setPicturesOpen] = useState(false);
+  /** The Pictures section (slides over the notes column), the picture shown, and its "pages" window. */
+  const [slidesOpen, setSlidesOpen] = useState(false);
+  const [slideIndex, setSlideIndex] = useState(0);
+  const [slideWhere, setSlideWhere] = useState(false);
+  /** The page whose "pictures saved here" reminder was closed. */
+  const [reminderOff, setReminderOff] = useState<string | null>(null);
+  /** A picture just added: the slides jump to it once it is in the list. */
+  const [slideNew, setSlideNew] = useState<string | null>(null);
   /** Files picked in the library, and the window for their pictures & text. */
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(() => new Set());
   const [selectedOpen, setSelectedOpen] = useState(false);
+  const [hiddenOpen, setHiddenOpen] = useState(false);
+  /** Side by side: the second PDF, its picker, and the pane's width (0 = half the viewer). */
+  const [side, setSide] = useState<SideState | null>(loadSide);
+  const [sidePicker, setSidePicker] = useState(false);
+  const [sideWidth, setSideWidth] = usePersistentState("ss-side-width", 0);
+  const sideViewerRef = useRef<PdfViewerHandle>(null);
+  const sideRef = useRef(side);
+  sideRef.current = side;
+  /** A swap waiting for its file to open (maybe after the unsaved-work prompt): then the old one goes beside. */
+  const swapRef = useRef<{ to: string; side: SideState } | null>(null);
   /** Choosing a part of the window for a screenshot. */
   const [snipping, setSnipping] = useState(false);
   /** Bumped to close all / expand all notes in the notes panel. */
@@ -280,13 +314,14 @@ export default function App() {
         return;
       }
       try {
-        const [full, res, anns, hls, bms, ths] = await Promise.all([
+        const [full, res, anns, hls, bms, ths, mks] = await Promise.all([
           api.document(id),
           api.resources(id),
           api.annotations(id),
           api.noteHighlights(id),
           api.bookmarks(id),
           api.textHighlights(id),
+          api.noteMarkers(id),
         ]);
         if (full.missing) throw new Error("This file is no longer on disk. Rescan your library.");
         const p = atPage ?? full.progress?.page ?? 1;
@@ -303,10 +338,14 @@ export default function App() {
         setResources(res);
         setAnnotations(anns);
         setNoteHighlights(hls);
+        setNoteMarkers(mks);
         setBookmarks(bms.bookmarks);
         setBookmarksReady(bms.imported);
         setBookmarksError(null);
         setDoc(full);
+        const sw = swapRef.current;
+        swapRef.current = null;
+        if (sw?.to === id) setSide(sw.side);
         if (window.location.hash !== `#/doc/${id}`) window.history.replaceState(null, "", `#/doc/${id}`);
         if (!isDesktop) setMobilePanel(null);
       } catch (e) {
@@ -347,6 +386,7 @@ export default function App() {
 
   const cancelPendingOpen = () => {
     setPendingOpen(null);
+    swapRef.current = null;
     const cur = docRef.current;
     if (cur && window.location.hash !== `#/doc/${cur.id}`) window.history.replaceState(null, "", `#/doc/${cur.id}`);
   };
@@ -449,6 +489,9 @@ export default function App() {
     setBookmarksReady(true);
   }, []);
 
+  /** Where Back / Forward would go (the viewer reports it; it starts empty for each file). */
+  const [navHistory, setNavHistory] = useState<{ back: number | null; forward: number | null }>({ back: null, forward: null });
+  useEffect(() => setNavHistory({ back: null, forward: null }), [doc?.id]);
   const goToPage = useCallback((p: number, top?: number | null) => viewerRef.current?.goToPage(p, top), []);
   const changeZoom = useCallback((z: number) => setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100))), []);
 
@@ -486,6 +529,32 @@ export default function App() {
     }
   };
 
+  /** Hides files from the lists, or shows them again. Undoable. */
+  const setFilesHidden = async (ds: DocumentRecord[], hidden: boolean, quiet = false) => {
+    const ids = ds.filter((d) => d.hidden !== hidden).map((d) => d.id);
+    if (!ids.length) return;
+    try {
+      await api.setHidden(ids, hidden);
+      if (hidden) setSelectedFiles((s) => new Set([...s].filter((id) => !ids.includes(id))));
+      await refreshLibrary();
+      const what = ids.length === 1 ? `“${ds.find((d) => d.id === ids[0])?.title}”` : `${ids.length} files`;
+      history.push(docRef.current?.id ?? LIBRARY_UNDO, {
+        label: `${hidden ? "Hide" : "Unhide"} ${what}`,
+        undo: async () => {
+          await api.setHidden(ids, !hidden);
+          await refreshLibrary();
+        },
+        redo: async () => {
+          await api.setHidden(ids, hidden);
+          await refreshLibrary();
+        },
+      });
+      if (!quiet) toast(hidden ? `Hid ${what} · Shift+K lists hidden files · Ctrl+Z to undo` : `Unhid ${what}`, "success");
+    } catch (e) {
+      toastError(e);
+    }
+  };
+
   const deleteFile = async (d: DocumentRecord) => {
     const name = fileName(d);
     try {
@@ -513,17 +582,19 @@ export default function App() {
 
   /** Re-reads notes and highlights from the server (after undo/redo or a file edit). */
   const reloadDocData = useCallback(async (docId: string) => {
-    const [res, anns, hls, bms, ths] = await Promise.all([
+    const [res, anns, hls, bms, ths, mks] = await Promise.all([
       api.resources(docId),
       api.annotations(docId),
       api.noteHighlights(docId),
       api.bookmarks(docId),
       api.textHighlights(docId),
+      api.noteMarkers(docId),
     ]);
     if (docRef.current?.id !== docId) return;
     setResources(res);
     setAnnotations(anns);
     setNoteHighlights(hls);
+    setNoteMarkers(mks);
     setTextHighlights(ths);
     setBookmarks(bms.bookmarks);
     if (bms.imported) setBookmarksReady(true);
@@ -556,36 +627,44 @@ export default function App() {
     url: r.url,
     styles: r.styles,
   });
-  const resourceWord = (t: ResourceInput["type"]) => (t === "note" ? "note" : "resource");
+  const markerFields = (m: NoteMarker): NoteMarkerInput => ({ id: m.id, page: m.page, x: m.x, y: m.y, quote: m.quote, prefix: m.prefix, suffix: m.suffix });
+  const resourceWord = (r: Pick<ResourceInput, "type" | "content">) => (isPicture({ type: r.type, content: r.content ?? "" }) ? "picture" : r.type === "note" ? "note" : "resource");
 
-  const createResource = async (input: ResourceInput) => {
+  const createResource = async ({ marker, ...input }: ResourceInput, opts?: { quiet?: boolean }) => {
     if (!doc) return;
     const docId = doc.id;
-    const id = uuid();
+    const id = input.id ?? uuid();
     const r = await api.createResource(docId, { ...input, id });
     setResources((rs) => [...rs, r]);
-    toast("Saved", "success");
+    // From the marker tool: the note's marker, on its page (one undo step with the note).
+    let m: NoteMarker | null = null;
+    if (marker && r.pageStart !== null) {
+      m = await api.createNoteMarker(id, { id: uuid(), page: r.pageStart, x: marker[0], y: marker[1] }).catch((e) => (toastError(e), null));
+      if (m) setNoteMarkers((ms) => [...ms, m!]);
+    }
+    if (!opts?.quiet) toast("Saved", "success");
     history.push(docId, {
-      label: `Add ${resourceWord(input.type)}`,
+      label: `Add ${resourceWord(input)}`,
       undo: async () => {
         await api.deleteResource(id).catch(tolerate([404]));
         await reloadDocData(docId);
       },
       redo: async () => {
         await api.createResource(docId, { ...resourceFields(r), id }).catch(tolerate([400]));
+        if (m) await api.createNoteMarker(id, markerFields(m)).catch(tolerate([409]));
         await reloadDocData(docId);
       },
     });
   };
 
-  const updateResource = async (id: string, input: ResourceInput) => {
+  const updateResource = async (id: string, { marker: _new, ...input }: ResourceInput) => {
     const before = resources.find((x) => x.id === id);
     const r = await api.updateResource(id, input);
     setResources((rs) => rs.map((x) => (x.id === id ? r : x)));
     if (doc && before) {
       const docId = doc.id;
       history.push(docId, {
-        label: `Edit ${resourceWord(before.type)}`,
+        label: `${isPicture(before) ? "Change pages of" : "Edit"} ${resourceWord(before)}`,
         undo: async () => {
           await api.updateResource(id, resourceFields(before));
           await reloadDocData(docId);
@@ -622,8 +701,92 @@ export default function App() {
     }, toastError);
   };
 
+  // ---- Note markers (undoable) ---------------------------------------------------------
+  const noteMarkersRef = useRef(noteMarkers);
+  noteMarkersRef.current = noteMarkers;
+  const createMarker = (resourceId: string, input: NoteMarkerInput) => {
+    const d = docRef.current;
+    if (!d) return;
+    const docId = d.id;
+    const id = uuid();
+    api.createNoteMarker(resourceId, { ...input, id }).then((m) => {
+      setNoteMarkers((ms) => [...ms, m]);
+      toast("Marker placed: clicking it opens the note there · Ctrl+Z to undo", "success");
+      history.push(docId, {
+        label: "Add note marker",
+        undo: async () => {
+          await api.deleteNoteMarker(id).catch(tolerate([404]));
+          await reloadDocData(docId);
+        },
+        redo: async () => {
+          await api.createNoteMarker(resourceId, markerFields(m)).catch(tolerate([409]));
+          await reloadDocData(docId);
+        },
+      });
+    }, toastError);
+  };
+  const moveNoteMarker = (id: string, at: [number, number]) => {
+    const d = docRef.current;
+    const before = noteMarkersRef.current.find((m) => m.id === id);
+    if (!d || !before) return;
+    const docId = d.id;
+    setNoteMarkers((ms) => ms.map((m) => (m.id === id ? { ...m, x: at[0], y: at[1] } : m)));
+    api.updateNoteMarker(id, { x: at[0], y: at[1] }).then(
+      (m) => {
+        setNoteMarkers((ms) => ms.map((x) => (x.id === id ? m : x)));
+        history.push(docId, {
+          label: "Move note marker",
+          undo: async () => {
+            await api.updateNoteMarker(id, { x: before.x, y: before.y });
+            await reloadDocData(docId);
+          },
+          redo: async () => {
+            await api.updateNoteMarker(id, { x: at[0], y: at[1] });
+            await reloadDocData(docId);
+          },
+        });
+      },
+      (e) => {
+        setNoteMarkers((ms) => ms.map((m) => (m.id === id ? before : m)));
+        toastError(e);
+      },
+    );
+  };
+  const deleteNoteMarker = (id: string) => {
+    const d = docRef.current;
+    const before = noteMarkersRef.current.find((m) => m.id === id);
+    if (!d || !before) return;
+    const docId = d.id;
+    setNoteMarkers((ms) => ms.filter((m) => m.id !== id));
+    api.deleteNoteMarker(id).then(
+      () => {
+        toast("Marker removed · Ctrl+Z to undo");
+        history.push(docId, {
+          label: "Remove note marker",
+          undo: async () => {
+            await api.createNoteMarker(before.resourceId, markerFields(before)).catch(tolerate([409]));
+            await reloadDocData(docId);
+          },
+          redo: async () => {
+            await api.deleteNoteMarker(id).catch(tolerate([404]));
+            await reloadDocData(docId);
+          },
+        });
+      },
+      (e) => {
+        setNoteMarkers((ms) => [...ms, before]);
+        toastError(e);
+      },
+    );
+  };
+  // Stable for the memoised pages; they call the latest version.
+  const markerOpsRef = useRef({ createMarker, moveNoteMarker, deleteNoteMarker });
+  markerOpsRef.current = { createMarker, moveNoteMarker, deleteNoteMarker };
+
   const deleteResource = async (id: string) => {
     const before = resources.find((x) => x.id === id);
+    // Its markers go with it (the database cascades); undo puts them back too.
+    const markers = noteMarkers.filter((m) => m.resourceId === id);
     try {
       await api.deleteResource(id);
       setResources((rs) => rs.filter((x) => x.id !== id));
@@ -632,11 +795,12 @@ export default function App() {
     }
     if (doc && before) {
       const docId = doc.id;
-      toast(`Deleted ${resourceWord(before.type)} · Ctrl+Z to undo`);
+      toast(`Deleted ${resourceWord(before)} · Ctrl+Z to undo`);
       history.push(docId, {
-        label: `Delete ${resourceWord(before.type)}`,
+        label: `Delete ${resourceWord(before)}`,
         undo: async () => {
           await api.createResource(docId, { ...resourceFields(before), id }).catch(tolerate([400]));
+          for (const m of markers) await api.createNoteMarker(id, markerFields(m)).catch(tolerate([409]));
           await reloadDocData(docId);
         },
         redo: async () => {
@@ -648,7 +812,7 @@ export default function App() {
   };
 
   // ---- Annotations -------------------------------------------------------------
-  const annotationLabel = (k: AnnotationInput["kind"]) => (k === "ink" ? "drawing" : k === "area" ? "area highlight" : "highlight");
+  const annotationLabel = (k: AnnotationInput["kind"]) => (k === "ink" ? "drawing" : k === "area" ? "area highlight" : k === "text" ? "text box" : "highlight");
   const annotationFields = (a: Annotation): AnnotationInput => ({
     id: a.id,
     page: a.page,
@@ -724,19 +888,24 @@ export default function App() {
     [markDirty, toastError, history.push, reloadDocData], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  /** A change to an annotation: its colour, or a text box's text, place or size. */
   const updateAnnotation = useCallback(
-    (id: string, patch: { color?: string }) => {
+    (id: string, patch: AnnotationPatch) => {
       const d = docRef.current;
       const before = annotationsRef.current.find((a) => a.id === id);
       if (!d || !before) return;
       const docId = d.id;
+      const undoPatch = Object.fromEntries(Object.keys(patch).map((k) => [k, before[k as keyof AnnotationPatch]])) as AnnotationPatch;
+      const what = patch.text !== undefined ? "Edit" : patch.rects ? "Move" : patch.strokeWidth !== undefined ? "Resize" : "Recolour";
+      // Shown at once (a text box would otherwise blink back to its old text until the server answers).
+      setAnnotations((as) => as.map((x) => (x.id === id ? { ...x, ...patch } : x)));
       api.updateAnnotation(id, patch).then((a) => {
         setAnnotations((as) => as.map((x) => (x.id === id ? a : x)));
         markDirty();
         history.push(docId, {
-          label: `Recolour ${annotationLabel(before.kind)}`,
+          label: `${what} ${annotationLabel(before.kind)}`,
           undo: async () => {
-            await api.updateAnnotation(id, { color: before.color });
+            await api.updateAnnotation(id, undoPatch);
             markDirty();
             await reloadDocData(docId);
           },
@@ -746,7 +915,10 @@ export default function App() {
             await reloadDocData(docId);
           },
         });
-      }, toastError);
+      }, (e) => {
+        setAnnotations((as) => as.map((x) => (x.id === id ? before : x)));
+        toastError(e);
+      });
     },
     [markDirty, toastError, history.push, reloadDocData], // eslint-disable-line react-hooks/exhaustive-deps
   );
@@ -918,12 +1090,13 @@ export default function App() {
   // ---- File edits (rewrite the PDF; undone by restoring the previous version) ---------
   /** Reloads the document after its file changed, showing `preferPage` (or the server's remapped page). */
   const refreshAfterFileChange = async (docId: string, preferPage?: number) => {
-    const [full, res, anns, hls, bms] = await Promise.all([
+    const [full, res, anns, hls, bms, mks] = await Promise.all([
       api.document(docId),
       api.resources(docId),
       api.annotations(docId),
       api.noteHighlights(docId),
       api.bookmarks(docId),
+      api.noteMarkers(docId),
     ]);
     if (docRef.current?.id !== docId) return full;
     const p = Math.max(1, Math.min(preferPage ?? full.progress?.page ?? pageRef.current, full.pageCount ?? 1));
@@ -933,6 +1106,7 @@ export default function App() {
     setResources(res);
     setAnnotations(anns);
     setNoteHighlights(hls);
+    setNoteMarkers(mks);
     setBookmarks(bms.bookmarks);
     setBookmarksReady(bms.imported); // false when another program changed the file: its outline is read again
     setDoc({ ...full });
@@ -1234,13 +1408,81 @@ export default function App() {
 
   /** Copies the page you're reading to the clipboard as a picture. */
   /** The open file's notes, one .md file per note, in one .zip. */
-  const downloadNotes = () => {
+  const downloadNotes = async () => {
     const d = docRef.current;
     if (!d) return;
-    const r = notesZip(d.title, resources);
+    const r = notesZip(d.title, resources, await fetchNoteImages(resources));
     if (!r) return toast("This file has no notes yet.");
     downloadBlob(r.blob, r.name);
     toast(`Saved ${r.count} note${r.count === 1 ? "" : "s"} as .md files in one .zip`, "success");
+  };
+
+  // ---- Pictures: notes that are only a picture, kept in their own section --------------------
+  const pictureList = useMemo(() => resources.filter(isPicture), [resources]);
+  const noteList = useMemo(() => resources.filter((r) => !isPicture(r)), [resources]);
+  const pagePictures = useMemo(() => picturesOnPage(pictureList, doc && isPaged(doc.kind) ? page : null), [pictureList, doc, page]);
+  /** Pictures for this page or a range with it; whole-PDF ones don't remind, they'd be on every page. */
+  const reminderCount = doc && isPaged(doc.kind) ? pagePictures.filter((r) => r.scope !== "document").length : 0;
+  const reminderKey = doc ? `${doc.id}:${page}` : null;
+
+  useEffect(() => {
+    setSlidesOpen(false);
+    setSlideWhere(false);
+    setSlideIndex(0);
+    setSlideNew(null);
+  }, [doc?.id]);
+  // The page changed or pictures came and went: stay on a picture that exists (a new one is shown).
+  useEffect(() => {
+    const at = slideNew ? pagePictures.findIndex((r) => r.id === slideNew) : -1;
+    if (at >= 0) {
+      setSlideIndex(at);
+      setSlideNew(null);
+    } else setSlideIndex((i) => Math.max(0, Math.min(i, pagePictures.length - 1)));
+  }, [pagePictures, slideNew]);
+  useEffect(() => setSlideIndex(0), [page]);
+
+  const showNotes = useCallback(() => (isDesktopRef.current ? setRightOpen(true) : setMobilePanel("right")), [setRightOpen]);
+  const openSlides = () => {
+    setSlidesOpen(true);
+    showNotes();
+  };
+  const toggleSlides = () => (slidesOpen ? setSlidesOpen(false) : openSlides());
+  const stepSlide = (by: number) => pagePictures.length > 1 && setSlideIndex((i) => (i + by + pagePictures.length) % pagePictures.length);
+
+  /** A picture (chosen, pasted or dropped) is saved for the page you're reading. */
+  const pictureInput = useRef<HTMLInputElement>(null);
+  const addPicture = async (file: Blob) => {
+    const d = docRef.current;
+    if (!d) return;
+    try {
+      const { src } = await uploadImage(file);
+      const p = pageRef.current;
+      const paged = isPaged(d.kind);
+      const id = uuid();
+      await createResource(
+        {
+          id,
+          type: "note",
+          title: "Picture",
+          content: `![](${src})`,
+          ...(paged ? { scope: "page", pageStart: p, pageEnd: p } : { scope: "document" }),
+        },
+        { quiet: true },
+      );
+      setSlideNew(id);
+      toast(slidesOpen ? "Picture saved" : `Picture saved for ${paged ? `page ${p}` : "this file"} · press ${keyOf("viewPictures")} to see it`, "success");
+    } catch (e) {
+      toastError(e);
+    }
+  };
+
+  const setPicturePages = (id: string, scope: ResourceScope, start: number | null, end: number | null) => {
+    setSlideWhere(false);
+    void updateResource(id, { type: "note", scope, pageStart: start, pageEnd: end }).catch(toastError);
+  };
+  const removePicture = (r: Resource) => {
+    setSlideWhere(false);
+    void deleteResource(r.id);
   };
 
   const copyPageImage = () => {
@@ -1268,14 +1510,23 @@ export default function App() {
     if (is("search")) return; // handled by the search box
     if (is("snip") && !document.querySelector('[role="dialog"]')) return run(() => setSnipping(true));
     // Dialogs have their own keys (Esc, Enter...).
-    if (showSettings || showHelp || pageOp || pendingOpen || textRequest || pdfTool || halvesOpen || picturesOpen || selectedOpen || document.querySelector('[role="dialog"]')) return;
+    if (showSettings || showHelp || hiddenOpen || pageOp || pendingOpen || textRequest || pdfTool || halvesOpen || picturesOpen || slideWhere || selectedOpen || sidePicker || document.querySelector('[role="dialog"]')) return;
 
     // Work with or without an open PDF.
     const openLeft = () => (isDesktopRef.current ? setLeftOpen(true) : setMobilePanel("left"));
     if (is("settings")) return run(() => setShowSettings(true));
     if (is("theme")) return run(toggleTheme);
+    if (is("hideBars")) return run(() => setBarsHidden((h) => !h));
     if (is("rescan")) return run(() => void rescan());
     if (is("selectedFiles")) return run(openSelected);
+    if (is("hiddenFiles")) return run(() => setHiddenOpen(true));
+    if (is("sideOpen")) return run(() => setSidePicker(true));
+    if (sideRef.current && sideDoc) {
+      if (is("sideClose")) return run(() => setSide(null));
+      if (is("sideSwap")) return run(swapSides);
+      if (is("sideNext")) return run(() => sideViewerRef.current?.goToPage(sideRef.current!.page + 1));
+      if (is("sidePrev")) return run(() => sideViewerRef.current?.goToPage(sideRef.current!.page - 1));
+    }
     if (is("toggleLeft")) return run(() => (isDesktopRef.current ? setLeftOpen((o) => !o) : setMobilePanel((m) => (m === "left" ? null : "left"))));
     if (is("toggleRight")) return run(() => (isDesktopRef.current ? setRightOpen((o) => !o) : setMobilePanel((m) => (m === "right" ? null : "right"))));
     if (is("files")) return run(() => (setLeftTab("files"), openLeft()));
@@ -1306,6 +1557,8 @@ export default function App() {
     else if (is("lastPage")) run(() => go(Number.MAX_SAFE_INTEGER));
     else if (is("fitWidth")) run(() => fit(viewerRef.current?.fitWidthZoom()));
     else if (is("fitPage")) run(() => fit(viewerRef.current?.fitPageZoom()));
+    else if (is("historyBack")) run(() => viewerRef.current?.goBack())
+    else if (is("historyForward")) run(() => viewerRef.current?.goForward())
     else if (is("goToPage"))
       run(() => {
         const input = document.querySelector<HTMLInputElement>('input[aria-label="Current page"]');
@@ -1313,6 +1566,12 @@ export default function App() {
         input?.select();
       });
     else if (is("newNote")) run(newNoteHere);
+    else if (is("addPicture")) run(() => pictureInput.current?.click());
+    else if (is("viewPictures")) run(toggleSlides);
+    else if (slidesOpen && is("pictureNext")) run(() => stepSlide(1));
+    else if (slidesOpen && is("picturePrev")) run(() => stepSlide(-1));
+    else if (slidesOpen && is("pictureWhere")) run(() => pagePictures.length && setSlideWhere(true));
+    else if (slidesOpen && e.key === "Escape" && !e.ctrlKey && !e.shiftKey) run(() => setSlidesOpen(false));
     else if (is("toggleNotes"))
       run(() => {
         setNotesToggle(Date.now());
@@ -1355,6 +1614,22 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // A copied picture pasted outside a text box becomes a note (text boxes and note editors handle their own pastes).
+  const pasteRef = useRef<(e: ClipboardEvent) => void>(() => undefined);
+  pasteRef.current = (e: ClipboardEvent) => {
+    const t = e.target as HTMLElement | null;
+    if (!docRef.current || t?.closest("input, textarea, select, [contenteditable], [role='dialog']")) return;
+    const file = [...(e.clipboardData?.files ?? [])].find((f) => f.type.startsWith("image/"));
+    if (!file) return;
+    e.preventDefault();
+    void addPicture(file);
+  };
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => pasteRef.current(e);
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
+
   const quoteToNote = useCallback(
     (p: number, text: string) => {
       setEditorRequest({
@@ -1367,6 +1642,76 @@ export default function App() {
     [isDesktop, setRightOpen],
   );
   const clearEditorRequest = useCallback(() => setEditorRequest(null), []);
+
+  // ---- Note markers ----------------------------------------------------------------
+  /** A note opened from its marker: the notes panel shows, opens and outlines it (at the passage). */
+  const [noteFocus, setNoteFocus] = useState<{ id: string; nonce: number; anchor: Anchor | null } | null>(null);
+  /** "Pin on page" was chosen for a passage of a note: the next click on a page places its marker. */
+  const [pendingPin, setPendingPin] = useState<{ resourceId: string; anchor: Anchor } | null>(null);
+  const pendingPinRef = useRef(pendingPin);
+  pendingPinRef.current = pendingPin;
+  // Another tool (Esc, a key, a click) drops a pin waiting for its spot.
+  useEffect(() => {
+    if (tool !== "marker" && pendingPin) setPendingPin(null);
+  }, [tool]); // eslint-disable-line react-hooks/exhaustive-deps
+  const markers = useMemo<PageMarker[]>(() => {
+    const notes = new Map(resources.map((r) => [r.id, r]));
+    return noteMarkers.flatMap((m) => {
+      const r = notes.get(m.resourceId);
+      if (!r) return [];
+      const name = r.title.trim() || r.content.split("\n").find((l) => l.trim())?.replace(/^[\s#>*-]+/, "").slice(0, 80) || "Note";
+      const quote = m.quote.trim().replace(/\s+/g, " ");
+      return [{ id: m.id, page: m.page, at: [m.x, m.y] as [number, number], label: quote ? `“${quote.length > 70 ? `${quote.slice(0, 70)}…` : quote}” in ${name}` : name }];
+    });
+  }, [noteMarkers, resources]);
+  const markedNotes = useMemo(() => new Set(noteMarkers.map((m) => m.resourceId)), [noteMarkers]);
+  const openMarker = useCallback(
+    (id: string) => {
+      const m = noteMarkersRef.current.find((x) => x.id === id);
+      if (!m) return;
+      showNotes();
+      setNoteFocus({ id: m.resourceId, nonce: Date.now(), anchor: m.quote ? { quote: m.quote, prefix: m.prefix, suffix: m.suffix } : null });
+    },
+    [showNotes],
+  );
+  const moveMarker = useCallback((id: string, at: [number, number]) => markerOpsRef.current.moveNoteMarker(id, at), []);
+  const deleteMarker = useCallback((id: string) => markerOpsRef.current.deleteNoteMarker(id), []);
+  /**
+   * The marker tool: a marker for the passage chosen with "Pin on page", or else a new note for that
+   * page with its marker at the spot. Back to Select after.
+   */
+  const placeMarker = useCallback(
+    (p: number, at: [number, number]) => {
+      const pin = pendingPinRef.current;
+      setTool("select");
+      if (pin) {
+        setPendingPin(null);
+        return markerOpsRef.current.createMarker(pin.resourceId, { page: p, x: at[0], y: at[1], ...pin.anchor });
+      }
+      setEditorRequest({ nonce: Date.now(), defaults: { type: "note", scope: "page", pageStart: p, pageEnd: p, marker: at } });
+      showNotes();
+    },
+    [showNotes],
+  );
+  const pinPassage = useCallback(
+    (resourceId: string, anchor: Anchor) => {
+      if (!docRef.current || !isPaged(docRef.current.kind)) return;
+      setTool("marker");
+      setPendingPin({ resourceId, anchor });
+      toast("Now click the spot on the page for this marker (Esc cancels).");
+    },
+    [toast],
+  );
+  /** The note card's 📍: scrolls the PDF to its markers in turn. */
+  const markerTurn = useRef<{ id: string; i: number }>({ id: "", i: 0 });
+  const showMarkerOf = (r: Resource) => {
+    const ms = noteMarkers.filter((m) => m.resourceId === r.id).sort((a, b) => a.page - b.page || a.y - b.y);
+    if (!ms.length) return;
+    const t = markerTurn.current;
+    const i = t.id === r.id ? (t.i + 1) % ms.length : 0;
+    markerTurn.current = { id: r.id, i };
+    goToPage(ms[i].page, Math.max(0, ms[i].y - 0.15));
+  };
 
   // ---- Theme ---------------------------------------------------------------------
   const toggleTheme = () => {
@@ -1396,8 +1741,53 @@ export default function App() {
     toast("Select files first, in the files list: Space or the box beside a file (Shift+click for a run of files).");
   }
 
+  // ---- Side by side ------------------------------------------------------------------
+  useEffect(() => saveSide(side), [side]);
+  const sideDoc = side ? documents.find((d) => d.id === side.id && isPaged(d.kind) && !d.missing) : undefined;
+  // A file that went away (deleted, or its folder removed) closes its pane.
+  useEffect(() => {
+    if (libraryLoaded && side && !sideDoc) setSide(null);
+  }, [libraryLoaded, side, sideDoc]);
+
+  /** Shows `d` beside the open file (where it was last read), or opens it when nothing is open. */
+  function openBeside(d: DocumentRecord) {
+    setSidePicker(false);
+    if (!docRef.current) return requestOpen(d);
+    const r = recent.find((x) => x.documentId === d.id);
+    const wasOpen = !!sideRef.current;
+    // Fitted to the pane, whatever zoom it was last read at.
+    setSide({ id: d.id, page: r?.page ?? 1, zoom: null });
+    // The open PDF now has half the room: fit it to its new width.
+    if (!wasOpen && isPaged(docRef.current.kind))
+      setTimeout(() => {
+        const z = viewerRef.current?.fitWidthZoom();
+        if (z) changeZoom(z);
+      }, 100);
+  }
+
+  /** The PDF beside becomes the open one (with tools and notes), and the open one goes beside. */
+  function swapSides() {
+    const s = sideRef.current;
+    const d = docRef.current;
+    if (!s) return;
+    if (!d) return (setSide(null), requestOpen(s.id, s.page));
+    if (!isPaged(d.kind)) return toast("Only PDFs and slides can go beside, so this file can't swap places.", "error");
+    const here: SideState = { id: d.id, page: pageRef.current, zoom: zoomRef.current };
+    if (s.id === d.id) {
+      // The same file twice: just trade places in it.
+      viewerRef.current?.goToPage(s.page);
+      sideViewerRef.current?.goToPage(here.page);
+      return;
+    }
+    swapRef.current = { to: s.id, side: here };
+    requestOpen(s.id, s.page);
+  }
+
   /** Sources for page edits and new PDFs: files with pages. */
-  const pagedDocuments = useMemo(() => documents.filter((d) => isPaged(d.kind)), [documents]);
+  // Files the user hid stay in `documents` (the open file, notes, the hidden list) but not in the lists.
+  const shownDocuments = useMemo(() => documents.filter((d) => !d.hidden), [documents]);
+  const hiddenDocuments = useMemo(() => documents.filter((d) => d.hidden), [documents]);
+  const pagedDocuments = useMemo(() => shownDocuments.filter((d) => isPaged(d.kind)), [shownDocuments]);
 
   const course = useMemo(() => {
     if (!doc) return null;
@@ -1405,8 +1795,8 @@ export default function App() {
     return parts.length > 1 ? parts[0] : (directories.find((d) => d.id === doc.directoryId)?.label ?? null);
   }, [doc, directories]);
 
-  const toolColor = tool === "pen" ? penColor : highlightColor;
-  const setToolColor = (c: string) => (tool === "pen" ? setPenColor(c) : setHighlightColor(c));
+  const toolColor = tool === "pen" ? penColor : tool === "text" ? textColor : highlightColor;
+  const setToolColor = (c: string) => (tool === "pen" ? setPenColor(c) : tool === "text" ? setTextColor(c) : setHighlightColor(c));
 
   const showLeft = isDesktop ? leftOpen : mobilePanel === "left";
   const showRight = isDesktop ? rightOpen : mobilePanel === "right";
@@ -1417,17 +1807,26 @@ export default function App() {
   const leftW = Math.min(Math.max(leftWidth, PANEL.left.min), leftMax);
   const rightMax = Math.max(PANEL.right.min, Math.min(PANEL.right.max, windowWidth - CENTER_MIN - (showLeft ? leftW : 0)));
   const rightW = Math.min(Math.max(rightWidth, PANEL.right.min), rightMax);
+  // The pane beside: half of the viewer unless resized; each half keeps at least CENTER_MIN / 1.5.
+  const centerW = windowWidth - (showLeft ? leftW : 0) - (rightShown ? rightW : 0);
+  const sideMin = Math.round(CENTER_MIN / 1.5);
+  const sideMax = Math.max(sideMin, centerW - sideMin);
+  const sideW = Math.min(Math.max(sideWidth || Math.round(centerW / 2), sideMin), sideMax);
 
   const libraryPanel = (
     <LibraryPanel
       directories={directories}
-      documents={documents}
+      documents={shownDocuments}
       recent={recent}
       activeId={doc?.id ?? null}
       scanning={scanning}
+      onHide={(ds) => void setFilesHidden(ds, true)}
+      hiddenCount={hiddenDocuments.length}
+      onShowHidden={() => setHiddenOpen(true)}
       onOpen={(d) => requestOpen(d)}
       onRename={(d, name) => void renameFile(d, name)}
       onDelete={(d) => void deleteFile(d)}
+      onOpenBeside={openBeside}
       renameRequest={fileRename}
       onRenameRequestDone={() => setFileRename(null)}
       onRescan={rescan}
@@ -1499,7 +1898,7 @@ export default function App() {
       page={page}
       pageCount={pageCount}
       paged={!doc || isPaged(doc.kind)}
-      resources={resources}
+      resources={noteList}
       annotations={annotations}
       noteHighlights={noteHighlights}
       highlightColor={highlightColor}
@@ -1516,12 +1915,52 @@ export default function App() {
       onJump={goToPage}
       toggleAllRequest={notesToggle}
       onDownloadNotes={downloadNotes}
+      onAddPicture={addPicture}
+      pictureCount={pagePictures.length}
+      onOpenPictures={openSlides}
+      focusRequest={noteFocus}
+      markedNotes={markedNotes}
+      onShowMarker={showMarkerOf}
+      onPinPassage={doc && isPaged(doc.kind) ? pinPassage : undefined}
     />
+  );
+
+  // The slides cover the whole notes column; the notes stay mounted underneath (an unsaved draft survives).
+  const rightContent = (
+    <div className="relative h-full">
+      <div className={cx("h-full", slidesOpen && "hidden")}>{rightPanel}</div>
+      {slidesOpen && doc && (
+        <PicturePanel
+          pictures={pagePictures}
+          index={slideIndex}
+          page={page}
+          paged={isPaged(doc.kind)}
+          onIndex={setSlideIndex}
+          onClose={() => setSlidesOpen(false)}
+          onAdd={(f) => void addPicture(f)}
+          onPick={() => pictureInput.current?.click()}
+          onWhere={() => pagePictures.length && setSlideWhere(true)}
+          onRemove={removePicture}
+        />
+      )}
+    </div>
   );
 
   return (
     <div className="flex h-full flex-col bg-canvas text-ink">
+      <input
+        ref={pictureInput}
+        type="file"
+        hidden
+        multiple
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        onChange={(e) => {
+          for (const f of e.target.files ?? []) void addPicture(f);
+          e.target.value = ""; // the same file can be chosen again
+        }}
+      />
       {/* Top bar */}
+      {!barsHidden && (
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-panel px-2 sm:px-3">
         <IconButton
           label={withKey("Show / hide the library", "toggleLeft")}
@@ -1551,6 +1990,9 @@ export default function App() {
         <IconButton label={withKey("Screenshot part of the window", "snip")} onClick={() => setSnipping(true)}>
           <Crop className="size-4" />
         </IconButton>
+        <IconButton label={withKey("Hide the title bar and tools bar", "hideBars")} onClick={() => setBarsHidden(true)}>
+          <ChevronsUp className="size-4" />
+        </IconButton>
         <IconButton label={withKey(dark ? "Light mode" : "Dark mode", "theme")} onClick={toggleTheme}>
           {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </IconButton>
@@ -1568,6 +2010,7 @@ export default function App() {
           <PanelRight className="size-4" />
         </IconButton>
       </header>
+      )}
 
       <div className="relative flex min-h-0 flex-1">
         {/* Left: library */}
@@ -1598,16 +2041,31 @@ export default function App() {
         )}
 
         {/* Center: viewer */}
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className={cx("relative flex min-w-0 flex-1", isDesktop ? "flex-row" : "flex-col")}>
+          {barsHidden && (
+            <button
+              type="button"
+              title={withKey("Show the title bar and tools bar", "hideBars")}
+              aria-label="Show the title bar and tools bar"
+              onClick={() => setBarsHidden(false)}
+              className="absolute right-4 top-1 z-30 flex size-6 items-center justify-center rounded-full border border-line bg-panel text-ink-2 opacity-50 shadow-sm hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-80"
+            >
+              <ChevronsDown className="size-3.5" />
+            </button>
+          )}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {doc ? (
             <>
               <ViewerToolbar
+                hidden={barsHidden}
                 tool={tool}
                 onTool={setTool}
                 color={toolColor}
                 onColor={setToolColor}
                 penWidth={penWidth}
                 onPenWidth={setPenWidth}
+                textSize={textSize}
+                onTextSize={setTextSize}
                 dirty={hasUnsavedChanges(doc)}
                 kind={doc.kind}
                 annotationCount={annotations.length + bookmarks.length}
@@ -1636,7 +2094,19 @@ export default function App() {
                 onRedo={() => void history.redo()}
                 undoing={history.running}
               />
-              <div className="min-h-0 flex-1">
+              <div className="relative min-h-0 flex-1">
+                {reminderCount > 0 && !slidesOpen && reminderOff !== reminderKey && (
+                  <div className="absolute bottom-3 left-3 z-20 flex items-center gap-1 rounded-full border border-line bg-panel/95 py-1 pl-1 pr-1 text-xs shadow-lg backdrop-blur">
+                    <button className="flex items-center gap-1.5 rounded-full px-2 py-0.5 font-medium hover:bg-hover" onClick={openSlides} title="Show the pictures saved for this page">
+                      <ImageIcon className="size-3.5 text-accent" />
+                      {reminderCount === 1 ? "A picture is" : `${reminderCount} pictures are`} saved for this page
+                      <Kbd>{keyOf("viewPictures")}</Kbd>
+                    </button>
+                    <button className="rounded-full p-1 text-ink-3 hover:bg-hover hover:text-ink" aria-label="Hide this reminder" title="Hide this reminder for this page" onClick={() => setReminderOff(reminderKey)}>
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                )}
                 {isPaged(doc.kind) ? (
                 <PdfViewer
                   key={doc.id}
@@ -1646,6 +2116,7 @@ export default function App() {
                   zoom={zoom}
                   onZoomChange={changeZoom}
                   onPageChange={setPage}
+                  onHistoryChange={setNavHistory}
                   onLoaded={onLoaded}
                   annotations={annotations}
                   tool={tool}
@@ -1655,6 +2126,13 @@ export default function App() {
                   onDeleteAnnotation={deleteAnnotation}
                   onRegion={(p, rect) => setTextRequest({ kind: "region", page: p, rect })}
                   onUpdateAnnotation={updateAnnotation}
+                  textColor={textColor}
+                  textSize={textSize}
+                  markers={markers}
+                  onOpenMarker={openMarker}
+                  onMoveMarker={moveMarker}
+                  onDeleteMarker={deleteMarker}
+                  onPlaceMarker={placeMarker}
                   onQuoteToNote={quoteToNote}
                 />
                 ) : (
@@ -1688,6 +2166,29 @@ export default function App() {
               onSettings={() => setShowSettings(true)}
             />
           )}
+          </div>
+          {side && sideDoc && (
+            <>
+              {isDesktop ? (
+                <ResizeHandle panel="right" label="Resize the PDF beside" value={sideW} min={sideMin} max={sideMax} defaultValue={Math.round(centerW / 2)} onChange={setSideWidth} />
+              ) : (
+                <div className="h-px shrink-0 bg-line" />
+              )}
+              <div className={cx("flex min-h-0 min-w-0 shrink-0", !isDesktop && "h-1/2")} style={isDesktop ? { width: sideW } : undefined}>
+                <SidePane
+                  key={side.id}
+                  doc={sideDoc}
+                  state={side}
+                  annotations={sideDoc.id === doc?.id ? annotations : null}
+                  onChange={setSide}
+                  onPick={() => setSidePicker(true)}
+                  onSwap={swapSides}
+                  onClose={() => setSide(null)}
+                  handleRef={sideViewerRef}
+                />
+              </div>
+            </>
+          )}
         </main>
 
         {/* Right: resources */}
@@ -1705,14 +2206,14 @@ export default function App() {
                 onChange={setRightWidth}
               />
               <aside className="shrink-0 overflow-hidden bg-canvas" style={{ width: rightW }}>
-                {rightPanel}
+                {rightContent}
               </aside>
             </>
           ) : (
             <>
               <div className="absolute inset-0 z-30 bg-black/30" onClick={() => setMobilePanel(null)} />
               <aside className="absolute inset-y-0 right-0 z-40 w-[90vw] max-w-96 border-l border-line bg-canvas shadow-2xl">
-                {rightPanel}
+                {rightContent}
               </aside>
             </>
           ))}
@@ -1725,6 +2226,10 @@ export default function App() {
           pageCount={pageCount}
           zoom={zoom}
           onPage={goToPage}
+          back={navHistory.back}
+          forward={navHistory.forward}
+          onBack={() => viewerRef.current?.goBack()}
+          onForward={() => viewerRef.current?.goForward()}
           onZoom={changeZoom}
           onFitWidth={() => {
             const z = viewerRef.current?.fitWidthZoom();
@@ -1847,6 +2352,18 @@ export default function App() {
         />
       )}
 
+      {slideWhere && doc && pagePictures[slideIndex] && (
+        <PicturePagesDialog
+          key={pagePictures[slideIndex].id}
+          picture={pagePictures[slideIndex]}
+          page={page}
+          pageCount={pageCount}
+          onSave={(scope, start, end) => setPicturePages(pagePictures[slideIndex].id, scope, start, end)}
+          onRemove={() => removePicture(pagePictures[slideIndex])}
+          onClose={() => setSlideWhere(false)}
+        />
+      )}
+
       {picturesOpen && doc && (
         <PageImagesDialog
           key={doc.id}
@@ -1860,6 +2377,16 @@ export default function App() {
         />
       )}
 
+      {sidePicker && <OpenBesideDialog documents={documents} recent={recent} currentId={doc?.id ?? null} onPick={openBeside} onClose={() => setSidePicker(false)} />}
+      {hiddenOpen && (
+        <HiddenFilesDialog
+          documents={hiddenDocuments}
+          directories={directories}
+          onUnhide={(ds) => void setFilesHidden(ds, false, true)}
+          onOpen={(d) => (setHiddenOpen(false), requestOpen(d))}
+          onClose={() => setHiddenOpen(false)}
+        />
+      )}
       {selectedOpen && <SelectedFilesDialog docs={selectedDocs} onClose={() => setSelectedOpen(false)} />}
 
       {textRequest && doc && (
@@ -1867,7 +2394,7 @@ export default function App() {
           key={`${doc.id}:${textRequest.kind === "region" ? `${textRequest.page}:${textRequest.rect.x}:${textRequest.rect.y}` : JSON.stringify(textRequest.preset ?? {})}`}
           highlights={annotations}
           bookmarks={bookmarks}
-          notes={resources}
+          notes={noteList}
           request={textRequest}
           doc={doc}
           page={page}

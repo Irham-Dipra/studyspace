@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { withKey } from "../lib/shortcuts";
-import { ChevronLeft, ChevronRight, Maximize, MoveHorizontal, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize, MoveHorizontal, Undo2, Redo2, ZoomIn, ZoomOut } from "lucide-react";
 import { IconButton, selectAllOnFocus } from "./ui";
 
 interface Props {
@@ -10,6 +10,11 @@ interface Props {
   pageCount: number;
   zoom: number;
   onPage: (p: number) => void;
+  /** The pages Back / Forward would go to (null: nothing to go back or forward to). */
+  back?: number | null;
+  forward?: number | null;
+  onBack?: () => void;
+  onForward?: () => void;
   onZoom: (z: number) => void;
   onFitWidth: () => void;
   onFitPage: () => void;
@@ -17,7 +22,7 @@ interface Props {
 
 const STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
 
-export function StatusBar({ paged = true, page, pageCount, zoom, onPage, onZoom, onFitWidth, onFitPage }: Props) {
+export function StatusBar({ paged = true, page, pageCount, zoom, onPage, back, forward, onBack, onForward, onZoom, onFitWidth, onFitPage }: Props) {
   const [draft, setDraft] = useState(String(page));
   useEffect(() => setDraft(String(page)), [page]);
 
@@ -48,6 +53,31 @@ export function StatusBar({ paged = true, page, pageCount, zoom, onPage, onZoom,
               disabled={!pageCount}
             />
             <span className="whitespace-nowrap tabular-nums text-ink-3">/ {pageCount || "–"}</span>
+            {(back != null || forward != null) && (
+              <>
+                <button
+                  className="flex h-7 items-center gap-1 rounded-md px-1.5 text-ink-2 hover:bg-hover hover:text-ink disabled:opacity-40"
+                  onClick={onBack}
+                  disabled={back == null}
+                  title={withKey(back == null ? "Back (nothing to go back to)" : `Back to page ${back}`, "historyBack")}
+                  aria-label="Back to the last place"
+                >
+                  <Undo2 className="size-4" />
+                  {back != null && <span className="text-xs tabular-nums">p. {back}</span>}
+                </button>
+                {forward != null && (
+                  <button
+                    className="flex h-7 items-center gap-1 rounded-md px-1.5 text-ink-2 hover:bg-hover hover:text-ink"
+                    onClick={onForward}
+                    title={withKey(`Forward to page ${forward}`, "historyForward")}
+                    aria-label="Forward again"
+                  >
+                    <Redo2 className="size-4" />
+                    <span className="text-xs tabular-nums">p. {forward}</span>
+                  </button>
+                )}
+              </>
+            )}
           </div>
 
           <div className="mx-auto flex items-center gap-1">

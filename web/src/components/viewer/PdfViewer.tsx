@@ -1,21 +1,25 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Ref } from "react";
-import { Highlighter, Loader2, MessageSquarePlus, Copy, Trash2, StickyNote } from "lucide-react";
+import { AArrowDown, AArrowUp, Highlighter, Loader2, MessageSquarePlus, Copy, Pencil, Trash2, StickyNote } from "lucide-react";
 import { CSS_UNITS, openPdf, type PDFDocumentProxy } from "../../lib/pdf";
 import { resolveDest, type PdfPosition } from "../../lib/outline";
-import { keyOf } from "../../lib/shortcuts";
+import { keyOf, matches } from "../../lib/shortcuts";
 import { Kbd } from "../ui";
-import type { Annotation, DocumentRecord, NormRect } from "../../lib/types";
-import { api, type AnnotationInput } from "../../lib/api";
+import type { Annotation, DocumentRecord, NormPoint, NormRect } from "../../lib/types";
+import { api, type AnnotationInput, type AnnotationPatch } from "../../lib/api";
 import { copyText } from "../../lib/pageImage";
 import { belowSelection, useTouchSelection } from "../../lib/touchSelection";
 import { PdfPage } from "./PdfPage";
-import { HIGHLIGHT_COLORS, HIGHLIGHT_OPACITY, hitTest, mergeLineRects, type Tool } from "./geometry";
+import type { PageMarker } from "./NoteMarkers";
+import { HIGHLIGHT_COLORS, HIGHLIGHT_OPACITY, TEXT_SIZES, hitTest, mergeLineRects, type Tool } from "./geometry";
 
 export interface PdfViewerHandle {
   /** Scrolls to `page`; with `top` (0 = top of the page, 1 = bottom) to that spot on it. */
   goToPage: (page: number, top?: number | null) => void;
   /** The page and the spot on it at the top of the view (where a bookmark added now points). */
   getPosition: () => PdfPosition;
+  /** Back / forward through the places you jumped from (a link, bookmark, note, page number...). */
+  goBack: () => void;
+  goForward: () => void;
   fitWidthZoom: () => number | null;
   fitPageZoom: () => number | null;
   getPdf: () => PDFDocumentProxy | null;
@@ -28,6 +32,8 @@ interface Props {
   zoom: number;
   onZoomChange: (zoom: number) => void;
   onPageChange: (page: number) => void;
+  /** The pages Back and Forward would go to (null: nothing there). Called when they change. */
+  onHistoryChange?: (h: { back: number | null; forward: number | null }) => void;
   onLoaded: (pageCount: number, pdf: PDFDocumentProxy) => void;
   annotations: Annotation[];
   tool: Tool;
@@ -37,8 +43,19 @@ interface Props {
   onDeleteAnnotation: (id: string) => void;
   /** A box drawn with the "OCR a region" tool. */
   onRegion?: (page: number, rect: NormRect) => void;
-  onUpdateAnnotation: (id: string, patch: { color?: string }) => void;
+  onUpdateAnnotation: (id: string, patch: AnnotationPatch) => void;
+  /** Colour and size for new text boxes. */
+  textColor?: string;
+  textSize?: number;
+  /** Notes' markers (all pages); without the handlers none are shown. */
+  markers?: PageMarker[];
+  onOpenMarker?: (id: string) => void;
+  onMoveMarker?: (id: string, at: NormPoint) => void;
+  onDeleteMarker?: (id: string) => void;
+  onPlaceMarker?: (page: number, at: NormPoint) => void;
   onQuoteToNote: (page: number, text: string) => void;
+  /** The second pane of side by side: no tools, and selected text can only be copied. */
+  readOnly?: boolean;
 }
 
 const GAP = 14;
@@ -284,7 +301,7 @@ export function PdfViewer(props: Props) {
   /** Keys for the open floating bar; returns true when it used the key. */
   const menuKeysRef = useRef<(e: KeyboardEvent) => boolean>(() => false);
   menuKeysRef.current = (e: KeyboardEvent) => {
-    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return false;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || props.readOnly) return false;
     const digit = /^Digit[1-9]$/.test(e.code) ? Number(e.code.slice(5)) - 1 : -1;
     if (selMenu) {
       if (digit >= 0 && HIGHLIGHT_COLORS[digit]) {
@@ -298,7 +315,12 @@ export function PdfViewer(props: Props) {
         return true;
       }
     } else if (annMenu) {
-      const palette = annMenu.annotation.kind === "ink" ? INK_MENU_COLORS : HIGHLIGHT_COLORS;
+      const palette = annMenu.annotation.kind === "ink" || annMenu.annotation.kind === "text" ? INK_MENU_COLORS : HIGHLIGHT_COLORS;
+      if (annMenu.annotation.kind === "text" && matches(e, "selEditText")) {
+        setEditTextId(annMenu.annotation.id);
+        setAnnMenu(null);
+        return true;
+      }
       if (digit >= 0 && palette[digit]) {
         props.onUpdateAnnotation(annMenu.annotation.id, { color: palette[digit] });
         setAnnMenu(null);
@@ -352,7 +374,8 @@ export function PdfViewer(props: Props) {
   }, [menuOpen]);
 
   // ---- Imperative API -------------------------------------------------------
-  const goToPage = useCallback(
+  /** Scrolls to a spot without touching the history (`top` as in `goToPage`). */
+  const scrollToSpot = useCallback(
     (page: number, top?: number | null) => {
       const el = scrollRef.current;
       const frac = top ? Math.min(1, Math.max(0, top)) : 0;
@@ -362,23 +385,110 @@ export function PdfViewer(props: Props) {
         return;
       }
       const p = Math.min(Math.max(1, Math.round(page)), layout.tops.length);
+      jumpedAt.current = performance.now();
+      burst.current = null;
       el.scrollTop = layout.tops[p - 1] + frac * Math.floor(sizes[p - 1].h * scale) - 8;
       updateFromScroll();
     },
     [layout, sizes, scale, updateFromScroll],
   );
 
+  /** Where the view is now, as `goToPage` takes it (a few pixels of slack so "top of the page" stays exactly that). */
+  const hereSpot = useCallback((): PdfPosition => {
+    const a = anchorRef.current ?? { page: currentRef.current, frac: 0 };
+    const top = a.frac < 0.02 ? null : Math.round(Math.min(0.98, a.frac + 8 / Math.max(1, (sizes[a.page - 1]?.h ?? 800) * scale)) * 10000) / 10000;
+    return { page: a.page, top };
+  }, [sizes, scale]);
+
+  // The places jumped from, for Back and Forward (a viewer is made again for each file, so it starts empty).
+  const history = useRef<{ back: PdfPosition[]; forward: PdfPosition[] }>({ back: [], forward: [] });
+  const onHistoryRef = useRef(props.onHistoryChange);
+  onHistoryRef.current = props.onHistoryChange;
+  const announceHistory = () => {
+    const h = history.current;
+    onHistoryRef.current?.({ back: h.back.at(-1)?.page ?? null, forward: h.forward.at(-1)?.page ?? null });
+  };
+
+  /** Puts a place on the Back list (not twice in a row), and forgets what Forward had. */
+  const remember = (spot: PdfPosition) => {
+    const h = history.current;
+    const last = h.back.at(-1);
+    if (!last || last.page !== spot.page || Math.abs((last.top ?? 0) - (spot.top ?? 0)) > 0.02) h.back.push(spot);
+    if (h.back.length > 50) h.back.shift();
+    h.forward = [];
+    announceHistory();
+  };
+
+  const goToPage = useCallback(
+    (page: number, top?: number | null) => {
+      if (scrollRef.current && layout.tops.length) {
+        // Only a jump is remembered: turning to the next or previous page, or a spot a short way
+        // along the same page, isn't (Back would then just undo a page turn).
+        const here = hereSpot();
+        const target = Math.min(Math.max(1, Math.round(page)), layout.tops.length);
+        const apart = Math.abs(target - here.page);
+        const far = apart > 1 || (apart === 1 && !!top) || (apart === 0 && !!top && Math.abs(top - (here.top ?? 0)) > 0.1);
+        if (far) remember(here);
+      }
+      scrollToSpot(page, top);
+    },
+    [layout, hereSpot, scrollToSpot], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // A quick scroll over several pages (wheel, scrollbar, trackpad) is a jump too. Reading on, a bit
+  // at a time with pauses, isn't: a burst of scrolling ends when the view has rested half a second.
+  const burst = useRef<PdfPosition | null>(null);
+  const jumpedAt = useRef(0);
+  const hereRef = useRef(hereSpot);
+  hereRef.current = hereSpot;
+  const rememberRef = useRef(remember);
+  rememberRef.current = remember;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let timer = 0;
+    const onScroll = () => {
+      // Scrolls we caused (a jump, Back, a zoom) don't start a burst.
+      if (!burst.current && performance.now() - jumpedAt.current > 400) burst.current = hereRef.current();
+      clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const from = burst.current;
+        burst.current = null;
+        if (from && Math.abs(hereRef.current().page - from.page) >= 3) rememberRef.current(from);
+      }, 500);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, [pdf]);
+
+  const goBack = useCallback(() => {
+    const h = history.current;
+    const to = h.back.pop();
+    if (!to) return;
+    h.forward.push(hereSpot());
+    scrollToSpot(to.page, to.top);
+    announceHistory();
+  }, [hereSpot, scrollToSpot]); // eslint-disable-line react-hooks/exhaustive-deps
+  const goForward = useCallback(() => {
+    const h = history.current;
+    const to = h.forward.pop();
+    if (!to) return;
+    h.back.push(hereSpot());
+    scrollToSpot(to.page, to.top);
+    announceHistory();
+  }, [hereSpot, scrollToSpot]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useImperativeHandle(
     props.ref,
     () => ({
       goToPage,
       getPdf: () => pdf,
-      getPosition: () => {
-        const a = anchorRef.current ?? { page: currentRef.current, frac: 0 };
-        // A few pixels of slack so "top of the page" stays exactly that.
-        const top = a.frac < 0.02 ? null : Math.round(Math.min(0.98, a.frac + 8 / Math.max(1, (sizes[a.page - 1]?.h ?? 800) * scale)) * 10000) / 10000;
-        return { page: a.page, top };
-      },
+      getPosition: hereSpot,
+      goBack,
+      goForward,
       fitWidthZoom: () => {
         const s = sizes[currentRef.current - 1] ?? sizes[0];
         if (!s) return null;
@@ -392,7 +502,7 @@ export function PdfViewer(props: Props) {
         return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
       },
     }),
-    [goToPage, pdf, sizes, scale, viewportWidth],
+    [goToPage, goBack, goForward, hereSpot, pdf, sizes, scale, viewportWidth],
   );
 
   const navigateDest = useCallback(
@@ -414,6 +524,24 @@ export function PdfViewer(props: Props) {
     }
     return m;
   }, [props.annotations]);
+
+  const markersByPage = useMemo(() => {
+    const m = new Map<number, PageMarker[]>();
+    for (const n of props.markers ?? []) m.set(n.page, [...(m.get(n.page) ?? []), n]);
+    return m;
+  }, [props.markers]);
+
+  /** A text box to edit, asked for from its menu (its page's layer opens it). */
+  const [editTextId, setEditTextId] = useState<string | null>(null);
+  const onTextEditDone = useCallback(() => setEditTextId(null), []);
+  /** A text box's font one size up or down (sizes between the toolbar's are kept in step). */
+  const resizeText = (a: Annotation, dir: 1 | -1) => {
+    const next = dir > 0 ? TEXT_SIZES.find((s) => s > a.strokeWidth + 1e-4) : [...TEXT_SIZES].reverse().find((s) => s < a.strokeWidth - 1e-4);
+    if (!next) return;
+    props.onUpdateAnnotation(a.id, { strokeWidth: next });
+    // The menu stays open: its copy of the box takes the new size, so another click goes on from it.
+    setAnnMenu((m) => (m && m.annotation.id === a.id ? { ...m, annotation: { ...m.annotation, strokeWidth: next } } : m));
+  };
 
   // ---- Text selection → highlight / quote ----------------------------------
   const selectionToItems = useCallback((): SelMenu["items"] => {
@@ -467,6 +595,7 @@ export function PdfViewer(props: Props) {
         return;
       }
       // No selection: was an annotation clicked?
+      if (props.readOnly) return;
       const pageEl = (e.target as HTMLElement).closest<HTMLElement>(".ss-page");
       if (!pageEl) return setAnnMenu(null);
       const page = Number(pageEl.dataset.page);
@@ -512,6 +641,16 @@ export function PdfViewer(props: Props) {
             onEraseAnnotation={props.onDeleteAnnotation}
             onNavigateDest={navigateDest}
             onRegion={props.onRegion}
+            textColor={props.textColor ?? "#212121"}
+            textSize={props.textSize ?? TEXT_SIZES[1]}
+            editTextId={editTextId}
+            onTextEditDone={onTextEditDone}
+            onUpdateAnnotation={props.onUpdateAnnotation}
+            markers={markersByPage.get(p) ?? NO_MARKERS}
+            onOpenMarker={props.onOpenMarker}
+            onMoveMarker={props.onMoveMarker}
+            onDeleteMarker={props.onDeleteMarker}
+            onPlaceMarker={props.onPlaceMarker}
           />
         </div>,
       );
@@ -567,8 +706,8 @@ export function PdfViewer(props: Props) {
           style={menuStyle(selMenu.x, selMenu.y)}
           onMouseDown={(e) => e.preventDefault()}
         >
-          <Highlighter className="mx-1 size-4 text-ink-3" />
-          {HIGHLIGHT_COLORS.map((c, i) => (
+          {!props.readOnly && <Highlighter className="mx-1 size-4 text-ink-3" />}
+          {!props.readOnly && HIGHLIGHT_COLORS.map((c, i) => (
             <button
               key={c}
               title={`Highlight (${i + 1})`}
@@ -577,18 +716,22 @@ export function PdfViewer(props: Props) {
               onClick={() => createHighlights(selMenu.items, c)}
             />
           ))}
-          <div className="mx-1 h-5 w-px bg-line" />
-          <MenuButton
-            icon={<MessageSquarePlus className="size-4" />}
-            label="Note"
-            hint={keyOf("selNote")}
-            onClick={() => {
-              const it = selMenu.items[0];
-              props.onQuoteToNote(it.page, selMenu.items.map((i) => i.text).join(" "));
-              window.getSelection()?.removeAllRanges();
-              setSelMenu(null);
-            }}
-          />
+          {!props.readOnly && (
+            <>
+              <div className="mx-1 h-5 w-px bg-line" />
+              <MenuButton
+                icon={<MessageSquarePlus className="size-4" />}
+                label="Note"
+                hint={keyOf("selNote")}
+                onClick={() => {
+                  const it = selMenu.items[0];
+                  props.onQuoteToNote(it.page, selMenu.items.map((i) => i.text).join(" "));
+                  window.getSelection()?.removeAllRanges();
+                  setSelMenu(null);
+                }}
+              />
+            </>
+          )}
           <MenuButton
             icon={<Copy className="size-4" />}
             label="Copy"
@@ -604,7 +747,7 @@ export function PdfViewer(props: Props) {
       {annMenu && (
         <div data-floating-menu
           className="fixed z-50 flex flex-wrap items-center gap-1 rounded-lg border border-line bg-panel p-1 shadow-lg" style={menuStyle(annMenu.x, annMenu.y)}>
-          {(annMenu.annotation.kind === "ink" ? INK_MENU_COLORS : HIGHLIGHT_COLORS).map((c, i) => (
+          {(annMenu.annotation.kind === "ink" || annMenu.annotation.kind === "text" ? INK_MENU_COLORS : HIGHLIGHT_COLORS).map((c, i) => (
             <button
               key={c}
               title={`Change colour (${i + 1})`}
@@ -617,6 +760,25 @@ export function PdfViewer(props: Props) {
             />
           ))}
           <div className="mx-1 h-5 w-px bg-line" />
+          {annMenu.annotation.kind === "text" && (
+            <>
+              <MenuButton
+                icon={<Pencil className="size-4" />}
+                label="Edit"
+                hint={keyOf("selEditText")}
+                onClick={() => {
+                  setEditTextId(annMenu.annotation.id);
+                  setAnnMenu(null);
+                }}
+              />
+              <button className="rounded-md p-1 text-ink-2 hover:bg-hover" title="Smaller text" aria-label="Smaller text" onClick={() => resizeText(annMenu.annotation, -1)}>
+                <AArrowDown className="size-4" />
+              </button>
+              <button className="rounded-md p-1 text-ink-2 hover:bg-hover" title="Larger text" aria-label="Larger text" onClick={() => resizeText(annMenu.annotation, 1)}>
+                <AArrowUp className="size-4" />
+              </button>
+            </>
+          )}
           {annMenu.annotation.text && (
             <MenuButton
               icon={<StickyNote className="size-4" />}
@@ -645,6 +807,7 @@ export function PdfViewer(props: Props) {
 }
 
 const EMPTY: Annotation[] = [];
+const NO_MARKERS: PageMarker[] = [];
 const INK_MENU_COLORS = ["#e53935", "#1e88e5", "#43a047", "#212121"];
 
 function textInRange(range: Range, layer: Element): string {

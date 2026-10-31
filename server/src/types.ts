@@ -5,7 +5,8 @@ export type ResourceType = (typeof RESOURCE_TYPES)[number];
 export const RESOURCE_SCOPES = ["page", "range", "document"] as const;
 export type ResourceScope = (typeof RESOURCE_SCOPES)[number];
 
-export const ANNOTATION_KINDS = ["highlight", "area", "ink"] as const;
+/** "text": a text box typed on the page (rects[0] = its box, strokeWidth = font size as a share of the page width). */
+export const ANNOTATION_KINDS = ["highlight", "area", "ink", "text"] as const;
 export type AnnotationKind = (typeof ANNOTATION_KINDS)[number];
 
 export interface Directory {
@@ -31,6 +32,8 @@ export interface DocumentRecord {
   mtimeMs: number;
   pageCount: number | null;
   missing: boolean;
+  /** Hidden from the library list by the user (still opens; listed under Hidden files). */
+  hidden: boolean;
   annotationsDirty: boolean;
   /** Bookmarks were changed in StudySpace and not yet written into the PDF. */
   bookmarksDirty: boolean;
@@ -56,6 +59,23 @@ export interface Resource {
   styles: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A marker on a page that opens a note, at the passage `quote` (with `prefix` / `suffix` around it,
+ * anchored like a note highlight), or the whole note when `quote` is empty. `x`, `y`: the spot it
+ * marks, in normalised display coordinates.
+ */
+export interface NoteMarker {
+  id: string;
+  resourceId: string;
+  page: number;
+  x: number;
+  y: number;
+  quote: string;
+  prefix: string;
+  suffix: string;
+  createdAt: string;
 }
 
 /** All geometry is normalised to the displayed page: (0,0) top-left, (1,1) bottom-right. */

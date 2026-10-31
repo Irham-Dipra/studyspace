@@ -3,10 +3,10 @@ import path from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { z, ZodError } from "zod";
 import type { AppConfig } from "./config.js";
-import type { DB } from "./db/index.js";
+import { transaction, type DB } from "./db/index.js";
 import type { AIProvider } from "./ai/index.js";
 import { deleteDirectory, insertDirectory, listDirectories, updateDirectory } from "./db/directories.js";
-import { getDocument, listDocuments, setPageCount } from "./db/documents.js";
+import { getDocument, listDocuments, setDocumentsHidden, setPageCount } from "./db/documents.js";
 import {
   createResource,
   deleteResource,
@@ -24,6 +24,7 @@ import {
   listNoteHighlightsForDocument,
   updateNoteHighlight,
 } from "./db/noteHighlights.js";
+import { createNoteMarker, deleteNoteMarker, listNoteMarkersForDocument, updateNoteMarker } from "./db/noteMarkers.js";
 import { getProgress, recentDocuments, saveProgress } from "./db/progress.js";
 import {
   createDocumentHighlight,
@@ -31,6 +32,7 @@ import {
   listDocumentHighlights,
   updateDocumentHighlight,
 } from "./db/documentHighlights.js";
+import { excludeError } from "./library/scanner.js";
 import { syncLibrary } from "./library/sync.js";
 import {
   insertBlank,
@@ -52,6 +54,7 @@ import { renameDocument, restoreDocument, trashDocument } from "./services/fileO
 import { createAuth } from "./auth.js";
 import { INSTALL_HINT, OcrJobs, ocrImage, ocrStatus, publicJob } from "./services/ocr.js";
 import { SlideConverter } from "./services/slides.js";
+import { IMAGE_EXTENSIONS, MAX_IMAGE_BYTES, noteImageFile, saveNoteImage } from "./services/noteImages.js";
 import { canEditFile, isLibraryFile, isPaged, type DocumentKind } from "./library/fileKinds.js";
 import { resolveInsideRoots } from "./library/pathGuard.js";
 import { ANNOTATION_KINDS, HttpError, RESOURCE_SCOPES, RESOURCE_TYPES } from "./types.js";
@@ -115,10 +118,21 @@ const outlineEntry: z.ZodType<OutlineEntry> = z.lazy(() =>
   }),
 );
 
+/** Folders and files to hide; a broken `re:` regex is refused with its reason. */
+const excludeList = z
+  .array(z.string().max(500))
+  .max(200)
+  .superRefine((list, ctx) => {
+    for (const x of list) {
+      const error = excludeError(x);
+      if (error) ctx.addIssue({ code: "custom", message: error });
+    }
+  });
+
 const directoryCreate = z.object({
   path: z.string().min(1),
   label: z.string().max(200).optional(),
-  excludes: z.array(z.string().max(500)).max(200).optional(),
+  excludes: excludeList.optional(),
 });
 
 const fp = z.string().optional();
@@ -204,7 +218,7 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
 
   api.patch("/directories/:id", auth.localOnly, async (req, res) => {
     const body = z
-      .object({ label: z.string().max(200).optional(), excludes: z.array(z.string()).optional(), enabled: z.boolean().optional() })
+      .object({ label: z.string().max(200).optional(), excludes: excludeList.optional(), enabled: z.boolean().optional() })
       .parse(req.body);
     const dir = updateDirectory(db, Number(param(req, "id")), body);
     if (!dir) throw new HttpError(404, "Directory not found");
@@ -258,6 +272,7 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
     }
     const needle = q.toLowerCase();
     const documents = listDocuments(db)
+      .filter((d) => !d.hidden)
       .filter((d) => d.title.toLowerCase().includes(needle) || d.relPath.toLowerCase().includes(needle))
       .slice(0, 30);
     res.json({ documents, resources: searchResources(db, q) });
@@ -347,6 +362,12 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
     res.json(getDocument(db, doc.id));
   });
 
+  /** Hides files from the library list, or shows them again (the list of hidden files unhides them). */
+  api.post("/library/hidden", (req, res) => {
+    const body = z.object({ ids: z.array(z.string()).min(1).max(5000), hidden: z.boolean() }).parse(req.body);
+    res.json({ documents: transaction(db, () => setDocumentsHidden(db, body.ids, body.hidden)) });
+  });
+
   // ---- Rename / delete the file (deleting moves it to the desktop Trash; undo puts it back) ----
   api.post("/documents/:id/rename", async (req, res) => {
     const body = z.object({ name: z.string().max(1000) }).parse(req.body);
@@ -392,6 +413,34 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
     } catch (err) {
       throw new HttpError(400, (err as Error).message);
     }
+  });
+
+  // ---- Pictures kept as notes (the note's text is `![](/api/images/<name>)`) ----
+  api.post("/images", express.raw({ type: Object.keys(IMAGE_EXTENSIONS), limit: MAX_IMAGE_BYTES }), async (req, res) => {
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new HttpError(400, "Send the picture as PNG, JPEG, GIF or WebP.");
+    try {
+      const name = await saveNoteImage(config.dataDir, req.body);
+      res.status(201).json({ name, src: `/api/images/${name}` });
+    } catch (err) {
+      throw new HttpError(400, (err as Error).message);
+    }
+  });
+
+  api.get("/images/:name", (req, res, next) => {
+    const img = noteImageFile(config.dataDir, param(req, "name"));
+    if (!img) throw new HttpError(404, "Picture not found");
+    res.sendFile(
+      img.file,
+      {
+        dotfiles: "allow",
+        // Named by content, so it never changes.
+        headers: { "Content-Type": img.contentType, "Cache-Control": "private, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" },
+      },
+      (err) => {
+        if (!err || res.headersSent) return;
+        next((err as NodeJS.ErrnoException).code === "ENOENT" ? new HttpError(404, "Picture not found") : err);
+      },
+    );
   });
 
   api.get("/resources/:id", (req, res) => {
@@ -455,6 +504,45 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
     res.status(204).end();
   });
 
+  // ---- Markers on pages that open a note (at a passage of it) -------------
+  const noteMarkerCreate = z.object({
+    id: clientId,
+    page,
+    x: unit,
+    y: unit,
+    quote: z.string().max(20000).optional(),
+    prefix: z.string().max(200).optional(),
+    suffix: z.string().max(200).optional(),
+  });
+
+  api.get("/documents/:id/note-markers", (req, res) => {
+    const doc = requireDoc(param(req, "id"));
+    res.json(listNoteMarkersForDocument(db, doc.id));
+  });
+
+  api.post("/resources/:id/markers", (req, res) => {
+    const r = getResource(db, param(req, "id"));
+    if (!r) throw new HttpError(404, "Resource not found");
+    const body = noteMarkerCreate.parse(req.body);
+    try {
+      res.status(201).json(createNoteMarker(db, r.id, body));
+    } catch (err) {
+      throw new HttpError(409, (err as Error).message);
+    }
+  });
+
+  api.patch("/note-markers/:id", (req, res) => {
+    const body = noteMarkerCreate.omit({ id: true }).partial().parse(req.body);
+    const m = updateNoteMarker(db, param(req, "id"), body);
+    if (!m) throw new HttpError(404, "Marker not found");
+    res.json(m);
+  });
+
+  api.delete("/note-markers/:id", (req, res) => {
+    if (!deleteNoteMarker(db, param(req, "id"))) throw new HttpError(404, "Marker not found");
+    res.status(204).end();
+  });
+
   // ---- Highlights on the text of HTML / Markdown documents ----------------
   api.get("/documents/:id/text-highlights", (req, res) => {
     const doc = requireDoc(param(req, "id"));
@@ -501,7 +589,13 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
 
   api.patch("/annotations/:id", (req, res) => {
     const body = z
-      .object({ color: color.optional(), opacity: z.number().min(0.05).max(1).optional(), text: z.string().max(20000).optional() })
+      .object({
+        color: color.optional(),
+        opacity: z.number().min(0.05).max(1).optional(),
+        text: z.string().max(20000).optional(),
+        rects: annotationCreate.shape.rects,
+        strokeWidth: annotationCreate.shape.strokeWidth,
+      })
       .parse(req.body);
     const a = updateAnnotation(db, param(req, "id"), body);
     if (!a) throw new HttpError(404, "Annotation not found");

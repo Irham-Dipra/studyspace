@@ -132,6 +132,44 @@ describe("migrations", () => {
     expect(db.prepare("SELECT kind FROM document_history ORDER BY id").all()).toEqual([{ kind: "ocr" }, { kind: "rotate" }, { kind: "move" }]);
   });
 
+  it("adds text boxes and note markers (v10), keeping existing annotations", () => {
+    const db = new DatabaseSync(":memory:");
+    runMigrations(db, migrations.filter((m) => m.version <= 9));
+    db.exec("PRAGMA foreign_keys = OFF");
+    const insert = (id: string, kind: string) =>
+      db.prepare("INSERT INTO annotations (id, document_id, page, kind, color, text) VALUES (?, 'd1', 2, ?, '#ff0000', 'kept')").run(id, kind);
+    insert("a1", "ink");
+    expect(() => insert("a0", "text")).toThrow(/CHECK/);
+    expect(runMigrations(db, migrations.filter((m) => m.version <= 10))).toContain(10);
+    insert("a2", "text");
+    expect(() => insert("a3", "bogus")).toThrow(/CHECK/);
+    expect(db.prepare("SELECT id, kind, page, text FROM annotations ORDER BY id").all()).toEqual([
+      { id: "a1", kind: "ink", page: 2, text: "kept" },
+      { id: "a2", kind: "text", page: 2, text: "kept" },
+    ]);
+    db.prepare("INSERT INTO resources (id, document_id, type, scope, marker_x, marker_y) VALUES ('r1', 'd1', 'note', 'page', 0.2, 0.3)").run();
+    expect(db.prepare("SELECT marker_x, marker_y FROM resources").get()).toEqual({ marker_x: 0.2, marker_y: 0.3 });
+  });
+
+  it("moves v10 markers into note_markers (v11), on the note's first page, with UUID ids", () => {
+    const db = new DatabaseSync(":memory:");
+    runMigrations(db, migrations.filter((m) => m.version <= 10));
+    db.exec("PRAGMA foreign_keys = OFF");
+    db.prepare("INSERT INTO resources (id, document_id, type, scope, marker_x, marker_y) VALUES ('r1', 'd1', 'note', 'range', 0.2, 0.3)").run();
+    db.prepare("INSERT INTO resource_pages (resource_id, page_start, page_end) VALUES ('r1', 4, 6)").run();
+    db.prepare("INSERT INTO resources (id, document_id, type, scope) VALUES ('r2', 'd1', 'note', 'page')").run();
+    db.prepare("INSERT INTO resource_pages (resource_id, page_start, page_end) VALUES ('r2', 2, 2)").run();
+    expect(runMigrations(db, migrations)).toContain(11);
+    const rows = db.prepare("SELECT id, resource_id, page, x, y, quote FROM note_markers").all() as { id: string }[];
+    expect(rows).toEqual([{ id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}$/), resource_id: "r1", page: 4, x: 0.2, y: 0.3, quote: "" }]);
+    const cols = (db.prepare("PRAGMA table_info(resources)").all() as { name: string }[]).map((c) => c.name);
+    expect(cols).not.toContain("marker_x");
+    // Deleting the note deletes its markers.
+    db.exec("PRAGMA foreign_keys = ON");
+    db.prepare("DELETE FROM resources WHERE id = 'r1'").run();
+    expect(db.prepare("SELECT COUNT(*) AS n FROM note_markers").get()).toEqual({ n: 0 });
+  });
+
   it("refuses to open a database from a newer version", () => {
     const db = new DatabaseSync(":memory:");
     runMigrations(db, migrations);

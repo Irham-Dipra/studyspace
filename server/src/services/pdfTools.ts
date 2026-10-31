@@ -9,6 +9,7 @@ import { getDocument, getDocumentByPath, insertDocument, setAnnotationsDirty, se
 import { bookmarkTree, type BookmarkNode } from "../db/bookmarks.js";
 import { createAnnotation, listAnnotations } from "../db/annotations.js";
 import { createResource, listResources } from "../db/resources.js";
+import { createNoteMarker, listNoteMarkersForDocument } from "../db/noteMarkers.js";
 import { createNoteHighlight, listNoteHighlightsForDocument } from "../db/noteHighlights.js";
 import { fingerprintFile } from "../library/fingerprint.js";
 import { isWithin, resolveInsideRoots } from "../library/pathGuard.js";
@@ -164,6 +165,14 @@ export async function createPdfs(db: DB, req: CreateRequest, dataDir: string): P
   const totalPages = outputs.reduce((n, o) => n + o.segments.reduce((m, s) => m + s.pages.length, 0), 0);
   if (totalPages > MAX_PAGES) throw new HttpError(400, `At most ${MAX_PAGES} pages at once.`);
 
+  // Checked before anything is written: a hidden file would vanish from the library on the next scan.
+  for (const o of outputs) {
+    const name = safeFileName(o.name.replace(/\.pdf$/i, ""));
+    if (isExcluded([relDir, `${name}.pdf`].filter(Boolean).join("/"), dir.excludes)) {
+      throw new HttpError(400, `“${name}.pdf” would be hidden by this library folder's settings. Pick another name or folder.`);
+    }
+  }
+
   const taken = new Set<string>();
   const written: string[] = [];
   const created: DocumentRecord[] = [];
@@ -250,6 +259,7 @@ export async function createPdfs(db: DB, req: CreateRequest, dataDir: string): P
 /** Copies a source's page and range notes that touch the copied pages, scoped to their new pages. */
 function copyNotes(db: DB, fromDoc: string, toDoc: string, map: Map<number, number>): void {
   const highlights = listNoteHighlightsForDocument(db, fromDoc);
+  const markers = listNoteMarkersForDocument(db, fromDoc);
   for (const r of listResources(db, fromDoc)) {
     if (r.scope === "document" || r.pageStart === null || r.pageEnd === null) continue;
     const pages: number[] = [];
@@ -270,6 +280,11 @@ function copyNotes(db: DB, fromDoc: string, toDoc: string, map: Map<number, numb
       url: r.url,
       styles: r.styles,
     });
+    // Markers on copied pages come along, on their new page numbers.
+    for (const m of markers.filter((x) => x.resourceId === r.id)) {
+      const p = map.get(m.page);
+      if (p) createNoteMarker(db, copy.id, { page: p, x: m.x, y: m.y, quote: m.quote, prefix: m.prefix, suffix: m.suffix });
+    }
     for (const h of highlights.filter((x) => x.resourceId === r.id)) {
       createNoteHighlight(db, copy.id, { color: h.color, quote: h.quote, prefix: h.prefix, suffix: h.suffix, comment: h.comment });
     }

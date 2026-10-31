@@ -11,9 +11,11 @@ export type ShortcutGroup =
   | "General"
   | "Panels"
   | "Pages & zoom"
+  | "Side by side"
   | "Tools"
   | "Selected text & highlights"
   | "Notes & bookmarks"
+  | "Pictures"
   | "Page tools"
   | "New PDFs"
   | "Images"
@@ -21,9 +23,11 @@ export type ShortcutGroup =
   | "In the Get text window"
   | "In the cut-in-half window"
   | "In the Save pictures window"
+  | "In the picture pages window"
   | "In the bookmarks list"
   | "In the files list"
   | "In the selected-files window"
+  | "In the hidden-files window"
   | "In dialogs & editors";
 
 export interface Shortcut {
@@ -42,9 +46,11 @@ export const SHORTCUTS = {
   redo: s("General", "Redo", "Ctrl+Shift+Z", "Ctrl+Y"),
   save: s("General", "Save highlights, drawings & bookmarks into the PDF", "Ctrl+S"),
   theme: s("General", "Dark / light mode", "Shift+D"),
+  hideBars: s("General", "Hide / show the title bar and the tools bar (more room to read)", "Shift+V"),
   settings: s("General", "Settings (study folders, note colours)", ","),
   rescan: s("General", "Rescan the library folders", "Shift+L"),
   selectedFiles: s("General", "Pictures, text & notes of the files selected in the files list…", "Shift+F"),
+  hiddenFiles: s("General", "Hidden files: the list, to unhide them", "Shift+K"),
 
   // Panels
   toggleLeft: s("Panels", "Show / hide the left panel (files, bookmarks)", "["),
@@ -60,6 +66,8 @@ export const SHORTCUTS = {
   firstPage: s("Pages & zoom", "First page", "Home"),
   lastPage: s("Pages & zoom", "Last page", "End"),
   goToPage: s("Pages & zoom", "Go to page (type it, press Enter)", "G"),
+  historyBack: s("Pages & zoom", "Back to where you jumped from (a link, bookmark, note or page number)", "Alt+ArrowLeft", "Backspace"),
+  historyForward: s("Pages & zoom", "Forward again, after going back", "Alt+ArrowRight", "Shift+Backspace"),
   zoomIn: s("Pages & zoom", "Zoom in", "+", "=", "Ctrl+=", "Ctrl++"),
   zoomOut: s("Pages & zoom", "Zoom out", "-", "_", "Ctrl+-"),
   zoomReset: s("Pages & zoom", "Zoom 100%", "0", "Ctrl+0"),
@@ -67,23 +75,38 @@ export const SHORTCUTS = {
   fitPage: s("Pages & zoom", "Fit whole page", "F"),
   wheelZoom: s("Pages & zoom", "Smooth zoom", "Ctrl+Wheel"),
 
+  // Side by side (a second PDF to read beside the open one)
+  sideOpen: s("Side by side", "Open a PDF beside this one, or change it…", "\\"),
+  sideClose: s("Side by side", "Close the PDF beside", "|"),
+  sideSwap: s("Side by side", "Swap the two (the open one has the tools and notes)", "Shift+X"),
+  sideNext: s("Side by side", "Next page of the PDF beside", "Shift+ArrowRight"),
+  sidePrev: s("Side by side", "Previous page of the PDF beside", "Shift+ArrowLeft"),
+
   // Tools
   select: s("Tools", "Select text", "V"),
   highlight: s("Tools", "Highlight text (just select it)", "H"),
-  area: s("Tools", "Highlight an area: click two corners (or drag)", "A"),
+  area: s("Tools", "Highlight an area: right-click two corners, or drag", "A"),
   pen: s("Tools", "Pen (draw freehand)", "P"),
   eraser: s("Tools", "Eraser (click or drag over marks)", "E"),
-  ocr: s("Tools", "Get text from a region: click two corners (or drag)", "O"),
+  ocr: s("Tools", "Get text from a region: right-click two corners, or drag", "O"),
+  text: s("Tools", "Text box: click (or drag its width) and type; Ctrl+Enter or a click outside finishes, Esc cancels", "Y"),
+  marker: s("Tools", "Note marker: click a spot on the page, then write its note (clicking the marker opens it)", "K"),
   cancelCorner: s("Tools", "Cancel a box after its first corner", "Escape"),
-  colour: s("Tools", "Pick colour 1–5 (highlight, area & pen tools)", "1–5"),
-  penWidth: s("Tools", "Pen width: fine / medium / bold", "Shift+1–3"),
+  colour: s("Tools", "Pick colour 1–5 (highlight, area, pen & text box tools)", "1–5"),
+  penWidth: s("Tools", "Pen width: fine / medium / bold (text box tool: text size)", "Shift+1–3"),
   back: s("Tools", "Back to Select; closes menus and bars", "Escape"),
 
   // Selected text & highlights (while the floating bar is open)
   selColour: s("Selected text & highlights", "Highlight the selection / recolour the highlight (colour 1–5)", "1–5"),
   selNote: s("Selected text & highlights", "Quote the selection / highlight into a new note", "N"),
   selCopy: s("Selected text & highlights", "Copy the selected text", "Ctrl+C"),
-  selDelete: s("Selected text & highlights", "Delete the clicked highlight or drawing", "Delete"),
+  selDelete: s("Selected text & highlights", "Delete the clicked highlight, drawing or text box", "Delete"),
+  textBigger: s("Tools", "While typing a text box: larger text", "Ctrl+]"),
+  textSmaller: s("Tools", "While typing a text box: smaller text", "Ctrl+["),
+  textColour: s("Tools", "While typing a text box: change its colour (colour 1–5)", "Ctrl+Shift+1–5"),
+  selEditText: s("Selected text & highlights", "Edit the clicked text box", "Enter"),
+  notePin: s("Selected text & highlights", "In a note: pin the selected text to a spot on the page (then click the spot)", "K"),
+  markerDelete: s("Selected text & highlights", "Remove a focused note marker (or right-click the marker)", "Delete"),
   styleColour: s("Selected text & highlights", "Recolour a clicked heading, label or ==mark== in a note (colour 1–9)", "1–9"),
   styleNone: s("Selected text & highlights", "…give it no colour", "0"),
   styleDefault: s("Selected text & highlights", "…give it back its default colour", "Delete"),
@@ -94,6 +117,14 @@ export const SHORTCUTS = {
   addBookmark: s("Notes & bookmarks", "Bookmark this spot (selected text becomes its title)", "B"),
   downloadNotes: s("Notes & bookmarks", "Download this file's notes (one .md file per note, in a .zip)", "Shift+N"),
   newTab: s("Notes & bookmarks", "Open a library PDF in a new browser tab", "Ctrl+Click"),
+
+  // Pictures: their own section in the notes column, shown as slides
+  viewPictures: s("Pictures", "Show / hide the pictures saved for this page (they fill the notes column)", "D"),
+  addPicture: s("Pictures", "Add a picture for this page (choose a file)", "U"),
+  pastePicture: s("Pictures", "Paste a copied picture for this page (dropping a picture on the notes or slides works too)", "Ctrl+V"),
+  pictureNext: s("Pictures", "Next picture", "Ctrl+ArrowRight"),
+  picturePrev: s("Pictures", "Previous picture", "Ctrl+ArrowLeft"),
+  pictureWhere: s("Pictures", "Pages of the shown picture, or remove it…", "J"),
 
   // Page tools (they change the PDF; all undoable)
   pageTools: s("Page tools", "Open the Page tools menu", "T"),
@@ -163,6 +194,13 @@ export const SHORTCUTS = {
   picCopy: s("In the Save pictures window", "Copy the picture (one page only)", "C"),
   picSave: s("In the Save pictures window", "Save", "Enter"),
 
+  // The picture pages window
+  pwThis: s("In the picture pages window", "This page", "1"),
+  pwRange: s("In the picture pages window", "Choose pages", "2"),
+  pwAll: s("In the picture pages window", "Whole PDF", "3"),
+  pwSave: s("In the picture pages window", "Save", "Enter"),
+  pwRemove: s("In the picture pages window", "Remove the picture", "Delete"),
+
   // Bookmarks list (with a bookmark focused)
   bmMoveFocus: s("In the bookmarks list", "Previous / next bookmark", "ArrowUp", "ArrowDown"),
   bmOpenClose: s("In the bookmarks list", "Open / close a chapter", "ArrowRight", "ArrowLeft"),
@@ -179,7 +217,9 @@ export const SHORTCUTS = {
   fileOpenClose: s("In the files list", "Open / close a folder", "ArrowRight", "ArrowLeft"),
   fileOpen: s("In the files list", "Open the file / folder", "Enter"),
   fileRename: s("In the files list", "Rename the file", "F2"),
+  fileBeside: s("In the files list", "Open the PDF beside the open one", "Shift+Enter"),
   fileDelete: s("In the files list", "Delete the file (to the Trash; asks first)", "Delete"),
+  fileHide: s("In the files list", "Hide the file from the list (with files selected: all of them)", "H"),
   fileSelect: s("In the files list", "Select / unselect the file (on a folder: all its files)", " "),
   fileSelectMove: s("In the files list", "Select while moving up / down", "Shift+ArrowUp", "Shift+ArrowDown"),
   fileSelectRange: s("In the files list", "Select every file from the last one picked to this one", "Shift+Click"),
@@ -197,6 +237,12 @@ export const SHORTCUTS = {
   sfTextFormat: s("In the selected-files window", "Text: Markdown ⇄ plain text", "M"),
   sfMarks: s("In the selected-files window", "Text: mark my highlights as ==text== on / off", "H"),
   sfNotes: s("In the selected-files window", "Text: include my notes on / off", "I"),
+
+  // The hidden-files window
+  hfMove: s("In the hidden-files window", "Previous / next file", "ArrowUp", "ArrowDown"),
+  hfUnhide: s("In the hidden-files window", "Unhide the file", "U", "Enter"),
+  hfOpen: s("In the hidden-files window", "Open the file (it stays hidden)", "O"),
+  hfUnhideAll: s("In the hidden-files window", "Unhide all", "Shift+U"),
 
   // Dialogs & editors
   confirm: s("In dialogs & editors", "Confirm a page dialog (in its first field)", "Enter"),
@@ -272,9 +318,11 @@ export const GROUP_ORDER: ShortcutGroup[] = [
   "General",
   "Panels",
   "Pages & zoom",
+  "Side by side",
   "Tools",
   "Selected text & highlights",
   "Notes & bookmarks",
+  "Pictures",
   "Page tools",
   "New PDFs",
   "Images",
@@ -282,8 +330,10 @@ export const GROUP_ORDER: ShortcutGroup[] = [
   "In the Get text window",
   "In the cut-in-half window",
   "In the Save pictures window",
+  "In the picture pages window",
   "In the bookmarks list",
   "In the files list",
   "In the selected-files window",
+  "In the hidden-files window",
   "In dialogs & editors",
 ];

@@ -13,6 +13,18 @@ interface Props {
   onError: (message: string) => void;
 }
 
+/** What the hide box accepts, shown under it. */
+function HideHelp() {
+  return (
+    <p className="mt-1 text-[11px] leading-relaxed text-ink-3">
+      Comma-separated. A name hides that folder or file anywhere (<code>Offllines</code>, <code>*.md</code>); with a <code>/</code> it is a path from
+      this folder (<code>CSE 301/*.md</code>, <code>Old/**</code>); a leading <code>/</code> means this folder only (<code>/*.html</code>).{" "}
+      <code>*</code> is anything within a folder, <code>**</code> crosses folders, <code>?</code> is one letter. <code>re:</code> starts a regular
+      expression on the path (<code>{"re:\\(old\\)\\.pdf$"}</code>). Hidden files keep their notes and come back when the rule goes.
+    </p>
+  );
+}
+
 const splitExcludes = (s: string) =>
   s
     .split(",")
@@ -87,7 +99,7 @@ export function SettingsDialog({ directories, config, onClose, onChanged, onErro
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-3">Library folders</h3>
         <p className="mb-3 text-xs text-ink-3">
-          StudySpace reads PDFs directly from these folders (and their subfolders). Files are never copied. Excluded folder names or relative paths are skipped.
+          StudySpace reads PDFs directly from these folders (and their subfolders). Files are never copied. Folders and files you hide are left out of the list.
         </p>
         <ul className="space-y-2">
           {directories.map((d) => (
@@ -130,9 +142,10 @@ export function SettingsDialog({ directories, config, onClose, onChanged, onErro
             </div>
           )}
           <div className="mt-2">
-            <Field label="Exclude (optional)" hint='Comma-separated folder names or relative paths, e.g. "Offllines, Old/Drafts"'>
-              <input className={inputCls} value={excludes} onChange={(e) => setExcludes(e.target.value)} />
+            <Field label="Hide folders and files (optional)">
+              <input className={inputCls} placeholder="Offllines, Old/Drafts, *.md" value={excludes} onChange={(e) => setExcludes(e.target.value)} />
             </Field>
+            <HideHelp />
           </div>
           <div className="mt-3 flex justify-end">
             <Button variant="primary" onClick={add} disabled={busy || !path.trim()}>
@@ -170,19 +183,27 @@ function DirectoryRow({ dir, onChanged, onError }: { dir: Directory; onChanged: 
   const [excludes, setExcludes] = useState(dir.excludes.join(", "));
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [help, setHelp] = useState(false);
   const dirty = label !== dir.label || excludes !== dir.excludes.join(", ");
 
   const run = async (fn: () => Promise<unknown>, msg?: string) => {
     setBusy(true);
     try {
-      await fn();
-      onChanged(msg);
+      const said = await fn();
+      onChanged(typeof said === "string" ? `${msg}: ${said}` : msg);
     } catch (e) {
       onError((e as Error).message);
     } finally {
       setBusy(false);
     }
   };
+
+  const save = () =>
+    run(async () => {
+      const before = dir.excludes.join(", ");
+      const r = await api.updateDirectory(dir.id, { label, excludes: splitExcludes(excludes) });
+      return excludes !== before && r.scan.missing ? `${r.scan.missing} file${r.scan.missing === 1 ? "" : "s"} hidden` : undefined;
+    }, "Folder updated");
 
   return (
     <li className={cx("rounded-lg border border-line p-3", !dir.enabled && "opacity-60")}>
@@ -197,14 +218,24 @@ function DirectoryRow({ dir, onChanged, onError }: { dir: Directory; onChanged: 
         </IconButton>
       </div>
       <p className="mt-1 break-all font-mono text-[11px] text-ink-3">{dir.path}</p>
-      <div className="mt-2 flex items-center gap-2">
-        <input className={cx(inputCls, "h-7 text-xs")} placeholder="Excluded folders (comma-separated)" value={excludes} onChange={(e) => setExcludes(e.target.value)} />
+      <label className="mt-2 block text-[11px] font-medium text-ink-2" htmlFor={`hide-${dir.id}`}>Hide folders and files</label>
+      <div className="mt-1 flex items-center gap-2">
+        <input
+          id={`hide-${dir.id}`}
+          className={cx(inputCls, "h-7 font-mono text-xs")}
+          placeholder="Offllines, Old/Drafts, *.md"
+          value={excludes}
+          onChange={(e) => setExcludes(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && dirty && !busy && save()}
+          onFocus={() => setHelp(true)}
+        />
         {dirty && (
-          <Button size="sm" variant="primary" disabled={busy} onClick={() => run(() => api.updateDirectory(dir.id, { label, excludes: splitExcludes(excludes) }), "Folder updated")}>
+          <Button size="sm" variant="primary" disabled={busy} onClick={save}>
             Save
           </Button>
         )}
       </div>
+      {help && <HideHelp />}
       {confirm && (
         <div className="mt-2 flex items-center gap-2 rounded-md bg-subtle px-2 py-1.5 text-xs">
           <span className="flex-1">Remove from library? Files stay on disk; notes are kept and return if you add it again.</span>

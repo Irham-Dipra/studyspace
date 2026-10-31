@@ -211,6 +211,37 @@ describe("rotating and moving pages", () => {
     await request(app).post(`/api/documents/${doc.id}/pages/rotate`).send({ pages: [2], angle: 45 }).expect(400);
   });
 
+  it("keeps note markers with their pages when pages turn, go or move, and undo puts them back", async () => {
+    const { app, doc } = await setup();
+    const note = (await request(app).post(`/api/documents/${doc.id}/resources`).send({ type: "note", scope: "range", pageStart: 2, pageEnd: 6 }).expect(201)).body;
+    const add = async (page: number) => (await request(app).post(`/api/resources/${note.id}/markers`).send({ page, x: 0.1, y: 0.2 }).expect(201)).body.id;
+    const [m2, m3, m5] = [await add(2), await add(3), await add(5)];
+    const markers = async () => Object.fromEntries(((await request(app).get(`/api/documents/${doc.id}/note-markers`)).body as { id: string; page: number; x: number; y: number }[]).map((m) => [m.id, m]));
+    const undo = (editId: string) => request(app).post(`/api/documents/${doc.id}/history/${editId}/undo`).expect(200);
+
+    const turned = await request(app).post(`/api/documents/${doc.id}/pages/rotate`).send({ pages: [2], angle: 90 }).expect(200);
+    let m = await markers();
+    expect(m[m2].x).toBeCloseTo(0.8);
+    expect(m[m2].y).toBeCloseTo(0.1);
+    expect(m[m5]).toMatchObject({ x: 0.1, y: 0.2 });
+    await undo(turned.body.editId);
+    expect((await markers())[m2]).toMatchObject({ x: 0.1, y: 0.2 });
+
+    // Deleting page 3 takes its marker; later ones move up a page. Undo brings it back.
+    const deleted = await request(app).post(`/api/documents/${doc.id}/pages/delete`).send({ pages: [3] }).expect(200);
+    m = await markers();
+    expect(m[m3]).toBeUndefined();
+    expect(m[m5].page).toBe(4);
+    await undo(deleted.body.editId);
+    m = await markers();
+    expect([m[m2].page, m[m3].page, m[m5].page]).toEqual([2, 3, 5]);
+
+    const moved = await request(app).post(`/api/documents/${doc.id}/pages/move`).send({ pages: [5], after: 0 }).expect(200);
+    expect((await markers())[m5].page).toBe(1);
+    await undo(moved.body.editId);
+    expect((await markers())[m5].page).toBe(5);
+  });
+
   it("moves pages with their notes, highlights and bookmarks, and undo moves them back", async () => {
     const { app, doc, file } = await setup();
     const id = doc.id;

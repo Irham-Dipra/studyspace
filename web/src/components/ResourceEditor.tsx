@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
-import { Eye, Pencil } from "lucide-react";
-import type { ResourceInput } from "../lib/api";
+import { Eye, Pencil, StickyNote } from "lucide-react";
+import { uploadImage, type ResourceInput } from "../lib/api";
 import { cleanPasted } from "../lib/pasteClean";
-import { RESOURCE_TYPE_LABEL, type Resource, type ResourceScope, type ResourceType } from "../lib/types";
+import { RESOURCE_TYPE_LABEL, type NormPoint, type Resource, type ResourceScope, type ResourceType } from "../lib/types";
 import { Markdown } from "./Markdown";
 import { Button, NumberInput, cx, inputCls } from "./ui";
 
@@ -34,13 +34,15 @@ export function ResourceEditor({ page, pageCount, paged = true, initial, default
   const [title, setTitle] = useState(initial?.title ?? defaults?.title ?? "");
   const [content, setContent] = useState(initial?.content ?? defaults?.content ?? "");
   const [url, setUrl] = useState(initial?.url ?? defaults?.url ?? "");
+  /** A new note's marker on its page, from the marker tool (markers of saved notes are on the page). */
+  const [marker, setMarker] = useState<NormPoint | null>(initial ? null : (defaults?.marker ?? null));
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pasteNote, setPasteNote] = useState<string | null>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
 
-  const snapshot = JSON.stringify([type, scope, start, end, title, content, url]);
+  const snapshot = JSON.stringify([type, scope, start, end, title, content, url, marker]);
   const [pristine] = useState(snapshot);
   const dirty = snapshot !== pristine;
   const dirtyRef = useRef(onDirtyChange);
@@ -67,6 +69,22 @@ export function ResourceEditor({ page, pageCount, paged = true, initial, default
   }, [content]);
 
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    // A copied picture goes in as a picture at the cursor.
+    const image = [...e.clipboardData.files].find((f) => f.type.startsWith("image/"));
+    if (image) {
+      e.preventDefault();
+      const el = e.currentTarget;
+      const [from, to] = [el.selectionStart, el.selectionEnd];
+      uploadImage(image).then(
+        ({ src }) => {
+          const tag = `![](${src})`;
+          caretTo.current = from + tag.length;
+          setContent((c) => c.slice(0, from) + tag + c.slice(to));
+        },
+        (err) => setError((err as Error).message),
+      );
+      return;
+    }
     const raw = e.clipboardData.getData("text/plain");
     const { text, cutChars, citations } = cleanPasted(raw);
     if (text === raw) return setPasteNote(null);
@@ -112,6 +130,7 @@ export function ResourceEditor({ page, pageCount, paged = true, initial, default
         // Also on save: catches text that came in without a paste event (drag, old notes being edited).
         content: cleanPasted(content).text,
         url: url.trim() || null,
+        marker: scope === "document" ? null : marker,
       });
     } catch (err) {
       setError((err as Error).message);
@@ -234,6 +253,17 @@ export function ResourceEditor({ page, pageCount, paged = true, initial, default
               )}
               {pageCount > 0 && <span className="text-ink-3">of {pageCount}</span>}
             </div>
+          )}
+          {marker && (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-ink-2">
+              <StickyNote className="size-3.5 shrink-0 text-amber-600" />
+              {scope === "document" ? "A whole-document note has no marker: it goes when you save." : `Marker on page ${start}: clicking it opens this note.`}
+              {scope !== "document" && (
+                <button type="button" className="ml-auto font-medium text-accent hover:underline" onClick={() => setMarker(null)}>
+                  Remove marker
+                </button>
+              )}
+            </p>
           )}
         </div>
       )}

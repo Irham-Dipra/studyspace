@@ -3,7 +3,7 @@
 StudySpace is a local-first PDF study app: library on the left, PDF viewer in the middle, notes on the right.
 It reads the user's course PDFs in place from `/home/dipra/Buet/3-1` and works fully offline.
 
-Status as of **2026-10-23**. Everything up to item 32 is committed. Other docs:
+Status as of **2026-11-01**. Items up to 32 are committed; items 33 (side by side), 34 (text boxes, note markers), 35 (markers at a passage), 36 (pictures as notes), 37 (whole-PDF notes apart) and 38 (Pictures section), 39 (Back button for jumps) 40 (hide files, root files row) and 41 (hide chosen files) are not yet. Other docs:
 - [HANDOFF.md](HANDOFF.md): the long version, with the detailed history of every feature and the problems already solved.
 - [README.md](README.md): setup, configuration, the HTTP API and the schema.
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md): every feature, explained for the user.
@@ -24,7 +24,7 @@ After **any** work in this project, before reporting back:
 export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"   # needed in every shell (Node 24 via nvm)
 npm run dev          # server http://127.0.0.1:4317, UI http://localhost:5173 (server: tsx watch)
 npm run typecheck    # server + web
-npm test             # server tests (vitest): 102 passing
+npm test             # server tests (vitest): 115 passing
 npm run build        # web/dist + server/dist; `npm start` serves the built app on 4317
                      # the dev server on 4317 also serves web/dist; the user works on 5173
 ```
@@ -40,6 +40,7 @@ Config lives in `.env`, the user's file, which is not committed. See `.env.examp
 
 The user's real PDFs are in `/home/dipra/Buet/3-1`. In-app edits overwrite the original PDF on purpose, so **testing must never touch them**.
 
+- **Don't edit the main tree while the user reads on 5173.** Vite hot-reloads their tab on every save, and `tsx watch` restarts 4317 (running new migrations on the real DB). Work in a git worktree in the scratchpad (carry over uncommitted changes; symlink the root `node_modules` only, never `web/node_modules`, which holds Vite's cache), test from there on 4399/5199, and copy the changes back only when the user says so.
 - **Never test on the user's own instance** (ports 4317/5173, real DB in `~/.local/share/studyspace`). Its server runs `tsx watch`, so a new migration runs on the real DB as soon as the code is saved.
 - **Test on ports 4399/5199**, with a scratch data dir and scratch *copies* of PDFs:
   - in `server/`: `STUDYSPACE_PORT=4399 STUDYSPACE_DATA_DIR=<scratch>/data STUDYSPACE_LIBRARY_DIRS=<scratch>/lib setsid npx tsx src/index.ts`
@@ -72,13 +73,13 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. I
 | `auth.ts` | Who may use it: this computer always; other devices (phone over Wi-Fi or `tailscale serve`) log in with `STUDYSPACE_PASSWORD` (session cookie). Host allowlist, `X-StudySpace` header on writes, folder routes local-only. |
 | `types.ts` | Shared server types. |
 | `db/index.ts` | `openDatabase`, the `transaction` helper and `runMigrations`. Migrations are transactional and recorded; it refuses a DB that is newer than the code. |
-| `db/migrations.ts` | Schema v1–v9 (see the table below). Add a new version for any schema change; never edit an old one. |
-| `db/*.ts` | CRUD per table: `directories`, `documents`, `resources`, `annotations`, `progress`, `noteHighlights`, `documentHighlights`, `bookmarks` (tree, cycle check, outline import), `sessions`. Create functions accept a client-supplied `id`, so undo/redo can re-create rows with the same id. |
+| `db/migrations.ts` | Schema v1–v12 (v12: `documents.hidden`) (see the table below). Add a new version for any schema change; never edit an old one. |
+| `db/*.ts` | CRUD per table: `directories`, `documents`, `resources`, `annotations`, `progress`, `noteHighlights`, `noteMarkers`, `documentHighlights`, `bookmarks` (tree, cycle check, outline import), `sessions`. Create functions accept a client-supplied `id`, so undo/redo can re-create rows with the same id. |
 | `library/fingerprint.ts` | Document identity: `v1:` + sha256(size + first and last 256 KiB). Moved or renamed files keep their data. |
 | `library/fileKinds.ts` | Which files the library shows: PDFs, slides (`.pptx`, `.ppt`), HTML (`.html`, `.htm`) and Markdown (`.md`); `DocumentRecord.kind` comes from the extension. `isPaged` (pdf, slides), `canEditFile` (pdf). |
-| `library/scanner.ts`, `library/sync.ts` | Find PDFs and slides (with excludes) and sync them into the DB. Handles moves by fingerprint, flags missing files, and resets bookmarks when another program changes a file. |
+| `library/scanner.ts`, `library/sync.ts` | Find PDFs and slides and sync them into the DB. Excludes (`isExcluded`, `parseExclude`) hide folders and files: names at any depth, paths with `/`, globs `*` `**` `?`, `re:` regexes; hidden files are marked missing, so notes stay. Handles moves by fingerprint, flags missing files, and resets bookmarks when another program changes a file. |
 | `library/pathGuard.ts` | Every file access must resolve inside an enabled library folder. PDFs are streamed in place, with range requests. |
-| `pdf/operations.ts` | pdf-lib edits: insert, copy, delete, replace, rotate and reorder pages; write/strip StudySpace annotations (`T="StudySpace"`); `writeOutline`; `composePdf`. |
+| `pdf/operations.ts` | pdf-lib edits: insert, copy, delete, replace, rotate and reorder pages; write/strip StudySpace annotations (`T="StudySpace"`; text boxes as FreeText in Helvetica, `buildTextBox`); `writeOutline`; `composePdf`. |
 | `pdf/coords.ts` | Normalized display coordinates (0..1 from the top-left) ⇄ PDF space, with `/Rotate` and CropBox; rotates rects and points. |
 | `pdf/pageMap.ts` | Page renumbering after insert, delete or move, and its inverse. It keeps notes, highlights and bookmarks on the right page. |
 | `services/fileWriter.ts` | Atomic writes: temp file, fsync, rename. |
@@ -86,14 +87,17 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. I
 | `services/pdfTools.ts` | Extract, split and merge into new PDFs: written only inside library folders, never overwriting (`name (2).pdf`). Notes, highlights and bookmarks are copied along. |
 | `services/ocr.ts` | OCR jobs on a temporary copy (`ocrmypdf --redo-ocr`) and region OCR (`tesseract`). The library file only changes when the user chooses *Add to PDF*. |
 | `services/fileOps.ts` | Rename a library file in place; delete = move to the desktop Trash (freedesktop.org layout, `config.trashDir`) and mark the row missing, so notes stay; restore it from there. |
+| `services/noteImages.ts` | Pictures kept as notes: `saveNoteImage` (type from the first bytes, no SVG, ≤ 25 MB) writes `<dataDir>/images/<sha256>.<ext>`, never deleted; `noteImageFile` only accepts such names. Routes `POST /images`, `GET /images/:name`. |
 | `services/slides.ts` | `SlideConverter`: slides → PDF with LibreOffice (once per version, in `<dataDir>/converted/`). A snap LibreOffice works in `~/snap/libreoffice/common/studyspace`. Slides are read-only: `editFile` refuses them, and `resolveReadablePdf` gives their PDF as a source. |
 | `ai/` | AI provider registry; only `none` for now. |
 
 **Tables:**
-- `directories`, `documents`, `resources` (notes of 5 kinds, scoped to a page, a range or the document), `annotations` (highlight, area, ink), `reading_progress`.
+- `directories`, `documents`, `resources` (notes of 5 kinds, scoped to a page, a range or the document), `annotations` (highlight, area, ink, text box), `reading_progress`.
 - `document_history` (file-edit undo), `note_highlights`, `bookmarks` (tree via `parent_id`, `position` REAL, `top` on the page), `schema_migrations`.
 - v8: `document_highlights` (text highlights on HTML/Markdown, quote + context), `sessions` (other devices' logins, token hashes), `reading_progress.top` (how far down a document without pages).
 - v9: `resources.styles` (JSON: colours picked for single headings, labels or marks of a note; key from `rehypeNoteStyles`).
+- v10: `annotations.kind` also `'text'` (text boxes: `rects[0]` the box, `stroke_width` the font size as a share of the page width; table rebuilt); `resources.marker_x` / `marker_y` (a note's marker; replaced by v11).
+- v11: `note_markers` (markers on pages that open a note at a passage: `page`, `x`, `y`, `quote` / `prefix` / `suffix`; several per note); v10's marker columns moved in and dropped.
 
 **Tests:** `server/test/*.test.ts` (vitest), with temp dirs and generated PDFs from `helpers.ts`. OCR and slides tests use stub binaries (`ocrmypdf`/`tesseract`, `soffice`).
 
@@ -118,15 +122,18 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. I
 | `lib/pageImage.ts`, `lib/snip.ts`, `lib/zip.ts` | Render pages and regions to images, the clipboard, window screenshots (`modern-screenshot`), and a minimal ZIP writer. |
 | `lib/pictures.ts` | Pages as pictures (one image, or a .zip): `makePictures`, the remembered format and sharpness. Used by `PageImagesDialog` and `SelectedFilesDialog`. |
 | `lib/tableRepair.ts` | Mends tables whose rows were broken over several lines (Gemini's copy), before rendering. |
-| `lib/math.ts`, `lib/noteAnchors.ts`, `lib/rehype*.ts` | Note rendering: LaTeX clean-up, money `$` escaping, bare formulas wrapped in `$` (`wrapBareLatex`), highlights inside notes (a formula counts as `$tex$` in the anchor text), heading colours, `==mark==` rendering. |
+| `lib/math.ts`, `lib/noteAnchors.ts`, `lib/rehype*.ts` | Note rendering: LaTeX clean-up, money `$` escaping, bare formulas wrapped in `$` (`wrapBareLatex`), highlights inside notes (a formula counts as `$tex$` in the anchor text; `anchorToRange` finds a passage again, for markers), heading colours, `==mark==` rendering. |
+| `lib/notePictures.ts` | What counts as a picture: a note whose whole content is `![](/api/images/<hash>.<ext>)` (`pictureSrc`, `isPicture`, `picturesOnPage`, `sortPictures`). App keeps them out of the notes list. |
 | `lib/pasteClean.ts` | Cleans an AI answer pasted into a note: cut before `@@START@@`, drop `[cite: n]`. |
 | `lib/noteColors.ts` | The notes' default highlighter colours (title, headings, bullet labels, `==marks==`): `NOTE_COLORS`, saved per browser in `localStorage` and applied as `--ss-note-*` variables on `<html>`; edited in Settings. `STYLE_COLORS`: the recolour menu's swatches. |
 | `lib/rehypeNoteStyles.ts` | Keys every default-coloured element of a note (`data-sk` = kind + text + `#n`) and applies the colour picked for it (`resources.styles`, `--hl`). Clicking one opens the `style` popover in `NoteAnnotations`. |
-| `components/viewer/` | `PdfViewer` (virtualized pages, current page, selection bars), `PdfPage`, `AnnotationOverlay` (draw, highlight, two-click boxes), `ViewerToolbar` (tools, colours, Page tools menu; by `kind`), `TextDocViewer` (HTML in a sandboxed frame, Markdown rendered; text highlights), `geometry.ts`. |
+| `components/viewer/` | `PdfViewer` (virtualized pages, current page, selection bars), `PdfPage`, `AnnotationOverlay` (draw, highlight, two-click boxes), `TextBoxes` (text boxes: type, edit, move; HTML layer), `NoteMarkers` (note markers: open, drag, place), `ViewerToolbar` (tools, colours, Page tools menu; by `kind`), `TextDocViewer` (HTML in a sandboxed frame, Markdown rendered; text highlights), `geometry.ts`. |
 | `components/ResourcePanel.tsx`, `ResourceEditor.tsx`, `NoteAnnotations.tsx`, `Markdown.tsx` | The notes column, the Markdown/KaTeX editor, and highlights or comments inside notes. |
-| `components/BookmarksPanel.tsx`, `LibraryPanel.tsx`, `SearchBox.tsx`, `StatusBar.tsx` | The left column (the files list also selects files: box, Shift+click, Space), search and the status bar. |
+| `components/BookmarksPanel.tsx`, `LibraryPanel.tsx`, `SearchBox.tsx`, `StatusBar.tsx` | The left column (the files list also selects files: box, Shift+click, Space; a library folder's own files sit under a closable *Files in …* row), search and the status bar. |
 | `components/LoginScreen.tsx` | `AuthGate`: the password screen for other devices. |
 | `components/*Dialog.tsx` | `GetTextDialog` (get text / OCR / bookmark sections / notes), `PageOpsDialog` (page edits), `PdfToolsDialog` (extract/split/merge), `PageImagesDialog`, `PageHalvesDialog`, `SelectedFilesDialog` (pictures / text / notes of each selected file, queued; `Shift+F`), `HelpDialog` (generated from the shortcuts), `SettingsDialog` (folders, note colours), `UnsavedDialog`. |
+| `components/PicturePanel.tsx`, `PicturePagesDialog.tsx` | The Pictures section: slides over the whole notes column (`D`; the notes stay mounted underneath), and the *Pages of this picture* window (`J`). |
+| `components/SidePane.tsx` | Side by side: `SidePane` (a read-only `PdfViewer` with its own page, zoom and bar), `OpenBesideDialog` (the picker), `loadSide` / `saveSide` (`localStorage` `ss-side`). App keeps the state (`side`, `swapSides`). |
 | `components/SnipOverlay.tsx`, `ui.tsx`, `index.css` | The window-screenshot overlay; shared UI (`Modal`, `Button`, `NumberInput`, `Kbd`, `KeyHint`, toasts); theme tokens and dark mode. |
 
 ### Conventions
@@ -182,6 +189,15 @@ Everything below is done and verified in the browser on scratch copies.
 30. Formulas pasted without `$` (a Gemini answer copied by selection: `n^{\text{th}}`, `X \sim \text{Bern}(p)`) render as math. Display equations are lost in such a copy and can't be recovered. Checked by rendering the user's text (no KaTeX errors); not yet looked at in the browser.
 31. Select several files in the library (box, Shift+click, Space, Ctrl+A) and press `Shift+F`: one window lists them, each with *Pictures* (whole file, .zip), *Text* (.md / .txt) and *Notes* (item 32); clicks queue up and download one at a time. Pictures and text only for files with pages. Tested in Chromium only.
 32. Download a file's notes as a .zip of Markdown files, one per note (`Shift+N`, or ⬇ in the notes panel); for several files, *Notes* (`N`) in the `Shift+F` window. Works for HTML and Markdown files too. Tested in Chromium only.
+33. Two PDFs side by side: `\` (or the library row's two-columns button / `Shift+Enter`) shows a PDF beside the open one, with its own page (`Shift+←/→`) and zoom; read-only (saved highlights, copy text); `Shift+X` swaps the two; `|` closes; remembered after a reload; stacked on phones. Tested in Chromium only.
+34. Text boxes typed on a page (`Y`: click or drag a width, type; edit, move, recolour, resize; saved into the PDF as FreeText in Helvetica, Latin letters only there) and note markers (`K`: click a spot, write the note; clicking the marker opens and outlines the note; drag to move). All undoable. Tested in Chromium only; phones not tested.
+35. A marker can open a note at a passage: select text in a note → *Pin on page* (`K`) → click the page; clicking the marker scrolls the note to that passage and lights it up. Several markers per note; right-click removes one (undoable). Tested in Chromium only.
+36. Pictures as notes: `U` (or *Picture* under the notes) picks files; `Ctrl+V` pastes a copied picture outside a text box; drop a picture on the notes panel; pasting into a note's text puts the picture at the cursor. A picture note is a normal note whose content is `![](/api/images/<hash>.<ext>)` (no schema change); click it to open full size; `Shift+N` zips the pictures too. Tested in Chromium only; phones and Firefox not tested. Get text's *include my notes* still writes the picture link as is.
+39. Back / forward through jumps: `Alt+←` / `Backspace` goes back to the exact spot you jumped from (link, bookmark, note's page label, marker, typed page number, Home/End, search result), `Alt+→` / `Shift+Backspace` forward again; ↶ *p. N* / ↷ buttons in the status bar. Page turns aren't jumps; a quick scroll over 3+ pages is (2026-10-28). History lives in `PdfViewer` (50 places per open file). PDFs and slides only. Tested in Chromium only; Firefox (where `Alt+←` is also the browser's Back) and phones not tested. Copied into the main tree on 2026-10-28; the scroll rule copied on 2026-10-28 too.
+38. A Pictures section of its own: `D` (or *Pictures* under the notes) swaps the notes column for slides, just the picture over the whole column (controls only on hover); `U` / `Ctrl+V` / drop add one for the page; `Ctrl+←/→` step; `J` sets its pages (one, a range, the whole PDF) or removes it; a reminder chip on the PDF when the page has a picture. No schema change: a picture is a note whose content is only the picture link, so old picture notes moved there by themselves. Made in a worktree; copied into the main tree on 2026-10-27. Tested in Chromium only (and its iPhone profile); Firefox and real phones not tested.
+37. The notes panel has two tabs, *On this page* (page and range notes) and *Whole PDF*, each grouped by kind; *Open all* / *Close all* under the tabs (notes open by default) and an *Index* of numbered chips (2+ notes) that opens and scrolls to a note. Tested in Chromium only; phones and Firefox not tested.
+40. Settings → *Hide folders and files* hides files too: names at any depth (`*.md`), paths from the library folder (`CSE 301/*.md`, `**`), only the top (`/*.html`), regexes (`re:…`); hidden files keep their notes. The files lying in a library folder itself sit under one closable row, *Files in <label>*. Made in a worktree; copied into the main tree on 2026-11-01. Tested in Chromium only.
+41. Hide chosen files: `H` on a file, or select files and press *Hide*; the crossed-eye count at the top of the list (or `Shift+K`) opens the hidden files to unhide them. Migration v12 (`documents.hidden`). Made in the main tree (2026-11-01). Tested in Chromium only.
 28. Change the notes' default highlighter colours (title, heading levels, bullet header and label, `==marks==`) in Settings → Note colours; per browser, reset per colour or all. Tested in Chromium only.
 
 ## Change log
@@ -287,6 +303,71 @@ Everything below is done and verified in the browser on scratch copies.
   - Changed: `App.tsx` (`downloadNotes`, `Shift+N`, unpaged files kept in `selectedDocs`), `components/ResourcePanel.tsx` (⬇ in the header, `onDownloadNotes`), `components/SelectedFilesDialog.tsx` (*Notes* button and job, `WHATS`, pictures/text off for unpaged files, "1 page"), `components/LibraryPanel.tsx` (any file selectable, *Download…*), `lib/shortcuts.ts` (`downloadNotes`, `sfNoteFiles`).
   - Docs: user guide §3, §4, §5, §12 (regenerated); README; HANDOFF 40.
   - Verified: typecheck, 102 tests, build (rebuilt `web/dist`); Chromium on scratch 4399/5199 with seeded notes (zip contents and names checked on disk, Bengali title, toast without notes, Markdown row in the Shift+F window); the item 31 test still passes. Real PDFs unchanged during testing.
+- **2026-10-23: two PDFs side by side (item 33, HANDOFF 41).**
+  - New: `web/src/components/SidePane.tsx`.
+  - Changed: `components/viewer/PdfViewer.tsx` (`readOnly`), `App.tsx` (`side`, `openBeside`, `swapSides`, keys, split layout with `ResizeHandle`), `components/LibraryPanel.tsx` (row button, `Shift+Enter`), `lib/shortcuts.ts` (group "Side by side": `sideOpen`, `sideClose`, `sideSwap`, `sideNext`, `sidePrev`; `fileBeside`), `scripts/shortcut-tables.mts` (escapes `|`).
+  - Docs: user guide §3, §4 (*Two PDFs side by side*), §12 (regenerated); README; HANDOFF 41 (and a note in "Problems already solved").
+  - Fixed while testing: a non-stable `onLoaded` reloaded the PDF beside on every page turn.
+  - Verified: typecheck, 102 tests, build (rebuilt `web/dist`); Chromium on scratch 4399/5199 (open, keys, copy-only bar, swap incl. the unsaved prompt, reload, files-list key, close, phone layout). Real PDFs not touched by testing (`CSE 301 …/HT_Probability_Revision_Notes.pdf` changed at 22:47, same size and time as the LaTeX `build/main.pdf` beside it, not a StudySpace edit).
+- **2026-10-24: text boxes and note markers (item 34, HANDOFF 42).**
+  - New: `web/src/components/viewer/TextBoxes.tsx`, `web/src/components/viewer/NoteMarkers.tsx`.
+  - Server: migration v10; `types.ts` (`"text"` kind, `Resource.marker`); `db/annotations.ts` (update `rects`, `strokeWidth`); `db/resources.ts` (`marker`); `app.ts` (schemas); `pdf/operations.ts` (`buildTextBox`, `wrapText`); `pdf/coords.ts` (`displayHeight`); `services/documentEditor.ts` (`rotateMarkers`, rotate-undo restores markers); `services/pdfTools.ts` (copies markers); tests in `migrations`, `resources`, `editing`, `pdftools`.
+  - Web: `lib/types.ts`, `lib/api.ts` (`AnnotationPatch`, `marker`), `lib/shortcuts.ts` (`text`, `marker`, `selEditText`), `viewer/geometry.ts` (tools, `TEXT_*`), `PdfPage.tsx`, `PdfViewer.tsx` (text box menu, markers), `ViewerToolbar.tsx` (tools, sizes), `ResourceEditor.tsx` (marker), `ResourcePanel.tsx` (`focusRequest`, 📍), `App.tsx` (`textColor`, `textSize`, general `updateAnnotation`, markers, `setNoteMarker`), `GetTextDialog.tsx` / `SelectedFilesDialog.tsx` (highlight kinds only).
+  - Docs: user guide §5 (*Note markers*), §6 (*Text boxes*), §7, §12 (regenerated); README; HANDOFF 42.
+  - Verified: typecheck, 106 tests, build (rebuilt `web/dist`); Chromium on scratch 4399/5199 (see HANDOFF 42) and `pdftoppm` of the saved copy. Migration v10 ran on the user's real DB (their `tsx watch` server); checked read-only: v10, 482 annotations kept. Real PDFs not touched by testing (only the LaTeX-built `HT_Probability_Revision_Notes.pdf`, 23:49 on 10-23).
+- **2026-10-24: markers at a passage of a note (item 35, HANDOFF 43).** Made in a worktree (the user reads on 5173).
+  - Server: migration v11 (`note_markers`, v10 columns moved and dropped); new `db/noteMarkers.ts`; `types.ts` (`NoteMarker`, `Resource.marker` removed); `db/resources.ts` (marker code out); `app.ts` (marker routes); `services/documentEditor.ts` (markers remapped with pages, snapshot/undo, `insertRow` skips dropped columns); `services/pdfTools.ts`; tests in `migrations`, `resources`, `pdftools`.
+  - Web: `lib/types.ts`, `lib/api.ts` (`NoteMarkerInput`, marker calls), `lib/noteAnchors.ts` (`anchorToRange`), `lib/shortcuts.ts` (`notePin`, `markerDelete`), `NoteAnnotations.tsx` (*Pin on page*), `ResourcePanel.tsx` (`reveal`, passage light-up, 📍 cycling), `ResourceEditor.tsx`, `viewer/NoteMarkers.tsx` (`PageMarker`, remove), `PdfPage.tsx`, `PdfViewer.tsx`, `App.tsx` (`noteMarkers`, pin flow), `index.css` (`.ss-passage`).
+  - Docs: user guide §5 (*Note markers* rewritten), §12 (regenerated); README; HANDOFF 43; memory note on leaving 5173 alone.
+  - Fixed while testing: the passage light-up sometimes ran before the reopened card had rendered its text; now a layout effect waits for it.
+  - Verified: typecheck, 107 tests, build; Chromium on scratch 4399/5199 from the worktree (see HANDOFF 43). The user's tree and servers were not touched while working.
+- **2026-10-25: area highlight corners by right-click (item 33 follow-up).** The user got stray boxes from single-click corners. Made in a worktree (the user reads on 5173).
+  - `web/src/components/viewer/AnnotationOverlay.tsx` (`onContextMenu` sets both corners; a left click makes no box); labels in `lib/shortcuts.ts` (`area`, `ocr`) and `ViewerToolbar.tsx`. Same for the OCR-region tool.
+  - Docs: user guide §4, §6, §12; README; HANDOFF.
+  - Verified: typecheck; Chromium on scratch 4399/5199: left clicks make nothing, right+right makes a box, right then left or Esc cancels, drag still works, OCR region opens its window, no native menu. Real PDFs only copied, never written. Not tested on a real touchpad or Firefox.
+
+- **2026-10-25: hide the title bar and tools bar.** `web/src/App.tsx` (`barsHidden`, persisted as `ss-bars-hidden`; the header and `ViewerToolbar` are not rendered; floating restore button in `main`; title-bar button), `lib/shortcuts.ts` (`hideBars`, `Shift+V`). Docs: user guide §2, §12; README. Verified: typecheck; Chromium on scratch 4399/5199 (key, both buttons, kept after reload, tool keys still work, screenshot). Not tested on a phone or in Firefox.
+  - **Fix, same day:** tool keys, colours 1–9, `Esc` and `T` live in `ViewerToolbar`, so not rendering it killed them. It now stays mounted, collapsed to zero height (`hidden` prop); the `T` menu still opens. Verified in Chromium on scratch: `A`, `P`, `Esc`, `T`, `L` with the bars hidden.
+
+- **2026-10-25: text box colour, size and width while typing.** `web/src/components/viewer/TextBoxes.tsx` (bar over the box being edited: colours, smaller/larger text by ~15% a step, right-edge width handle; `commit` saves only what changed), `lib/shortcuts.ts` (`textBigger` `Ctrl+]`, `textSmaller` `Ctrl+[`, `textColour` `Ctrl+Shift+1–5`; `Alt+digit` avoided: Firefox tab keys). Docs: user guide §6, §12. Verified: typecheck; Chromium on scratch 4399/5199 (create with colour/size/width, edit again by keys, saved values via the API, Ctrl+Z restores). The typeface is still Helvetica only (a font choice would need a schema change). Not tested in Firefox or on a phone.
+
+- **2026-10-27: pictures as notes (item 36, HANDOFF 44).** Made in a worktree in the scratchpad (the user reads on 5173).
+  - New: `server/src/services/noteImages.ts`, `server/test/noteimages.test.ts`.
+  - Server: `app.ts` (`POST /images`, `GET /images/:name`). Web: `lib/api.ts` (`uploadImage`), `lib/shortcuts.ts` (`addPicture` `U`, `pastePicture` `Ctrl+V`), `App.tsx` (`addPicture`, file input, window paste), `ResourcePanel.tsx` (*Picture* button, drop, `firstLine`), `ResourceEditor.tsx` (paste a picture), `Markdown.tsx` (link to full size), `lib/notesZip.ts` (`fetchNoteImages`, `images/` folder), `SelectedFilesDialog.tsx`, `index.css`.
+  - Docs: user guide §5 (*Pictures as notes*), §12 (regenerated), §13; README (API); HANDOFF 44.
+  - Verified: typecheck, 111 tests; Chromium on scratch 4399/5199 (key, paste, drop, editor paste, undo/redo, reload, zip). Real PDFs only copied. Not tested in Firefox or on a phone. Copied into the main tree the same day.
+
+- **2026-10-27: whole-PDF notes in their own tab; open/close all; index (item 37, HANDOFF 45).** Made in a worktree (the user reads on 5173).
+  - `web/src/components/ResourcePanel.tsx`: tabs (`tab`, `activeTab`, `pageItems`, `wholeItems`), *Open all* / *Close all* (`setAllOpen`), the index (`ordered`, `jumpTo`, `noteName`), `seenIds`. Fixed: `scrollIntoView()` returns a promise in new Chromium and was returned from a layout effect ("destroy is not a function").
+  - Docs: user guide §5; HANDOFF 45.
+  - Verified: typecheck; Chromium on scratch 4399/5199 from the worktree (tabs, counts, open/close all, `C`, index jump, adding on the Whole PDF tab, page 2). Not tested in Firefox or on a phone.
+
+- **2026-10-27: Pictures section (item 38, HANDOFF 46).** Made in a worktree in the scratchpad (the user reads on 5173); copied into the main tree the same day.
+  - New: `web/src/lib/notePictures.ts`, `web/src/components/PicturePanel.tsx`, `web/src/components/PicturePagesDialog.tsx`.
+  - Changed: `App.tsx` (`pictureList` / `noteList`, `slidesOpen`, `slideIndex`, `slideWhere`, `addPicture` with a client id, `createResource(input, { quiet })`, `rightContent`, reminder chip, keys), `components/ResourcePanel.tsx` (*Pictures* button with the count replaces *Picture*; `pictureCount`, `onOpenPictures`), `lib/shortcuts.ts` (groups "Pictures" and "In the picture pages window": `viewPictures` `D`, `pictureNext/Prev`, `pictureWhere` `J`, `pw*`; `addPicture` / `pastePicture` moved there).
+  - Docs: user guide §2, §5 (*Pictures*, replaces *Pictures as notes*), §12 (regenerated); README (API); HANDOFF 46.
+  - Verified: typecheck; Chromium on scratch 4399/5199 from the worktree (add by file, paste, drop, stepping, pages window, reminder, remove and undo, draft kept, iPhone profile). Real PDFs only copied.
+
+- **2026-10-27: Back / forward through jumps (item 39, HANDOFF 47).** Made in a worktree (the user reads on 5173); copied into the main tree on 2026-10-28.
+  - `web/src/components/viewer/PdfViewer.tsx` (`history`, `scrollToSpot`, `hereSpot`, `goBack`, `goForward`, `onHistoryChange`), `TextDocViewer.tsx` (no-ops), `components/StatusBar.tsx` (↶ / ↷), `App.tsx` (`navHistory`, keys, `PAGED_ONLY`), `lib/shortcuts.ts` (`historyBack`, `historyForward`).
+  - Docs: user guide §4 (*Going back*), §12 (regenerated); HANDOFF 47.
+  - Verified: typecheck; Chromium on scratch 4399/5199 (worktree): jumps recorded, page turns not, exact scroll restore, forward, Backspace, chain from Home/End.
+
+- **2026-10-28: Back also for fast scrolling (item 39 follow-up).** The user said Back/Forward "don't work": they scroll by hand, which wasn't recorded. Made in a worktree (the user reads on 5173); copied into the main tree the same day.
+  - `web/src/components/viewer/PdfViewer.tsx` (`remember`, `burst`, `jumpedAt`, a `scroll` listener). Docs: user guide §4, HANDOFF 47.
+  - Verified: typecheck; Chromium on scratch 4399/5199 from the worktree: slow reading over 18 pages records nothing; a fast scroll shows ↶ *p. 23*, Backspace returns to page 23, Shift+Backspace forward; a typed jump is recorded once. Not tested in Firefox or on a phone.
+
+- **2026-11-01: hide files; root files under one row (item 40, HANDOFF 48).** Made in a worktree in the scratchpad (the user reads on 5173); copied into the main tree the same day.
+  - Server: `library/scanner.ts` (`parseExclude`, `excludeError`, `isExcluded` for files and globs/regexes, files checked in the scan), `app.ts` (`excludeList` validation), `services/fileOps.ts` (rename refuses a hidden name), `services/pdfTools.ts` (new PDFs too); `test/discovery.test.ts` (3 new).
+  - Web: `components/SettingsDialog.tsx` (*Hide folders and files*, `HideHelp`, Enter saves, hidden count), `components/LibraryPanel.tsx` (`looseKey`, `folderRow`, `renderRoot`; `folderKeys` for root files).
+  - Docs: user guide §3; README (`STUDYSPACE_EXCLUDES`); HANDOFF 48.
+  - Verified: typecheck, 114 tests, build; Chromium on scratch 4399/5199 from the worktree. Real PDFs only copied (mtimes unchanged).
+
+- **2026-11-01: hide chosen files (item 41, HANDOFF 49).** Worked directly in the main tree at the user's request.
+  - Server: migration v12, `db/documents.ts` (`setDocumentsHidden`), `app.ts` (`POST /library/hidden`, search skips hidden), `types.ts`; `test/fileops.test.ts`.
+  - Web: new `components/HiddenFilesDialog.tsx`; `App.tsx` (`setFilesHidden`, `shownDocuments`), `LibraryPanel.tsx`, `lib/api.ts`, `lib/tabSync.ts`, `lib/types.ts`, `lib/shortcuts.ts` (`hiddenFiles`, `fileHide`, `hf*`).
+  - Docs: user guide §3, §12 (regenerated); HANDOFF 49.
+  - Verified: typecheck, 115 tests; Chromium on scratch 4399/5199. Real PDFs untouched.
 
 ## Open questions for the user
 

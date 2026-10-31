@@ -268,4 +268,73 @@ export const migrations: Migration[] = [
       ALTER TABLE resources ADD COLUMN styles TEXT NOT NULL DEFAULT '{}';
     `,
   },
+  {
+    version: 10,
+    name: "text_boxes_note_markers",
+    up: `
+      -- Text boxes typed on a page: a new annotation kind. SQLite can't change a CHECK, so the
+      -- table is rebuilt (nothing references annotations).
+      CREATE TABLE annotations_new (
+        id           TEXT PRIMARY KEY,
+        document_id  TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+        page         INTEGER NOT NULL CHECK (page >= 1),
+        kind         TEXT NOT NULL CHECK (kind IN ('highlight', 'area', 'ink', 'text')),
+        color        TEXT NOT NULL,
+        opacity      REAL NOT NULL DEFAULT 0.4,
+        rects        TEXT NOT NULL DEFAULT '[]',
+        paths        TEXT NOT NULL DEFAULT '[]',
+        stroke_width REAL NOT NULL DEFAULT 0.003,
+        text         TEXT NOT NULL DEFAULT '',
+        created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      INSERT INTO annotations_new SELECT id, document_id, page, kind, color, opacity, rects, paths, stroke_width, text,
+        created_at, updated_at FROM annotations;
+      DROP TABLE annotations;
+      ALTER TABLE annotations_new RENAME TO annotations;
+      CREATE INDEX idx_annotations_document_page ON annotations(document_id, page);
+      -- A note's marker on its (first) page: clicking it opens the note. Normalised display coordinates.
+      ALTER TABLE resources ADD COLUMN marker_x REAL;
+      ALTER TABLE resources ADD COLUMN marker_y REAL;
+    `,
+  },
+  {
+    version: 11,
+    name: "note_markers",
+    up: `
+      -- Markers on pages that open a note, possibly at a passage of it (quote + context, anchored
+      -- like note highlights; empty quote = the whole note). A note can have several. They replace
+      -- v10's single marker per note (resources.marker_x/y), which are moved here.
+      CREATE TABLE note_markers (
+        id          TEXT PRIMARY KEY,
+        resource_id TEXT NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
+        page        INTEGER NOT NULL CHECK (page >= 1),
+        x           REAL NOT NULL,
+        y           REAL NOT NULL,
+        quote       TEXT NOT NULL DEFAULT '',
+        prefix      TEXT NOT NULL DEFAULT '',
+        suffix      TEXT NOT NULL DEFAULT '',
+        created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+      );
+      CREATE INDEX idx_note_markers_resource ON note_markers(resource_id);
+      -- Version-4 UUIDs, so undo/redo can recreate these with the same id like any other.
+      INSERT INTO note_markers (id, resource_id, page, x, y)
+        SELECT lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))), 2)
+               || '-a' || substr(lower(hex(randomblob(2))), 2) || '-' || lower(hex(randomblob(6))),
+               r.id, rp.page_start, r.marker_x, r.marker_y
+        FROM resources r JOIN resource_pages rp ON rp.resource_id = r.id
+        WHERE r.marker_x IS NOT NULL AND r.marker_y IS NOT NULL;
+      ALTER TABLE resources DROP COLUMN marker_x;
+      ALTER TABLE resources DROP COLUMN marker_y;
+    `,
+  },
+  {
+    version: 12,
+    name: "documents_hidden",
+    up: `
+      -- Files the user hid from the library list (picked by hand; rules in directories.excludes
+      -- are separate). The file and its notes stay; the list in the app unhides them.
+      ALTER TABLE documents ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ];

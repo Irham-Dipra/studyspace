@@ -39,6 +39,23 @@ describe("resource CRUD", () => {
     await request(ctx.app).delete(`/api/resources/${id}`).expect(404);
   });
 
+  it("keeps several markers per note, each at a passage or the whole note", async () => {
+    const note = (await request(ctx.app).post(`/api/documents/${docId}/resources`).send({ type: "note", scope: "range", pageStart: 4, pageEnd: 6, content: "# A\n\nfirst part\n\n# B\n\nsecond part" }).expect(201)).body;
+    const whole = (await request(ctx.app).post(`/api/resources/${note.id}/markers`).send({ page: 4, x: 0.25, y: 0.6 }).expect(201)).body;
+    expect(whole).toMatchObject({ resourceId: note.id, page: 4, x: 0.25, y: 0.6, quote: "" });
+    const at = (await request(ctx.app).post(`/api/resources/${note.id}/markers`).send({ page: 5, x: 0.5, y: 0.1, quote: "second part", prefix: "B" }).expect(201)).body;
+    const list = (await request(ctx.app).get(`/api/documents/${docId}/note-markers`)).body;
+    expect(list.map((m: { id: string }) => m.id)).toEqual([whole.id, at.id]);
+    expect((await request(ctx.app).patch(`/api/note-markers/${at.id}`).send({ x: 0.7, page: 6 }).expect(200)).body).toMatchObject({ x: 0.7, page: 6, quote: "second part" });
+    await request(ctx.app).post(`/api/resources/${note.id}/markers`).send({ page: 1, x: 2, y: 0 }).expect(400);
+    await request(ctx.app).post(`/api/resources/${note.id}/markers`).send({ id: whole.id, page: 1, x: 0, y: 0 }).expect(409);
+    await request(ctx.app).delete(`/api/note-markers/${whole.id}`).expect(204);
+    await request(ctx.app).delete(`/api/note-markers/${whole.id}`).expect(404);
+    // Deleting the note deletes its markers.
+    await request(ctx.app).delete(`/api/resources/${note.id}`).expect(204);
+    expect((await request(ctx.app).get(`/api/documents/${docId}/note-markers`)).body).toEqual([]);
+  });
+
   it("validates input", async () => {
     const bad = [
       { type: "bogus", scope: "page", pageStart: 1 },

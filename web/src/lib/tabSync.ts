@@ -34,7 +34,7 @@ export function onRemoteChange(listener: (change: TabChange) => void): () => voi
 export function classifyMutation(url: string): { scope: "doc" | "library"; file: boolean } | null {
   // Reading position and page counts are per tab / self-healing; AI calls create resources via their own response.
   if (/\/progress$|\/meta$/.test(url)) return null;
-  if (/^\/directories|^\/library\/scan|^\/pdf-tools\/|\/(rename|trash|restore)$/.test(url)) return { scope: "library", file: false };
+  if (/^\/directories|^\/library\/(scan|hidden)|^\/pdf-tools\/|\/(rename|trash|restore)$/.test(url)) return { scope: "library", file: false };
   // OCR runs on a copy; only "Add to PDF" (apply) changes the file.
   if (/^\/ocr\/jobs\/[^/]+\/apply$/.test(url)) return { scope: "doc", file: true };
   if (/^\/ocr\/|\/ocr$/.test(url)) return null;

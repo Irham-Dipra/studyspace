@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Ban, Copy, Highlighter, MessageSquare, MessageSquarePlus, Palette, RotateCcw, Trash2, X } from "lucide-react";
+import { Ban, Copy, Highlighter, MapPin, MessageSquare, MessageSquarePlus, Palette, RotateCcw, Trash2, X } from "lucide-react";
 import { selectionToAnchor } from "../lib/noteAnchors";
 import { STYLE_COLORS } from "../lib/noteColors";
 import { copyText } from "../lib/pageImage";
@@ -125,6 +125,8 @@ interface PopoverProps {
   onDelete: (id: string) => void;
   /** Offers "Note": the selected text into a new note (documents; inside a note it isn't offered). */
   onQuote?: (text: string) => void;
+  /** Offers "Pin on page" (notes): a marker on the page, placed next, that opens the note at this text. */
+  onPin?: (resourceId: string, anchor: Anchor) => void;
   /** The colour picked for a note's heading/label/mark, and changing it (null = back to the default). */
   styleOf?: (resourceId: string, key: string) => string | undefined;
   onStyle?: (resourceId: string, key: string, color: string | null) => void;
@@ -134,7 +136,7 @@ interface PopoverProps {
  * Floating bar for a text selection inside a note (or an HTML / Markdown document), or the menu of an
  * existing highlight there.
  */
-export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwitch, onCreate, onUpdate, onDelete, onQuote, styleOf, onStyle }: PopoverProps) {
+export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwitch, onCreate, onUpdate, onDelete, onQuote, onPin, styleOf, onStyle }: PopoverProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const highlight = popover.kind === "highlight" ? highlights.find((h) => h.id === popover.highlightId) : undefined;
   const [comment, setComment] = useState(highlight?.comment ?? "");
@@ -174,6 +176,12 @@ export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwi
     if (popover.kind === "selection") {
       if (color) {
         void highlightWith(color);
+        return true;
+      }
+      if (onPin && matches(e, "notePin")) {
+        onPin(popover.resourceId, popover.anchor);
+        window.getSelection()?.removeAllRanges();
+        onClose();
         return true;
       }
       if (onQuote && matches(e, "selNote")) {
@@ -259,6 +267,17 @@ export function NotePopovers({ popover, highlights, defaultColor, onClose, onSwi
                 else onClose();
               }}
             />
+            {onPin && (
+              <PopButton
+                icon={<MapPin className="size-4" />}
+                label="Pin on page"
+                onClick={() => {
+                  onPin(popover.resourceId, popover.anchor);
+                  window.getSelection()?.removeAllRanges();
+                  onClose();
+                }}
+              />
+            )}
             {onQuote && (
               <PopButton
                 icon={<MessageSquarePlus className="size-4" />}

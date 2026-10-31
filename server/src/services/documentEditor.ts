@@ -10,6 +10,7 @@ import { bookmarkTree, type BookmarkNode } from "../db/bookmarks.js";
 import { listAnnotations } from "../db/annotations.js";
 import { getProgress, saveProgress } from "../db/progress.js";
 import { setResourcePages } from "../db/resources.js";
+import { listNoteMarkersForDocument } from "../db/noteMarkers.js";
 import { fingerprintFile } from "../library/fingerprint.js";
 import { resolveInsideRoots } from "../library/pathGuard.js";
 import { canEditFile, isPaged } from "../library/fileKinds.js";
@@ -111,6 +112,8 @@ interface Snapshot {
   /** Optional because snapshots taken before migration 6 lack them. */
   bookmarks?: Row[];
   bookmarksDirty?: number;
+  /** Optional because snapshots taken before migration 11 lack them. */
+  noteMarkers?: Row[];
 }
 
 function takeSnapshot(db: DB, documentId: string): Snapshot {
@@ -128,11 +131,14 @@ function takeSnapshot(db: DB, documentId: string): Snapshot {
     annotationsDirty: (db.prepare("SELECT annotations_dirty AS d FROM documents WHERE id = ?").get(documentId) as { d: number }).d,
     bookmarks: all("SELECT * FROM bookmarks WHERE document_id = ?"),
     bookmarksDirty: (db.prepare("SELECT bookmarks_dirty AS d FROM documents WHERE id = ?").get(documentId) as { d: number }).d,
+    noteMarkers: all("SELECT m.* FROM note_markers m JOIN resources r ON r.id = m.resource_id WHERE r.document_id = ?"),
   };
 }
 
 function insertRow(db: DB, table: string, row: Row): void {
-  const cols = Object.keys(row);
+  // Old snapshots may hold columns a later migration dropped (resources.marker_x/y, v10 → v11).
+  const known = new Set((db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name));
+  const cols = Object.keys(row).filter((c) => known.has(c));
   db.prepare(`INSERT OR REPLACE INTO ${table} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`).run(
     ...(cols.map((c) => row[c]) as (string | number | null)[]),
   );
@@ -291,6 +297,10 @@ function remapAfterInsert(db: DB, documentId: string, after: number, count: numb
     const p = mapPageAfterInsert(a.page, after, count);
     if (p !== a.page) db.prepare("UPDATE annotations SET page = ? WHERE id = ?").run(p, a.id);
   }
+  for (const m of listNoteMarkersForDocument(db, documentId)) {
+    const p = mapPageAfterInsert(m.page, after, count);
+    if (p !== m.page) db.prepare("UPDATE note_markers SET page = ? WHERE id = ?").run(p, m.id);
+  }
   // Page objects keep their identity on insertion, so the file's own bookmarks stay correct.
   db.prepare("UPDATE bookmarks SET page = page + ? WHERE document_id = ? AND page > ?").run(count, documentId, after);
   const prog = getProgress(db, documentId);
@@ -319,6 +329,12 @@ function remapAfterDelete(db: DB, documentId: string, map: DeletionMap, policy: 
     const p = map.map(a.page);
     if (p === null) db.prepare("DELETE FROM annotations WHERE id = ?").run(a.id);
     else if (p !== a.page) db.prepare("UPDATE annotations SET page = ? WHERE id = ?").run(p, a.id);
+  }
+  // A marker goes with its page (undo brings it back); its note may live on.
+  for (const m of listNoteMarkersForDocument(db, documentId)) {
+    const p = map.map(m.page);
+    if (p === null) db.prepare("DELETE FROM note_markers WHERE id = ?").run(m.id);
+    else if (p !== m.page) db.prepare("UPDATE note_markers SET page = ? WHERE id = ?").run(p, m.id);
   }
   // A bookmark on a deleted page moves to the next surviving page. The file's copy of it now points at
   // a removed page, so the bookmarks need saving again.
@@ -466,6 +482,15 @@ function rotateAnnotations(db: DB, documentId: string, pages: Set<number>, angle
   }
 }
 
+/** Turns note markers on turned pages, like the annotations. */
+function rotateMarkers(db: DB, documentId: string, pages: Set<number>, angle: number, only?: (id: string) => boolean): void {
+  for (const m of listNoteMarkersForDocument(db, documentId)) {
+    if (!pages.has(m.page) || (only && !only(m.id))) continue;
+    const [x, y] = rotateNormPoint([m.x, m.y], angle);
+    db.prepare("UPDATE note_markers SET x = ?, y = ? WHERE id = ?").run(x, y, m.id);
+  }
+}
+
 /** Turns pages clockwise by 90, 180 or 270 degrees. Page numbers don't change. */
 export function rotateDocumentPages(db: DB, opts: EditorOptions, id: string, pages: number[], angle: number, fp?: string) {
   const sorted = [...new Set(pages)].sort((a, b) => a - b);
@@ -478,6 +503,7 @@ export function rotateDocumentPages(db: DB, opts: EditorOptions, id: string, pag
     afterWrite: () => {
       const set = new Set(sorted);
       rotateAnnotations(db, id, set, angle);
+      rotateMarkers(db, id, set, angle);
       // A bookmark's spot on a turned page: flipped upside down, or (turned sideways) the top of the page.
       for (const b of db.prepare("SELECT id, page, top FROM bookmarks WHERE document_id = ? AND top IS NOT NULL").all(id) as {
         id: string;
@@ -522,6 +548,9 @@ export function moveDocumentPages(db: DB, opts: EditorOptions, id: string, pages
       }
       for (const a of listAnnotations(db, id)) {
         if (map(a.page) !== a.page) db.prepare("UPDATE annotations SET page = ? WHERE id = ?").run(map(a.page), a.id);
+      }
+      for (const m of listNoteMarkersForDocument(db, id)) {
+        if (map(m.page) !== m.page) db.prepare("UPDATE note_markers SET page = ? WHERE id = ?").run(map(m.page), m.id);
       }
       // The file's own outline points at page objects, which moved with their pages, so it stays right.
       for (const b of db.prepare("SELECT id, page FROM bookmarks WHERE document_id = ?").all(id) as { id: string; page: number }[]) {
@@ -640,6 +669,19 @@ export async function undoEdit(db: DB, opts: EditorOptions, id: string, editId: 
       for (const a of snap.annotations) insertRow(db, "annotations", a);
       // Drawn on a turned page after the turn: turn back with it.
       if (latest.kind === "rotate") rotateAnnotations(db, id, new Set(params.pages), 360 - params.angle!, (aid) => !snapAnn.has(aid));
+
+      // Note markers: the same as annotations (after the notes, which they belong to, are back).
+      if (snap.noteMarkers) {
+        const snapMarkers = new Set(snap.noteMarkers.map((m) => m.id as string));
+        for (const m of listNoteMarkersForDocument(db, id)) {
+          if (snapMarkers.has(m.id)) continue;
+          const p = unmap(m.page);
+          if (p === null) db.prepare("DELETE FROM note_markers WHERE id = ?").run(m.id);
+          else if (p !== m.page) db.prepare("UPDATE note_markers SET page = ? WHERE id = ?").run(p, m.id);
+        }
+        for (const m of snap.noteMarkers) insertRow(db, "note_markers", m);
+        if (latest.kind === "rotate") rotateMarkers(db, id, new Set(params.pages), 360 - params.angle!, (mid) => !snapMarkers.has(mid));
+      }
 
       // Bookmarks: back to how they were before the edit; newer ones are kept, mapped back. (Rows are
       // re-inserted parent-first; INSERT OR REPLACE on a parent would cascade-delete its children.)

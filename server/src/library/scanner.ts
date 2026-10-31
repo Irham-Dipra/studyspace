@@ -15,21 +15,86 @@ export interface ScannedFile {
 export const ALWAYS_SKIP = new Set(["node_modules", "__pycache__", "venv", ".venv", "dist", "build", "target"]);
 
 /**
- * Decides whether a directory (given as a root-relative path) is excluded.
- * An exclude containing "/" matches that relative path (and everything below it);
- * a bare name matches any directory with that name at any depth. Case-insensitive.
+ * One "hide" rule from a library folder's settings, matched against root-relative paths
+ * (forward slashes), case-insensitively:
+ * - `re:<regex>`: a regular expression tested against the whole relative path;
+ * - with a "/" (or starting with one): a path from the library folder, e.g. `Old/Drafts`, `CSE 301/*.md`;
+ * - otherwise a folder or file name at any depth, e.g. `Offllines`, `*.md`.
+ * `*` is any run of characters except "/", `**` crosses folders, `?` is one character.
+ * A rule that matches a folder hides everything inside it.
  */
-export function isExcluded(relDir: string, excludes: string[]): boolean {
-  const rel = relDir.toLowerCase();
-  const segments = rel.split("/");
-  for (const raw of excludes) {
-    const ex = raw.trim().replace(/^\/+|\/+$/g, "").toLowerCase();
-    if (!ex) continue;
-    if (ex.includes("/")) {
-      if (rel === ex || rel.startsWith(`${ex}/`)) return true;
-    } else if (segments.includes(ex)) {
-      return true;
+interface Rule {
+  /** "name": tested against each folder or file name; otherwise against the path and each folder above it. */
+  kind: "regex" | "path" | "name";
+  re: RegExp;
+}
+
+const ruleCache = new Map<string, Rule | null>();
+
+function globSource(glob: string): string {
+  let out = "";
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === "*") {
+      if (glob[i + 1] === "*") {
+        // "**/" also matches no folder at all.
+        if (glob[i + 2] === "/") (out += "(?:.*/)?"), (i += 2);
+        else (out += ".*"), i++;
+      } else out += "[^/]*";
+    } else if (c === "?") out += "[^/]";
+    else out += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  }
+  return out;
+}
+
+/** The rule for one exclude, or null when it is empty or a broken regex. */
+export function parseExclude(raw: string): Rule | null {
+  if (ruleCache.has(raw)) return ruleCache.get(raw)!;
+  let rule: Rule | null = null;
+  const text = raw.trim();
+  if (/^re:/i.test(text)) {
+    try {
+      const src = text.slice(3).trim();
+      if (src) rule = { kind: "regex", re: new RegExp(src, "i") };
+    } catch {
+      rule = null;
     }
+  } else {
+    const anchored = text.startsWith("/");
+    const glob = text.replace(/^\/+|\/+$/g, "");
+    if (glob) {
+      const kind = anchored || glob.includes("/") ? "path" : "name";
+      rule = { kind, re: new RegExp(`^${globSource(glob)}$`, "i") };
+    }
+  }
+  ruleCache.set(raw, rule);
+  return rule;
+}
+
+/** Why an exclude can't be used, or null when it is fine (only regexes can be broken). */
+export function excludeError(raw: string): string | null {
+  const text = raw.trim();
+  if (!/^re:/i.test(text)) return null;
+  try {
+    new RegExp(text.slice(3).trim(), "i");
+    return null;
+  } catch (e) {
+    return `Not a valid regular expression: ${text} (${(e as Error).message})`;
+  }
+}
+
+/**
+ * Decides whether a folder or file (given as a root-relative path) is hidden by the excludes:
+ * it, or a folder above it, matches one of them. See `parseExclude` for the rules.
+ */
+export function isExcluded(relPath: string, excludes: string[]): boolean {
+  const segments = relPath.split("/").filter(Boolean);
+  if (!segments.length) return false;
+  const prefixes = segments.map((_, i) => segments.slice(0, i + 1).join("/"));
+  for (const raw of excludes) {
+    const rule = parseExclude(raw);
+    if (!rule) continue;
+    if (rule.kind === "name" ? segments.some((s) => rule.re.test(s)) : prefixes.some((p) => rule.re.test(p))) return true;
   }
   return false;
 }
@@ -54,6 +119,7 @@ export async function scanForDocuments(root: string, excludes: string[] = []): P
         if (ALWAYS_SKIP.has(entry.name) || isExcluded(rel, excludes)) continue;
         await walk(abs, rel);
       } else if ((entry.isFile() || entry.isSymbolicLink()) && isLibraryFile(entry.name)) {
+        if (isExcluded(rel, excludes)) continue;
         try {
           const real = entry.isSymbolicLink() ? await fs.realpath(abs) : abs;
           if (entry.isSymbolicLink() && !isWithin(realRoot, real)) continue; // symlink escaping the root

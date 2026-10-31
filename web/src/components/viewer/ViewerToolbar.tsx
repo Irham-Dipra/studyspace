@@ -13,6 +13,7 @@ import {
   Highlighter,
   Images,
   Loader2,
+  MapPin,
   MousePointer2,
   PenLine,
   Redo2,
@@ -24,22 +25,28 @@ import {
   SquareDashed,
   SquareSplitVertical,
   Trash2,
+  Type,
   Undo2,
   Wrench,
 } from "lucide-react";
-import { HIGHLIGHT_COLORS, PEN_COLORS, type Tool } from "./geometry";
+import { HIGHLIGHT_COLORS, PEN_COLORS, TEXT_SIZES, type Tool } from "./geometry";
 import type { TextPreset } from "../GetTextDialog";
 import { isTyping, keyOf, matches, withKey, type ShortcutId } from "../../lib/shortcuts";
 import { IconButton, Kbd, KeyHint, cx } from "../ui";
 import { canEditFile, isPaged, type DocumentKind } from "../../lib/types";
 
 interface Props {
+  /** Collapsed to nothing, but still mounted: it owns the tool, colour and Page tools keys. */
+  hidden?: boolean;
   tool: Tool;
   onTool: (t: Tool) => void;
   color: string;
   onColor: (c: string) => void;
   penWidth: number;
   onPenWidth: (w: number) => void;
+  /** Font size for new text boxes (one of TEXT_SIZES). */
+  textSize: number;
+  onTextSize: (s: number) => void;
   dirty: boolean;
   /**
    * Slides can't be edited, so page edits and OCR are left out. HTML and Markdown have no pages, so
@@ -76,11 +83,15 @@ interface Props {
 const TOOLS: { id: Tool; label: string; icon: typeof Highlighter }[] = [
   { id: "select", label: "Select text", icon: MousePointer2 },
   { id: "highlight", label: "Highlight text", icon: Highlighter },
-  { id: "area", label: "Highlight area: click two corners", icon: SquareDashed },
+  { id: "area", label: "Highlight area: right-click (two-finger tap) two corners, or drag", icon: SquareDashed },
   { id: "pen", label: "Draw", icon: PenLine },
   { id: "eraser", label: "Eraser", icon: Eraser },
-  { id: "ocr", label: "Get text from a region: click two corners", icon: ScanText },
+  { id: "ocr", label: "Get text from a region: right-click (two-finger tap) two corners, or drag", icon: ScanText },
+  { id: "text", label: "Text box: click (or drag its width) and type", icon: Type },
+  { id: "marker", label: "Note marker: click a spot, then write its note", icon: MapPin },
 ];
+
+const TEXT_SIZE_LABELS = ["Small", "Medium", "Large"];
 
 /** The tools for text that flows (HTML, Markdown): the others draw on pages. */
 const TEXT_TOOLS = new Set<Tool>(["select", "highlight"]);
@@ -144,8 +155,8 @@ export function ViewerToolbar(p: Props) {
   const editable = canEditFile(p.kind);
   const paged = isPaged(p.kind);
   const tools = paged ? TOOLS : TOOLS.filter((t) => TEXT_TOOLS.has(t.id));
-  const colors = p.tool === "pen" ? PEN_COLORS : HIGHLIGHT_COLORS;
-  const showColors = p.tool === "highlight" || p.tool === "area" || p.tool === "pen";
+  const colors = p.tool === "pen" || p.tool === "text" ? PEN_COLORS : HIGHLIGHT_COLORS;
+  const showColors = p.tool === "highlight" || p.tool === "area" || p.tool === "pen" || p.tool === "text";
 
   // Tool keys, colours (1–5), pen widths (Shift+1–3) and the Page tools menu (T).
   const keysRef = useRef<(e: KeyboardEvent) => void>(() => undefined);
@@ -162,6 +173,7 @@ export function ViewerToolbar(p: Props) {
     const n = Number(e.code.slice(5)) - 1;
     if (!e.shiftKey && showColors && colors[n]) p.onColor(colors[n]);
     else if (e.shiftKey && p.tool === "pen" && PEN_WIDTHS[n]) p.onPenWidth(PEN_WIDTHS[n].w);
+    else if (e.shiftKey && p.tool === "text" && TEXT_SIZES[n]) p.onTextSize(TEXT_SIZES[n]);
   };
   useEffect(() => {
     const on = (e: KeyboardEvent) => keysRef.current(e);
@@ -195,7 +207,7 @@ export function ViewerToolbar(p: Props) {
   const ic = "size-4 shrink-0 text-ink-3";
 
   return (
-    <div className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto border-b border-line bg-panel px-2">
+    <div className={cx("flex shrink-0 items-center gap-1 overflow-x-auto bg-panel px-2", p.hidden ? "h-0 overflow-y-hidden" : "h-11 border-b border-line")} aria-hidden={p.hidden || undefined}>
       <IconButton label={withKey(p.undoLabel ? `Undo: ${p.undoLabel}` : "Nothing to undo", "undo")} disabled={!p.canUndo} onClick={p.onUndo}>
         {p.undoing ? <Loader2 className="size-4 animate-spin" /> : <Undo2 className="size-4" />}
       </IconButton>
@@ -235,6 +247,24 @@ export function ViewerToolbar(p: Props) {
               className={cx("grid size-7 shrink-0 place-items-center rounded-md", p.penWidth === w.w ? "bg-accent-soft" : "hover:bg-hover")}
             >
               <span className="rounded-full bg-ink" style={{ width: 4 + w.w * 1600, height: 4 + w.w * 1600 }} />
+            </button>
+          ))}
+        </>
+      )}
+
+      {p.tool === "text" && (
+        <>
+          <div className="mx-1 h-5 w-px shrink-0 bg-line" />
+          {TEXT_SIZES.map((s, i) => (
+            <button
+              key={s}
+              title={`${TEXT_SIZE_LABELS[i]} text (Shift+${i + 1})`}
+              aria-label={`${TEXT_SIZE_LABELS[i]} text`}
+              onClick={() => p.onTextSize(s)}
+              className={cx("grid size-7 shrink-0 place-items-center rounded-md font-semibold text-ink", p.textSize === s ? "bg-accent-soft" : "hover:bg-hover")}
+              style={{ fontSize: 10 + i * 3 }}
+            >
+              A
             </button>
           ))}
         </>

@@ -75,9 +75,17 @@ export const Markdown = memo(function Markdown({ children, highlights = NO_HIGHL
     () => ({
       // Links within the page stay in the tab; everything else opens a new one.
       a: ({ node: _n, ...p }) => (p.href?.startsWith("#") ? <a {...p} /> : <a {...p} target="_blank" rel="noreferrer noopener" />),
-      img: ({ node: _n, src, ...p }) => (
-        <img {...p} src={assetUrl && typeof src === "string" && isRelative(src) ? assetUrl(safeDecode(src)) : src} loading="lazy" />
-      ),
+      img: ({ node: _n, src, ...p }) => {
+        const img = <img {...p} src={assetUrl && typeof src === "string" && isRelative(src) ? assetUrl(safeDecode(src)) : src} loading="lazy" />;
+        // A picture kept as a note opens full size in a new tab.
+        return typeof src === "string" && src.startsWith("/api/images/") ? (
+          <a href={src} target="_blank" rel="noreferrer noopener" title="Open the picture full size">
+            {img}
+          </a>
+        ) : (
+          img
+        );
+      },
     }),
     [assetUrl],
   );

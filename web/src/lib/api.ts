@@ -8,6 +8,7 @@ import type {
   NormPoint,
   NormRect,
   NoteHighlight,
+  NoteMarker,
   ReadingProgress,
   Resource,
   ResourceScope,
@@ -83,6 +84,16 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   return data as T;
 }
 
+/** Stores a picture (PNG, JPEG, GIF or WebP) for a note; `src` is what the note's Markdown points at. */
+export async function uploadImage(file: Blob): Promise<{ name: string; src: string }> {
+  const res = await fetch("/api/images", { method: "POST", headers: { ...CSRF_HEADER, "Content-Type": file.type }, body: file });
+  if (res.status === 401) authListener?.();
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : undefined;
+  if (!res.ok) throw new ApiError(res.status, data?.error ?? res.statusText);
+  return data;
+}
+
 export interface ResourceInput {
   id?: string;
   type: ResourceType;
@@ -93,6 +104,8 @@ export interface ResourceInput {
   content?: string;
   url?: string | null;
   styles?: Record<string, string>;
+  /** A new note's marker on its first page (the marker tool): App places it once the note exists. Not sent. */
+  marker?: NormPoint | null;
 }
 
 /** A folder inside the library where new PDFs can be saved. */
@@ -144,6 +157,12 @@ export interface AnnotationInput {
   text?: string;
 }
 
+/** A marker for a note: where it is, and the passage of the note it opens at (none: the whole note). */
+export type NoteMarkerInput = Pick<NoteMarker, "page" | "x" | "y"> & Partial<Pick<NoteMarker, "id" | "quote" | "prefix" | "suffix">>;
+
+/** What can change on an annotation after it's made (a text box: its text, box and size too). */
+export type AnnotationPatch = Partial<Pick<AnnotationInput, "color" | "opacity" | "text" | "rects" | "strokeWidth">>;
+
 /** A file edit's result: the updated document plus the id needed to undo it (null when history is disabled). */
 export type EditResult = DocumentRecord & { editId: string | null };
 
@@ -167,6 +186,8 @@ export const api = {
 
   library: () => req<{ directories: Directory[]; documents: DocumentRecord[] }>("GET", "/library"),
   scan: () => req<ScanResult>("POST", "/library/scan"),
+  /** Hides files from the library list, or shows them again. */
+  setHidden: (ids: string[], hidden: boolean) => req<{ documents: DocumentRecord[] }>("POST", "/library/hidden", { ids, hidden }),
   recent: () => req<(ReadingProgress & { title: string })[]>("GET", "/recent"),
   /** Renames the file in its folder; the extension is kept. */
   renameFile: (id: string, name: string) => req<DocumentRecord>("POST", `/documents/${id}/rename`, { name }),
@@ -223,6 +244,11 @@ export const api = {
     req<NoteHighlight>("PATCH", `/note-highlights/${id}`, body),
   deleteNoteHighlight: (id: string) => req<void>("DELETE", `/note-highlights/${id}`),
 
+  noteMarkers: (docId: string) => req<NoteMarker[]>("GET", `/documents/${docId}/note-markers`),
+  createNoteMarker: (resourceId: string, body: NoteMarkerInput) => req<NoteMarker>("POST", `/resources/${resourceId}/markers`, body),
+  updateNoteMarker: (id: string, body: Partial<Omit<NoteMarkerInput, "id">>) => req<NoteMarker>("PATCH", `/note-markers/${id}`, body),
+  deleteNoteMarker: (id: string) => req<void>("DELETE", `/note-markers/${id}`),
+
   textHighlights: (docId: string) => req<TextHighlight[]>("GET", `/documents/${docId}/text-highlights`),
   createTextHighlight: (
     docId: string,
@@ -235,7 +261,7 @@ export const api = {
   annotations: (docId: string) => req<Annotation[]>("GET", `/documents/${docId}/annotations`),
   createAnnotation: (docId: string, body: AnnotationInput) =>
     req<Annotation>("POST", `/documents/${docId}/annotations`, body),
-  updateAnnotation: (id: string, body: Partial<Pick<AnnotationInput, "color" | "opacity" | "text">>) =>
+  updateAnnotation: (id: string, body: AnnotationPatch) =>
     req<Annotation>("PATCH", `/annotations/${id}`, body),
   deleteAnnotation: (id: string) => req<void>("DELETE", `/annotations/${id}`),
   rotatePages: (docId: string, pages: number[], angle: 90 | 180 | 270, fingerprint: string) =>

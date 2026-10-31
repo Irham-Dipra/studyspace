@@ -25,13 +25,14 @@ interface Props {
 export function AnnotationOverlay({ page, width, height, annotations, tool, color, penWidth, selectedId, onCreate, onErase, onRegion }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   /**
-   * A box (area highlight or OCR region) is made by dragging, or by clicking its two corners: after a
-   * click without dragging the box is `armed`, follows the pointer, and the next click finishes it.
+   * A box (area highlight or OCR region) is made by dragging, or by right-clicking its two corners (a
+   * two-finger tap on a touchpad): after the first the box is `armed`, follows the pointer, and the
+   * next right-click finishes it. A plain left click does nothing, so a stray click makes no box.
    */
   const [draft, setDraft] = useState<{ kind: "ink"; points: NormPoint[] } | { kind: "area"; start: NormPoint; end: NormPoint; armed?: boolean } | null>(null);
   const armed = draft?.kind === "area" && !!draft.armed;
 
-  // Esc, another tool, or a click outside this page drops a box waiting for its second corner.
+  // Esc, another tool, a left click, or a click outside this page drops a box waiting for its second corner.
   useEffect(() => {
     if (!armed) return;
     const onKey = (e: KeyboardEvent) => {
@@ -51,7 +52,7 @@ export function AnnotationOverlay({ page, width, height, annotations, tool, colo
   const erased = useRef(new Set<string>());
   const interactive = tool === "pen" || tool === "area" || tool === "eraser" || tool === "ocr";
 
-  const toNorm = (e: React.PointerEvent): NormPoint => {
+  const toNorm = (e: React.MouseEvent): NormPoint => {
     const r = svgRef.current!.getBoundingClientRect();
     return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))];
   };
@@ -64,14 +65,26 @@ export function AnnotationOverlay({ page, width, height, annotations, tool, colo
     }
   };
 
+  const boxTool = tool === "area" || tool === "ocr";
+
+  // Corners are right-clicks, taken from the contextmenu event: it is always ours to cancel, even when
+  // finishing the box opens a dialog over the page.
+  const onContextMenu = (e: React.MouseEvent) => {
+    if (!boxTool) return;
+    e.preventDefault();
+    const p = toNorm(e);
+    if (draft?.kind === "area" && draft.armed) finishBox(draft.start, p); // the second corner
+    else setDraft({ kind: "area", start: p, end: p, armed: true });
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!interactive || e.button !== 0) return;
+    if (!interactive) return;
+    if (e.button !== 0) return;
     e.preventDefault();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     const p = toNorm(e);
-    if (draft?.kind === "area" && draft.armed) return finishBox(draft.start, p); // the second corner
     if (tool === "pen") setDraft({ kind: "ink", points: [p] });
-    else if (tool === "area" || tool === "ocr") setDraft({ kind: "area", start: p, end: p });
+    else if (boxTool) setDraft({ kind: "area", start: p, end: p }); // a left press drops an armed corner too
     else if (tool === "eraser") {
       erased.current = new Set();
       eraseAt(p);
@@ -103,9 +116,8 @@ export function AnnotationOverlay({ page, width, height, annotations, tool, colo
       onCreate({ page, kind: "ink", color, opacity: 1, paths: [simplifyPath(draft.points)], strokeWidth: penWidth });
       setDraft(null);
     } else if (!draft.armed) {
-      // A drag makes the box now; a plain click is its first corner, waiting for the second.
-      if (bigEnough(draft.start, draft.end)) finishBox(draft.start, draft.end);
-      else setDraft({ ...draft, armed: true });
+      // A drag makes the box; a plain left click makes nothing (corners are right-clicks).
+      finishBox(draft.start, draft.end);
     }
   };
 
@@ -133,6 +145,7 @@ export function AnnotationOverlay({ page, width, height, annotations, tool, colo
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={() => !armed && setDraft(null)}
+      onContextMenu={onContextMenu}
     >
       {annotations.map((a) =>
         a.kind === "ink" ? (
@@ -174,7 +187,7 @@ export function AnnotationOverlay({ page, width, height, annotations, tool, colo
           <circle cx={draft.start[0] * width} cy={draft.start[1] * height} r={4} fill={tool === "ocr" ? "var(--ss-accent)" : color} stroke="white" strokeWidth={1.5} />
           {!bigEnough(draft.start, draft.end) && (
             <text x={draft.start[0] * width + 8} y={draft.start[1] * height - 8} fontSize={11} fill="var(--ss-accent)" style={{ paintOrder: "stroke", stroke: "white", strokeWidth: 3 }}>
-              Click the opposite corner · Esc cancels
+              Right-click the opposite corner · Esc cancels
             </text>
           )}
         </g>

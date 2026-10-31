@@ -8,11 +8,13 @@ import {
   PDFRef,
   PDFString,
   EncryptedPDFError,
+  StandardFonts,
   degrees,
+  type PDFFont,
 } from "pdf-lib";
 import type { Annotation } from "../types.js";
 import { HttpError } from "../types.js";
-import { displayToPdf, displayWidth, hexToRgb, normaliseRotation, type PageGeometry } from "./coords.js";
+import { displayHeight, displayToPdf, displayWidth, hexToRgb, normaliseRotation, type PageGeometry } from "./coords.js";
 
 /** Annotations written by StudySpace carry this author and an NM prefix so they can be replaced idempotently. */
 export const ANNOT_AUTHOR = "StudySpace";
@@ -210,7 +212,100 @@ function bbox(points: [number, number][], pad = 0): [number, number, number, num
   return [Math.min(...xs) - pad, Math.min(...ys) - pad, Math.max(...xs) + pad, Math.max(...ys) + pad];
 }
 
-function buildAnnotation(pdf: PDFDocument, page: PDFPage, a: Annotation): PDFRef | null {
+/** Text-box layout, shared with the web overlay (TextBoxes.tsx): padding and line height per font size. */
+const TEXT_PAD = 0.2;
+const TEXT_LINE = 1.2;
+/** First baseline below the top of a line, per font size (matches the browser's Arial / Liberation Sans). */
+const TEXT_BASELINE = 0.95;
+
+/** Lines of `text` that fit `width` at `size`, broken at spaces (or inside a word too long for a line). */
+function wrapText(text: string, font: PDFFont, size: number, width: number): string[] {
+  const fits = (s: string) => font.widthOfTextAtSize(s, size) <= width;
+  const out: string[] = [];
+  for (const para of text.split("\n")) {
+    let line = "";
+    for (const word of para.split(/(\s+)/)) {
+      if (!word) continue;
+      if (fits(line + word)) {
+        line += word;
+        continue;
+      }
+      if (line.trim()) out.push(line.trimEnd());
+      line = word.trimStart();
+      // A word wider than the box: split it.
+      while (line && !fits(line)) {
+        let n = line.length - 1;
+        while (n > 1 && !fits(line.slice(0, n))) n--;
+        out.push(line.slice(0, n));
+        line = line.slice(n);
+      }
+    }
+    out.push(line.trimEnd());
+  }
+  return out;
+}
+
+/**
+ * A text box as a FreeText annotation drawn in Helvetica. Helvetica only has Latin characters
+ * (WinAnsi): others are drawn as "?", while /Contents keeps the text as typed.
+ */
+function buildTextBox(pdf: PDFDocument, page: PDFPage, a: Annotation, font: PDFFont, common: Record<string, unknown>): PDFRef | null {
+  const rc = a.rects[0];
+  if (!rc || !a.text.trim()) return null;
+  const ctx = pdf.context;
+  const g = pageGeometry(page);
+  const dw = displayWidth(g);
+  const dh = displayHeight(g);
+  const [r, gr, b] = hexToRgb(a.color);
+  const size = Math.max(4, a.strokeWidth * dw);
+  const pad = TEXT_PAD * size;
+  const boxW = Math.max(rc.w * dw, size * 2);
+  const known = new Set(font.getCharacterSet());
+  const drawable = [...a.text.replace(/\r\n?/g, "\n")].map((c) => (c === "\n" || known.has(c.codePointAt(0)!) ? c : "?")).join("");
+  const lines = wrapText(drawable, font, size, boxW - 2 * pad);
+  const boxH = Math.max(rc.h * dh, 2 * pad + lines.length * TEXT_LINE * size);
+
+  // Drawn upright as the page is shown: the form is turned with the page's /Rotate.
+  const rot = (normaliseRotation(g.rotation) * Math.PI) / 180;
+  const cos = Math.round(Math.cos(rot));
+  const sin = Math.round(Math.sin(rot));
+  const corners = [
+    displayToPdf(rc.x, rc.y, g),
+    displayToPdf(rc.x + boxW / dw, rc.y, g),
+    displayToPdf(rc.x, rc.y + boxH / dh, g),
+    displayToPdf(rc.x + boxW / dw, rc.y + boxH / dh, g),
+  ];
+  const rect = bbox(corners);
+  let ops = `BT /F1 ${f(size)} Tf ${f(r)} ${f(gr)} ${f(b)} rg\n`;
+  lines.forEach((line, i) => {
+    const y = boxH - pad - TEXT_BASELINE * size - i * TEXT_LINE * size;
+    if (line) ops += `1 0 0 1 ${f(pad)} ${f(y)} Tm ${font.encodeText(line).toString()} Tj\n`;
+  });
+  ops += "ET";
+  const ap = ctx.register(
+    ctx.stream(ops, {
+      Type: "XObject",
+      Subtype: "Form",
+      BBox: [0, 0, boxW, boxH],
+      Matrix: [cos, sin, -sin, cos, 0, 0],
+      Resources: { Font: { F1: font.ref } },
+    }),
+  );
+  const { C: _border, ...rest } = common;
+  return ctx.register(
+    ctx.obj({
+      ...rest,
+      Subtype: "FreeText",
+      Rect: rect,
+      DA: PDFString.of(`/Helv ${f(size)} Tf ${f(r)} ${f(gr)} ${f(b)} rg`),
+      Q: 0,
+      BS: { W: 0 },
+      AP: { N: ap },
+    }),
+  );
+}
+
+function buildAnnotation(pdf: PDFDocument, page: PDFPage, a: Annotation, font: () => PDFFont): PDFRef | null {
   const ctx = pdf.context;
   const g = pageGeometry(page);
   const [r, gr, b] = hexToRgb(a.color);
@@ -227,6 +322,7 @@ function buildAnnotation(pdf: PDFDocument, page: PDFPage, a: Annotation): PDFRef
     P: page.ref,
   };
 
+  if (a.kind === "text") return buildTextBox(pdf, page, a, font(), common);
   if (a.kind === "highlight" || a.kind === "area") {
     if (!a.rects.length) return null;
     const quads: number[] = [];
@@ -294,10 +390,13 @@ export function writeAnnotations(pdf: PDFDocument, annotations: Annotation[]): {
   let removed = 0;
   for (const p of pages) removed += stripStudySpaceAnnotations(pdf, p);
   let written = 0;
+  // Embedded only when there is a text box.
+  let helvetica: PDFFont | undefined;
+  const font = () => (helvetica ??= pdf.embedStandardFont(StandardFonts.Helvetica));
   for (const a of annotations) {
     const page = pages[a.page - 1];
     if (!page) continue;
-    const ref = buildAnnotation(pdf, page, a);
+    const ref = buildAnnotation(pdf, page, a, font);
     if (ref) {
       page.node.addAnnot(ref);
       written++;

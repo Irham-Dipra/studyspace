@@ -18,6 +18,28 @@ async function setup() {
   return { ...ctx, root, doc };
 }
 
+describe("hiding files", () => {
+  it("hides files from search, keeps them through a rescan and a rename, and shows them again", async () => {
+    const { app, doc } = await setup();
+    const r = await request(app).post("/api/library/hidden").send({ ids: [doc.id, "no-such-id"], hidden: true }).expect(200);
+    expect(r.body.documents).toHaveLength(1);
+    expect(r.body.documents[0]).toMatchObject({ id: doc.id, hidden: true });
+
+    const listed = async () => ((await request(app).get("/api/library")).body.documents as { id: string; hidden: boolean }[]).find((d) => d.id === doc.id);
+    expect((await listed())?.hidden).toBe(true); // still listed, so the app can show it under Hidden files
+    expect((await request(app).get(`/api/search?q=${encodeURIComponent(path.basename(doc.path, ".pdf"))}`)).body.documents).toEqual([]);
+
+    await request(app).post("/api/library/scan").expect(200);
+    await request(app).post(`/api/documents/${doc.id}/rename`).send({ name: "Renamed" }).expect(200);
+    expect((await listed())?.hidden).toBe(true);
+    expect((await request(app).get(`/api/documents/${doc.id}/resources`)).body).toHaveLength(1);
+
+    await request(app).post("/api/library/hidden").send({ ids: [doc.id], hidden: false }).expect(200);
+    expect((await listed())?.hidden).toBe(false);
+    expect((await request(app).post("/api/library/hidden").send({ ids: [], hidden: true })).status).toBe(400);
+  });
+});
+
 describe("renaming files", () => {
   it("renames in place, keeps the extension and the notes", async () => {
     const { app, root, doc } = await setup();

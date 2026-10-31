@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import request from "supertest";
 import { afterAll, describe, expect, it } from "vitest";
-import { isExcluded, scanForDocuments } from "../src/library/scanner.js";
+import { excludeError, isExcluded, scanForDocuments } from "../src/library/scanner.js";
 import { resolveInsideRoots } from "../src/library/pathGuard.js";
 import { fingerprintFile } from "../src/library/fingerprint.js";
 import { cleanupTempDirs, createTestContext, tempDir, writePdf } from "./helpers.js";
@@ -35,6 +35,43 @@ describe("file discovery", () => {
     expect(isExcluded("CSE 301/Books", ["CSE 301/Books"])).toBe(true);
     expect(isExcluded("CSE 309/Books", ["CSE 301/Books"])).toBe(false);
     expect(isExcluded("CSE 301", ["CSE 301/Books"])).toBe(false);
+  });
+
+  it("hides files and folders by wildcard, path or regex", () => {
+    // A name pattern: any depth.
+    expect(isExcluded("notes.md", ["*.md"])).toBe(true);
+    expect(isExcluded("CSE 301/Books/notes.MD", ["*md"])).toBe(true);
+    expect(isExcluded("CSE 301/Chapter 1.pdf", ["*.md"])).toBe(false);
+    expect(isExcluded("CSE 301/Syllabus.pdf", ["syllabus.pdf"])).toBe(true);
+    expect(isExcluded("CSE 301/Ch?.pdf", ["ch?.pdf"])).toBe(true);
+    // A path: from the library folder; "*" stays inside one folder.
+    expect(isExcluded("CSE 301/a.md", ["CSE 301/*.md"])).toBe(true);
+    expect(isExcluded("CSE 301/Books/a.md", ["CSE 301/*.md"])).toBe(false);
+    expect(isExcluded("CSE 301/Books/a.md", ["CSE 301/**/*.md"])).toBe(true);
+    expect(isExcluded("CSE 301/a.md", ["CSE 301/**/*.md"])).toBe(true);
+    expect(isExcluded("CSE 309/a.md", ["CSE 301/*.md"])).toBe(false);
+    expect(isExcluded("CSE 301/Books/Ross.pdf", ["CSE 301/B*"])).toBe(true); // a folder hides what's inside
+    // A leading "/": only in the library folder itself.
+    expect(isExcluded("a.md", ["/*.md"])).toBe(true);
+    expect(isExcluded("CSE 301/a.md", ["/*.md"])).toBe(false);
+    // Regular expressions on the whole relative path.
+    expect(isExcluded("CSE 301/Lecture 3 (old).pdf", ["re:\\(old\\)\\.pdf$"])).toBe(true);
+    expect(isExcluded("CSE 301/Lecture 3.pdf", ["re:\\(old\\)\\.pdf$"])).toBe(false);
+    expect(isExcluded("CSE 301/x.pdf", ["re:("])).toBe(false); // broken: ignored
+    expect(excludeError("re:(")).toMatch(/regular expression/);
+    expect(excludeError("*.md")).toBeNull();
+    // Dots and brackets are literal outside regexes.
+    expect(isExcluded("CSE 301/aXmd", ["*.md"])).toBe(false);
+    expect(isExcluded("[draft] a.pdf", ["[draft]*"])).toBe(true);
+  });
+
+  it("leaves hidden files out of a scan", async () => {
+    const root = await makeLibrary();
+    await writePdf(path.join(root, "Syllabus.pdf"), 1);
+    fs.writeFileSync(path.join(root, "CSE 301", "summary.md"), "# Hi");
+    fs.writeFileSync(path.join(root, "todo.md"), "# Todo");
+    const files = await scanForDocuments(root, ["Offllines", "/*.md", "syllabus.pdf", "CSE 301/Books/*"]);
+    expect(files.map((f) => f.relPath)).toEqual(["CSE 301/Chapter 1.pdf", "CSE 301/summary.md", "CSE 309/Slides.pdf"]);
   });
 
   it("does not follow symlinks that escape the root", async () => {
@@ -109,6 +146,34 @@ describe("library sync API", () => {
     db.prepare("UPDATE documents SET path = '/etc/hostname' WHERE id = ?").run(doc.id);
     const res = await request(app).get(`/api/documents/${doc.id}/file`);
     expect(res.status).toBe(403);
+  });
+
+  it("hides files by the folder's settings and brings them back with their notes", async () => {
+    const { app } = createTestContext();
+    const root = await makeLibrary();
+    const dir = (await request(app).post("/api/directories").send({ path: root }).expect(201)).body.directory;
+    const ross = (await request(app).get("/api/library")).body.documents.find((d: { relPath: string }) => d.relPath.endsWith("Ross.PDF"));
+    await request(app).post(`/api/documents/${ross.id}/resources`).send({ type: "note", scope: "document", content: "keep me" }).expect(201);
+    const paths = async () => (await request(app).get("/api/library")).body.documents.map((d: { relPath: string }) => d.relPath).sort();
+
+    const bad = await request(app).patch(`/api/directories/${dir.id}`).send({ excludes: ["re:("] });
+    expect(bad.status).toBe(400);
+    expect(bad.body.issues.join(" ")).toMatch(/regular expression/);
+
+    await request(app).patch(`/api/directories/${dir.id}`).send({ excludes: ["Offllines", "CSE 309/*.pdf", "draft*"] }).expect(200);
+    expect(await paths()).toEqual(["CSE 301/Books/Ross.PDF", "CSE 301/Chapter 1.pdf"]);
+
+    // Renaming into a hidden name is refused (the file would vanish on the next scan).
+    const r = await request(app).post(`/api/documents/${ross.id}/rename`).send({ name: "Draft" });
+    expect([r.status, r.body.error]).toEqual([400, expect.stringMatching(/hidden/)]);
+
+    await request(app).patch(`/api/directories/${dir.id}`).send({ excludes: ["*books*"] }).expect(200);
+    expect(await paths()).toEqual(["CSE 301/Chapter 1.pdf", "CSE 309/Slides.pdf", "Offllines/lab.pdf"]);
+
+    await request(app).patch(`/api/directories/${dir.id}`).send({ excludes: [] }).expect(200);
+    expect(await paths()).toContain("CSE 301/Books/Ross.PDF");
+    const notes = (await request(app).get(`/api/documents/${ross.id}/resources`)).body;
+    expect(notes.map((n: { content: string }) => n.content)).toEqual(["keep me"]);
   });
 
   it("rejects non-existent directories", async () => {

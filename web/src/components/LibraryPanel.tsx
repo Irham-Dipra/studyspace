@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, FileCode2, FileText, FileType2, Folder, FolderOpen, History, Library, Pencil, Presentation, RefreshCw, Settings, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, Columns2, EyeOff, FileCode2, FileText, FileType2, Files, Folder, FolderOpen, History, Library, Pencil, Presentation, RefreshCw, Settings, Trash2, X } from "lucide-react";
 import { hasUnsavedChanges, isPaged, type Directory, type DocumentRecord, type ReadingProgress } from "../lib/types";
 import { Button, IconButton, KeyHint, Modal, cx } from "./ui";
 import { keyOf, matches, withKey } from "../lib/shortcuts";
@@ -54,6 +54,12 @@ interface Props {
   selected: Set<string>;
   onSelect: (ids: Set<string>) => void;
   onOpenSelected: () => void;
+  /** Shows a PDF in the pane beside the open one. */
+  onOpenBeside: (doc: DocumentRecord) => void;
+  /** Hides files from this list (`documents` holds only the files not hidden). */
+  onHide: (docs: DocumentRecord[]) => void;
+  hiddenCount: number;
+  onShowHidden: () => void;
 }
 
 const docHref = (d: DocumentRecord) => `#/doc/${d.id}`;
@@ -75,13 +81,18 @@ const fileName = (d: DocumentRecord) => d.relPath.split("/").pop() ?? d.title;
 /** Any file on disk can be picked (pictures and text are then offered only for files with pages). */
 const selectable = (d: DocumentRecord) => !d.missing;
 
-/** The keys of the folders above a file, from the top down. */
+/**
+ * The row that holds the files lying in a library folder itself (not in a subfolder), so they can be
+ * closed like a folder. Real folder keys continue with "/", so this one can't clash.
+ */
+const looseKey = (dirKey: string) => `${dirKey}:files`;
+
+/** The keys of the folders above a file, from the top down (for a file in the library folder itself, its files row). */
 function folderKeys(d: DocumentRecord): string[] {
   let key = `d${d.directoryId}`;
-  return d.relPath
-    .split("/")
-    .slice(0, -1)
-    .map((part) => (key = `${key}/${part}`));
+  const parts = d.relPath.split("/").slice(0, -1);
+  if (!parts.length) return [looseKey(key)];
+  return parts.map((part) => (key = `${key}/${part}`));
 }
 
 export function LibraryPanel(p: Props) {
@@ -238,7 +249,14 @@ export function LibraryPanel(p: Props) {
         const parent = folder ? folder.slice(0, folder.lastIndexOf("/")) : doc && folderKeys(doc).at(-1);
         rows.find((r) => r.dataset.folder === parent)?.focus();
       }
-    } else if (doc && matches(n, "fileRename")) setEditing(doc.id);
+    } else if (matches(n, "fileHide") && (selectedCount || doc)) {
+      // With files selected, all of them; otherwise the file you're on. The focus moves on.
+      const hide = selectedCount ? documents.filter((d) => selected.has(d.id)) : [doc!];
+      const gone = new Set(hide.map((d) => d.id));
+      (rows.slice(i + 1).find((r) => !gone.has(r.dataset.docId ?? "")) ?? rows.slice(0, i).reverse().find((r) => !gone.has(r.dataset.docId ?? "")))?.focus();
+      p.onHide(hide);
+    } else if (doc && isPaged(doc.kind) && matches(n, "fileBeside")) p.onOpenBeside(doc);
+    else if (doc && matches(n, "fileRename")) setEditing(doc.id);
     else if (doc && matches(n, "fileDelete")) setConfirmDelete(doc);
     else handled = false;
     if (handled) {
@@ -274,35 +292,63 @@ export function LibraryPanel(p: Props) {
     onOpen(d);
   };
 
+  const folderRow = (key: string, name: string, count: number, depth: number, files = false) => {
+    const expanded = isOpen(key);
+    return (
+      <button
+        data-lib-row
+        data-folder={key}
+        className={cx(
+          "flex w-full items-center gap-1 rounded-md py-1 pr-2 text-left text-[13px] outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent/50",
+          depth === 0 ? "font-semibold text-ink" : "text-ink-2",
+        )}
+        style={{ paddingLeft: 4 + depth * 14 }}
+        onClick={() => toggle(key)}
+        aria-expanded={expanded}
+        title={files ? "The files in this library folder itself, not in a subfolder" : undefined}
+      >
+        <ChevronRight className={cx("size-3.5 shrink-0 text-ink-3 transition-transform", expanded && "rotate-90")} />
+        {files ? (
+          <Files className={cx("size-4 shrink-0", expanded ? "text-accent/80" : "text-ink-3")} />
+        ) : expanded ? (
+          <FolderOpen className="size-4 shrink-0 text-accent/80" />
+        ) : (
+          <Folder className="size-4 shrink-0 text-ink-3" />
+        )}
+        <span className={cx("truncate", files && "italic")}>{name}</span>
+        <span className="ml-auto pl-2 text-[11px] font-normal text-ink-3">{count}</span>
+      </button>
+    );
+  };
+
+  /** A library folder: its subfolders, then its own files under one closable row. */
+  const renderRoot = (node: TreeNode, label: string) => {
+    if (!node.docs.length) return renderNode(node, 0);
+    const key = looseKey(node.key);
+    return (
+      <>
+        {node.folders.size > 0 && renderNode({ ...node, docs: [] }, 0)}
+        <ul>
+          <li>
+            {folderRow(key, `Files in ${label}`, node.docs.length, 0, true)}
+            {isOpen(key) && renderNode({ ...node, folders: new Map() }, 1)}
+          </li>
+        </ul>
+      </>
+    );
+  };
+
   const renderNode = (node: TreeNode, depth: number) => {
     const folders = [...node.folders.values()].sort((a, b) => naturalSort(a.name, b.name));
     const docs = [...node.docs].sort((a, b) => naturalSort(a.title, b.title));
     return (
       <ul>
-        {folders.map((f) => {
-          const expanded = isOpen(f.key);
-          return (
-            <li key={f.key}>
-              <button
-                data-lib-row
-                data-folder={f.key}
-                className={cx(
-                  "flex w-full items-center gap-1 rounded-md py-1 pr-2 text-left text-[13px] outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent/50",
-                  depth === 0 ? "font-semibold text-ink" : "text-ink-2",
-                )}
-                style={{ paddingLeft: 4 + depth * 14 }}
-                onClick={() => toggle(f.key)}
-                aria-expanded={expanded}
-              >
-                <ChevronRight className={cx("size-3.5 shrink-0 text-ink-3 transition-transform", expanded && "rotate-90")} />
-                {expanded ? <FolderOpen className="size-4 shrink-0 text-accent/80" /> : <Folder className="size-4 shrink-0 text-ink-3" />}
-                <span className="truncate">{f.name}</span>
-                <span className="ml-auto pl-2 text-[11px] font-normal text-ink-3">{f.count}</span>
-              </button>
-              {expanded && renderNode(f, depth + 1)}
-            </li>
-          );
-        })}
+        {folders.map((f) => (
+          <li key={f.key}>
+            {folderRow(f.key, f.name, f.count, depth)}
+            {isOpen(f.key) && renderNode(f, depth + 1)}
+          </li>
+        ))}
         {docs.map((d) => {
           const icon = <KindIcon kind={d.kind} />;
           const picked = selected.has(d.id);
@@ -359,6 +405,8 @@ export function LibraryPanel(p: Props) {
                     />
                   )}
                   <span className="hidden shrink-0 items-center group-hover:flex group-focus-visible:flex [@media(hover:none)]:flex">
+                    {isPaged(d.kind) && rowAction(withKey("Open beside the open PDF", "fileBeside"), <Columns2 className="size-3.5" />, () => p.onOpenBeside(d))}
+                    {rowAction(withKey("Hide from this list", "fileHide"), <EyeOff className="size-3.5" />, () => p.onHide([d]))}
                     {rowAction(withKey("Rename", "fileRename"), <Pencil className="size-3.5" />, () => setEditing(d.id))}
                     {rowAction(withKey("Delete (to the Trash)", "fileDelete"), <Trash2 className="size-3.5" />, () => setConfirmDelete(d))}
                   </span>
@@ -376,6 +424,16 @@ export function LibraryPanel(p: Props) {
       <div className="flex items-center gap-1 px-3 pb-2 pt-3">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-ink-3">Course materials</h2>
         <div className="ml-auto flex">
+          {p.hiddenCount > 0 && (
+            <button
+              className="flex h-8 items-center gap-1 rounded-md px-1.5 text-[11px] text-ink-3 hover:bg-hover hover:text-ink"
+              title={withKey(`${p.hiddenCount} hidden file${p.hiddenCount === 1 ? "" : "s"}: see them and unhide them`, "hiddenFiles")}
+              aria-label="Hidden files"
+              onClick={p.onShowHidden}
+            >
+              <EyeOff className="size-3.5" /> {p.hiddenCount}
+            </button>
+          )}
           <IconButton label={withKey("Rescan folders", "rescan")} onClick={onRescan} disabled={scanning}>
             <RefreshCw className={cx("size-4", scanning && "animate-spin")} />
           </IconButton>
@@ -450,7 +508,7 @@ export function LibraryPanel(p: Props) {
               {tree.count === 0 ? (
                 <p className="px-2 py-1 text-xs text-ink-3">{q ? "No matches" : "No PDFs, slides, HTML or Markdown files found"}</p>
               ) : (
-                renderNode(tree, 0)
+                renderRoot(tree, dir.label)
               )}
             </section>
           ))
@@ -459,7 +517,15 @@ export function LibraryPanel(p: Props) {
       {selectedCount > 0 && (
         <div className="flex items-center gap-2 border-t border-line px-3 py-2 text-xs">
           <span className="whitespace-nowrap text-ink-2">{selectedCount} selected</span>
-          <Button size="sm" variant="primary" className="ml-auto whitespace-nowrap" onClick={p.onOpenSelected} title="Pictures, text and notes of the selected files">
+          <Button
+            size="sm"
+            className="ml-auto whitespace-nowrap"
+            onClick={() => p.onHide(documents.filter((d) => selected.has(d.id)))}
+            title={withKey("Hide the selected files from this list (undo with Ctrl+Z)", "fileHide")}
+          >
+            <EyeOff className="size-3.5" /> Hide
+          </Button>
+          <Button size="sm" variant="primary" className="whitespace-nowrap" onClick={p.onOpenSelected} title="Pictures, text and notes of the selected files">
             Download… <KeyHint id="selectedFiles" className="border-white/40 bg-white/10 text-white/80" />
           </Button>
           <IconButton label={withKey("Unselect all", "fileUnselect")} onClick={() => onSelect(new Set())}>

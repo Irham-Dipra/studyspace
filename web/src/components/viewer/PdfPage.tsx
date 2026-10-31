@@ -1,8 +1,10 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { pdfjs, STUDYSPACE_AUTHOR, type PDFDocumentProxy, type PDFPageProxy } from "../../lib/pdf";
-import type { Annotation, NormRect } from "../../lib/types";
-import type { AnnotationInput } from "../../lib/api";
+import type { Annotation, NormPoint, NormRect } from "../../lib/types";
+import type { AnnotationInput, AnnotationPatch } from "../../lib/api";
 import { AnnotationOverlay } from "./AnnotationOverlay";
+import { NoteMarkers, type PageMarker } from "./NoteMarkers";
+import { TextBoxes } from "./TextBoxes";
 import type { Tool } from "./geometry";
 
 interface LinkBox {
@@ -32,6 +34,18 @@ interface Props {
   onEraseAnnotation: (id: string) => void;
   onNavigateDest: (dest: unknown) => void;
   onRegion?: (page: number, rect: NormRect) => void;
+  /** Text boxes: colour and size for new ones, the one to edit, and changes. */
+  textColor: string;
+  textSize: number;
+  editTextId: string | null;
+  onTextEditDone: () => void;
+  onUpdateAnnotation: (id: string, patch: AnnotationPatch) => void;
+  /** Note markers on this page. */
+  markers: PageMarker[];
+  onOpenMarker?: (id: string) => void;
+  onMoveMarker?: (id: string, at: NormPoint) => void;
+  onDeleteMarker?: (id: string) => void;
+  onPlaceMarker?: (page: number, at: NormPoint) => void;
 }
 
 /** Max canvas pixels per page; keeps memory bounded at high zoom on HiDPI screens. */
@@ -140,6 +154,9 @@ function PdfPageImpl(props: Props) {
   }, [page, scale]);
 
   const textInteractive = props.tool === "select" || props.tool === "highlight";
+  // Text boxes are drawn by their own layer (HTML, so their text wraps); the SVG draws the rest.
+  const drawn = useMemo(() => props.annotations.filter((a) => a.kind !== "text"), [props.annotations]);
+  const boxes = useMemo(() => props.annotations.filter((a) => a.kind === "text"), [props.annotations]);
 
   return (
     <div
@@ -156,7 +173,7 @@ function PdfPageImpl(props: Props) {
         page={pageNumber}
         width={cssW}
         height={cssH}
-        annotations={props.annotations}
+        annotations={drawn}
         tool={props.tool}
         color={props.color}
         penWidth={props.penWidth}
@@ -166,6 +183,33 @@ function PdfPageImpl(props: Props) {
         onRegion={props.onRegion}
       />
       <div ref={textRef} className="textLayer" style={{ pointerEvents: textInteractive ? undefined : "none" }} />
+      <TextBoxes
+        page={pageNumber}
+        width={cssW}
+        height={cssH}
+        boxes={boxes}
+        tool={props.tool}
+        color={props.textColor}
+        size={props.textSize}
+        editId={props.editTextId}
+        onEditDone={props.onTextEditDone}
+        onCreate={props.onCreateAnnotation}
+        onUpdate={props.onUpdateAnnotation}
+        onDelete={props.onEraseAnnotation}
+      />
+      {props.onOpenMarker && props.onMoveMarker && props.onDeleteMarker && props.onPlaceMarker && (
+        <NoteMarkers
+          page={pageNumber}
+          width={cssW}
+          height={cssH}
+          markers={props.markers}
+          tool={props.tool}
+          onOpen={props.onOpenMarker}
+          onMove={props.onMoveMarker}
+          onDelete={props.onDeleteMarker}
+          onPlace={props.onPlaceMarker}
+        />
+      )}
       {textInteractive &&
         links.map((l, i) => (
           <a

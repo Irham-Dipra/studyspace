@@ -231,7 +231,7 @@ export function GetTextDialog({ request, doc, page, pageCount, getPdf, highlight
   const highlightMap = useMemo(() => {
     const m = new Map<number, NormRect[]>();
     for (const a of highlights) {
-      if (a.kind === "ink") continue;
+      if (a.kind !== "highlight" && a.kind !== "area") continue;
       m.set(a.page, [...(m.get(a.page) ?? []), ...a.rects]);
     }
     return m;

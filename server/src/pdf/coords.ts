@@ -36,6 +36,12 @@ export function displayWidth(g: PageGeometry): number {
   return normaliseRotation(g.rotation) % 180 === 0 ? x1 - x0 : y1 - y0;
 }
 
+/** Height of the page as displayed (after rotation), in PDF units. */
+export function displayHeight(g: PageGeometry): number {
+  const [x0, y0, x1, y1] = g.box;
+  return normaliseRotation(g.rotation) % 180 === 0 ? y1 - y0 : x1 - x0;
+}
+
 export function hexToRgb(hex: string): [number, number, number] {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return [1, 0.92, 0.23];

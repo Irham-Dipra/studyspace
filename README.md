@@ -76,7 +76,7 @@ The database is never placed inside the web root. The **Settings** dialog shows 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `STUDYSPACE_LIBRARY_DIRS` | – | Folders added on first start (separate several with `:`). Later changes go through Settings. |
-| `STUDYSPACE_EXCLUDES` | – | Comma-separated folder names or relative paths to skip, e.g. `Offllines` |
+| `STUDYSPACE_EXCLUDES` | – | Comma-separated folders or files to hide, e.g. `Offllines, *.md` (same rules as Settings: names at any depth, paths with `/`, `*` `**` `?`, `re:` regexes) |
 | `STUDYSPACE_DATA_DIR` | `~/.local/share/studyspace` | Database + backups |
 | `STUDYSPACE_HOST` / `STUDYSPACE_PORT` | `127.0.0.1` / `4317` | Address. `127.0.0.1` = this computer only; `0.0.0.0` = also devices on the same Wi-Fi (they must log in). |
 | `STUDYSPACE_PASSWORD` | – | Lets other devices (a phone over Wi-Fi or Tailscale) log in. Without it only this computer can use StudySpace. This computer never needs it. |
@@ -107,20 +107,24 @@ Real environment variables override `.env`.
 - **Select text** to get a small menu: highlight it in a colour, quote it into a new note, or copy it.
 - **Tools** (toolbar or keys): `V` select · `H` highlight text · `A` highlight an area · `P` pen · `E` eraser · `Esc` back to select. Click an existing highlight to recolour it, delete it, or turn it into a note.
 - **Slides:** `.pptx` and `.ppt` files show in the library (with a slides icon) next to PDFs. The first time one opens, LibreOffice turns a copy of it into a PDF (about 30–60 s), kept in `<dataDir>/converted/` and made again only when the slides change; after that it opens at once. Notes, highlights, drawings, bookmarks, Get text and pictures work as on a PDF. The slides file is never changed: page edits, Save to PDF and OCR are off, and *Extract pages* makes an editable PDF.
-- **Save to PDF:** highlights and drawings are stored instantly in the database. **Save to PDF** writes them into the original file as standard PDF Highlight/Ink annotations, so Okular, Evince, Acrobat and browsers show them too. Saving again replaces StudySpace's earlier annotations instead of duplicating them, and annotations from other tools are left untouched.
+- **Text boxes:** the text box tool (`Y`) types text onto a page; it wraps in its box and can be moved, edited, recoloured and resized (all undoable). *Save to PDF* writes them as FreeText annotations drawn in Helvetica (WinAnsi: other characters are drawn as `?`; `/Contents` keeps the text).
+- **Note markers:** a marker on a page opens a note at a passage of it: select text in a note → *Pin on page* (`K`) → click the spot. The marker tool (`K`) also makes a new note with a marker. A note can have several (`note_markers`); dragging moves one, right-click removes it. Markers stay in StudySpace.
+- **Save to PDF:** highlights and drawings are stored instantly in the database. **Save to PDF** writes them into the original file as standard PDF Highlight/Ink/FreeText annotations, so Okular, Evince, Acrobat and browsers show them too. Saving again replaces StudySpace's earlier annotations instead of duplicating them, and annotations from other tools are left untouched.
 - **Page tools:** the 🗑 button (or `Shift+Delete`) deletes the current page, and 🔧 offers *insert blank pages*, *insert pages from another PDF*, *replace this page* (with pages of any library PDF, one for one, so page numbers and notes stay put), *turn pages*, *move pages* and *delete several pages*. These rewrite the original file. Notes, ranges, highlights and your reading position stay with their content as page numbers shift. Notes that belonged only to a deleted page are **never moved onto another page**: they are removed with it (undo brings them back), or kept as whole-document notes if you choose that in the dialog.
 - **New PDFs:** 🔧 → *Extract pages to a new PDF* (optionally removing them from the original), *Split this PDF* (every N pages, by page ranges, or by chapter bookmarks) and *Merge PDFs* (any library PDFs and page lists, in your order, with a bookmark per source). New files go into a library folder you pick, never overwrite existing files, show up in the library at once, and bring along the copied pages' notes, highlights and bookmarks. The source PDFs are only read.
 - **Bookmarks:** the left column's *Bookmarks* tab shows the PDF's own outline (imported the first time it opens) and lets you add (`B`), rename, nest, reorder and delete bookmarks. They jump to the exact spot on the page and follow their pages through page edits. **Save to PDF** writes them into the file as a standard outline.
 - **Undo / redo everything:** `Ctrl+Z` / `Ctrl+Shift+Z` (or `Ctrl+Y`), or the ↶ ↷ buttons. This covers notes, resources, highlights, drawings, bookmarks, page edits and Save to PDF. Undoing a page edit restores the previous file version exactly and puts every note back on its original page.
 - **Shortcuts for everything:** every feature has a key, shown beside it (menu items, buttons, tooltips) and listed in the searchable `?` help. All keys live in one registry, `web/src/lib/shortcuts.ts`, which the handlers, tooltips and help screen all read. Examples: `T` page tools, `I`/`Shift+I` insert, `R` replace, `Shift+R` turn, `M` move, `X` extract, `S` split, `Shift+M` merge, `Shift+C` copy page as image, `Shift+H` cut page in half, `B` bookmark, `N` note, `L`/`Shift+B` files/bookmarks, `/` filter, `1`–`5` colours, `Ctrl+S` save, `Ctrl+K` search.
+- **Hide the bars:** `Shift+V` (or the title bar's double-arrow button) hides the title bar and the tools bar; a small button at the top right of the page (or `Shift+V`) brings them back. Remembered in `localStorage` (`ss-bars-hidden`).
 - **Screenshot to clipboard:** `Q` (or the crop button) dims the window; click two corners or drag, and that part of the window is copied as a PNG (`Enter` takes the whole window). The window is drawn in-page with `modern-screenshot`, so no screen-sharing prompt.
 - **Save pages as pictures:** `Shift+S` saves this page, chosen pages or the whole PDF as PNG or JPEG at 100 to 300 dpi; several pages come as one `.zip` (a small store-only zip writer, `web/src/lib/zip.ts`).
+- **Side by side:** `\` (or the two-columns button on a library file, `Shift+Enter`) shows a second PDF beside the open one, with its own page and zoom (`Shift+←/→`). It is read-only (its saved highlights, copy text); `Shift+X` swaps the two, so the other one gets the tools and notes. Remembered per browser (`localStorage` `ss-side`).
 - **Download notes:** `Shift+N` (or ⬇ in the notes panel) downloads the open file's notes as one `.zip` with a Markdown file per note, numbered in reading order (`web/src/lib/notesZip.ts`).
 - **Several files at once:** select files in the library (the box beside a file, Shift+click, `Space`, `Ctrl+A`), then `Shift+F` opens one window listing them, each with *Pictures* (every page, one `.zip`), *Text* (`.md` / `.txt`, from the PDF's text) and *Notes* (one `.md` per note, in a `.zip`). Pictures and text are for files with pages. Requests queue up and download one at a time.
 - **Keyboard-first forms:** in any dialog or form, `↓` jumps to the next empty text box and `↑` to the previous one (`web/src/lib/fieldNav.ts`).
 - **Get text / OCR in one key:** PDF text of this page / chosen pages / whole PDF with `Shift+T` / `Shift+G` / `Shift+A`; OCR with `Shift+O` / `Shift+P` / `Shift+W`. *Mark my highlights* (toggle with `H`) wraps text you highlighted (StudySpace highlights, and Highlight annotations saved in the PDF by any reader) as `==text==`, which notes render highlighted.
 - **Get text of a bookmark's section, with your notes:** `Shift+E` (text) / `Shift+U` (OCR), `4` in the Get text window, or `T` / `O` on a bookmark. The text runs from the bookmark's heading to the next bookmark's heading, even mid-page (a chapter includes its sections). *Include my notes* (`I`) puts each note in as a quote after the last of its pages being read.
-- **Area highlight by corners:** with the area (`A`) or region-OCR (`O`) tool, click the top-left then the bottom-right corner (or drag).
+- **Area highlight by corners:** with the area (`A`) or region-OCR (`O`) tool, right-click (two-finger tap) the top-left then the bottom-right corner, or drag. A plain left click makes no box.
 - **Copy pages as images:** `Shift+C` copies the current page to the clipboard as a PNG. `Shift+H` cuts it in half (top/bottom or left/right, adjustable) and lets you copy either half (`1`/`2`) or both (`B`; rich editors get two pictures), or save both as PNGs (`S`).
 - Reading position and zoom are remembered per document. **Continue reading** in the library lists recent documents.
 - **Resizable columns:** drag the dividers between the three columns (double-click resets; widths are remembered).
@@ -166,7 +170,7 @@ In the browser, a per-document undo stack also covers notes and annotations. Del
 
 ### Database schema
 
-`schema_migrations`, `directories`, `documents`, `resources` (with `styles`, colours picked for single headings or labels), `resource_pages`, `annotations`, `reading_progress` (with `top` for documents without pages), `document_history`, `note_highlights`, `bookmarks`, `document_highlights` (text highlights on HTML / Markdown), `sessions` (other devices' logins). Migrations live in `server/src/db/migrations.ts`:
+`schema_migrations`, `directories`, `documents`, `resources` (with `styles`, colours picked for single headings or labels), `note_markers` (markers on pages that open a note at a passage: page, spot, quote + context), `resource_pages`, `annotations` (kinds `highlight`, `area`, `ink`, `text`), `reading_progress` (with `top` for documents without pages), `document_history`, `note_highlights`, `bookmarks`, `document_highlights` (text highlights on HTML / Markdown), `sessions` (other devices' logins). Migrations live in `server/src/db/migrations.ts`:
 - They are append-only and applied in order.
 - Each runs in its own transaction and is rolled back completely on failure.
 - The server refuses to open a database created by a newer version.
@@ -208,6 +212,8 @@ All endpoints live under `/api`.
 **Resources**
 - `GET /documents/:id/resources[?page=N]`, `POST /documents/:id/resources`
 - `GET|PATCH|DELETE /resources/:id` (body may carry `styles`: `{ "<element key>": "#rrggbb" | "none" }`)
+- `POST /images` (the picture as the raw body, `image/png|jpeg|gif|webp`; checked by its first bytes, no SVG) → `{ name, src }`; `GET /images/:name`. A picture is a note whose whole content is `![](/api/images/<sha256>.<ext>)`; the app shows those in the Pictures section (slides over the notes column), not in the notes list. Files live in `<dataDir>/images/`, named by content hash, never deleted.
+- `GET /documents/:id/note-markers`, `POST /resources/:id/markers` `{ page, x, y, quote?, prefix?, suffix? }`, `PATCH|DELETE /note-markers/:id`
 
 **Highlights inside notes**
 - `GET /documents/:id/note-highlights`, `POST /resources/:id/highlights` `{ color, quote, prefix, suffix, comment }`
@@ -218,7 +224,7 @@ All endpoints live under `/api`.
 - `PATCH|DELETE /text-highlights/:id`
 
 **Annotations**
-- `GET|POST /documents/:id/annotations`, `PATCH|DELETE /annotations/:id`
+- `GET|POST /documents/:id/annotations`, `PATCH|DELETE /annotations/:id` (PATCH: `color`, `opacity`, `text`, `rects`, `strokeWidth`; a text box's `strokeWidth` is its font size as a share of the page width)
 - `POST /documents/:id/annotations/save` (writes highlights, drawings and the bookmark outline into the PDF)
 
 **Bookmarks (the PDF outline)**

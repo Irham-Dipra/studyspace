@@ -247,7 +247,7 @@ body {
 .ss-doc .ss-md h2 { font-size: 1.4em; margin-top: 1.2em; padding-bottom: 0.2em; border-bottom: 1px solid var(--ss-line); }
 .ss-doc .ss-md h3 { font-size: 1.2em; margin-top: 1.1em; }
 .ss-doc .ss-md h4 { font-size: 1.05em; }
-.ss-doc .ss-md img { max-width: 100%; height: auto; }
+.ss-md img { max-width: 100%; height: auto; border-radius: 0.375rem; }
 .ss-doc .ss-md table { display: block; max-width: 100%; overflow-x: auto; }
 
 .ss-note-hl {
@@ -287,4 +287,18 @@ body {
 }
 .ss-flash {
   animation: ss-flash 1.2s ease-in-out;
+}
+
+/* The passage a note marker points at, lit up for a moment when the marker is clicked. */
+.ss-passage {
+  animation: ss-passage 1.8s ease-out forwards;
+}
+@keyframes ss-passage {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }

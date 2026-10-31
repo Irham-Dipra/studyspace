@@ -1,6 +1,7 @@
 export type ResourceType = "note" | "ai_explanation" | "summary" | "pyq" | "link";
 export type ResourceScope = "page" | "range" | "document";
-export type AnnotationKind = "highlight" | "area" | "ink";
+/** "text": a text box typed on the page (rects[0] = its box, strokeWidth = font size as a share of the page width). */
+export type AnnotationKind = "highlight" | "area" | "ink" | "text";
 
 export interface Directory {
   id: number;
@@ -36,6 +37,8 @@ export interface DocumentRecord {
   mtimeMs: number;
   pageCount: number | null;
   missing: boolean;
+  /** Hidden from the library list by the user (still opens; listed under Hidden files). */
+  hidden: boolean;
   annotationsDirty: boolean;
   /** Bookmarks were changed in StudySpace but not yet written into the PDF's outline. */
   bookmarksDirty: boolean;
@@ -87,6 +90,23 @@ export interface Resource {
   styles: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A marker on a page that opens a note at the passage `quote` (with `prefix` / `suffix` around it,
+ * anchored like a note highlight), or the whole note when `quote` is empty. `x`, `y`: the spot it
+ * marks, normalised to the page as shown.
+ */
+export interface NoteMarker {
+  id: string;
+  resourceId: string;
+  page: number;
+  x: number;
+  y: number;
+  quote: string;
+  prefix: string;
+  suffix: string;
+  createdAt: string;
 }
 
 export interface NormRect {

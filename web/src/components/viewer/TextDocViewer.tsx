@@ -231,6 +231,8 @@ export function TextDocViewer(props: Props) {
         else if (scrollRef.current) scrollRef.current.scrollTop = t * (scrollRef.current.scrollHeight - scrollRef.current.clientHeight);
       },
       getPosition: () => ({ page: 1, top: topRef.current }),
+      goBack: () => undefined, // no pages to go back through
+      goForward: () => undefined,
       fitWidthZoom: () => 1,
       fitPageZoom: () => 1,
       getPdf: () => null,
