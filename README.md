@@ -1,270 +1,197 @@
 # StudySpace
 
-A local-first PDF study workspace. StudySpace reads course PDFs straight from your folders and shows the notes, summaries, previous-year questions (PYQs), links and AI explanations that belong to the page you are reading.
+**A local-first study workspace for your course PDFs.** Your library on the left, the PDF in the middle, and the notes for the page you're reading on the right.
 
-- **Library (left):** finds PDFs in your configured folders, recursively, and groups them by folder.
-- **Viewer (center):** PDF.js rendering with continuous scroll, exact current-page tracking, zoom (buttons, Ctrl+wheel, fit width/page), text selection, highlights, an area highlighter, a pen, an eraser and page editing.
-- **Page resources (right):** shows only what is attached to the visible page, plus document-wide items. It updates as you scroll.
+StudySpace reads your PDFs where they already are, keeps everything on your own computer and works fully offline: no account, no upload, no API key. It runs on **Windows, macOS and Linux**, and in any modern browser, including your phone's.
 
-Everything runs on your machine. No account, no upload and no API key are needed.
+<!-- To add a screenshot: save it as docs/screenshot.png, then put this line here: ![StudySpace](docs/screenshot.png) -->
 
-📖 **Step-by-step instructions for every feature: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)** (or press `?` in the app).
+## Features
 
----
+- **Library:** finds the PDFs, slides (`.pptx`, `.ppt`), HTML pages and Markdown files in your folders, groups them by folder, and remembers where you stopped reading. You can rename, delete and hide files, and filter and search everything (`Ctrl+K`).
+- **Notes that follow the page:** each note belongs to a page, a page range or the whole file, and the notes panel always shows the ones for the page in view. Notes are Markdown with LaTeX math (KaTeX), tables and pictures, and you can highlight or comment inside them. Notes are kept in five kinds: personal notes, summaries, previous-year questions, AI explanations and links.
+- **Mark up the PDF:** text and area highlights, a pen, an eraser, text boxes and note markers. *Save to PDF* writes them into the file as standard annotations, so other PDF readers show them too.
+- **Page tools:** insert, delete, replace, rotate and move pages, or extract, split and merge into new PDFs. Your notes stay on the right pages through every edit.
+- **Bookmarks:** the PDF's own outline is read in. You can edit it and save it back into the file.
+- **Get text and OCR:** turn pages, a bookmark's section or a drawn region into Markdown or plain text, optionally with your highlights and notes included. Scanned pages can be OCRed and their text added to the PDF.
+- **Reading tools:** two PDFs side by side, back and forward through jumps, pages saved as pictures, any part of the window copied to the clipboard as a screenshot.
+- **Export:** a file's notes as Markdown files in a `.zip`, its pages as pictures or its text, also for several files at once.
+- **Undo everything:** `Ctrl+Z` covers notes, highlights, bookmarks and even page edits. Edited PDFs keep their previous versions as a backup.
+- **Keyboard first:** every feature has a key, shown beside it. Press `?` in the app for the full list.
+- **On your phone:** open it over your Wi-Fi or Tailscale with a password ([phone setup](docs/PHONE_SETUP.md)).
 
-## Requirements
+Every feature, step by step: **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**.
 
-- Node.js **22.5+** (24 LTS recommended). StudySpace uses Node's built-in `node:sqlite`, so nothing has to be compiled.
-- Linux, macOS or Windows (developed on Ubuntu).
+## Quick start
 
-If Node isn't installed:
+You need **Node.js 24 or newer** and **Git**. [REQUIREMENTS.md](REQUIREMENTS.md) lists everything, with install commands for each system.
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-source ~/.bashrc
-nvm install --lts
+git clone https://github.com/YOUR-USERNAME/studyspace.git
+cd studyspace
+npm install
+npm run check
+npm run dev
 ```
 
-## Setup
+`npm run check` reports anything this computer is missing. Once `npm run dev` is running, open **http://localhost:5173** and add the folder holding your PDFs under **⚙ Settings → Library folders**.
+
+## Run it on another PC, step by step
+
+### 1. Install Node.js and Git
+
+| System | Commands |
+| --- | --- |
+| **Windows 10/11** (PowerShell) | `winget install -e --id OpenJS.NodeJS.LTS`<br>`winget install -e --id Git.Git`<br>Then **close and reopen** the terminal. |
+| **macOS** | Install [Homebrew](https://brew.sh), then `brew install node git` |
+| **Ubuntu / Debian** | `sudo apt install git curl`<br>`curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh \| bash`<br>Reopen the terminal, then `nvm install 24` |
+| **Fedora / Arch** | `sudo dnf install git nodejs` or `sudo pacman -S git nodejs npm` (check that `node -v` says 24 or newer; if not, use nvm as on Ubuntu) |
+
+You can also download Node.js from [nodejs.org](https://nodejs.org) and Git from [git-scm.com](https://git-scm.com). Check both with `node -v` (it should say v24 or newer) and `git --version`.
+
+LibreOffice (for slides) and OCRmyPDF/Tesseract (for OCR) are optional. You can add them later: see [REQUIREMENTS.md](REQUIREMENTS.md).
+
+### 2. Get the code
+
+```bash
+git clone https://github.com/YOUR-USERNAME/studyspace.git
+cd studyspace
+```
+
+Without Git, use **Code → Download ZIP** on GitHub, unzip it, and open a terminal in that folder.
+
+### 3. Install the npm packages
 
 ```bash
 npm install
-cp .env.example .env      # then set STUDYSPACE_LIBRARY_DIRS to your PDF folder
 ```
 
-You can also skip `.env` and add folders in the app under **Settings → Library folders** (it has a folder browser).
+This downloads the packages listed in `package.json` (the exact versions are pinned in `package-lock.json`) into `node_modules/`. It takes a minute or two and needs no compiler: the few native parts come prebuilt for Windows, macOS and Linux.
 
-## Run
+### 4. Check the computer
 
-**Development** (API with auto-reload + Vite dev server with hot reload):
+```bash
+npm run check
+```
+
+Each line is `[ok]`, `[--]` (optional and missing, which is fine) or `[!!]` (required and missing). Fix the `[!!]` lines and run it again.
+
+### 5. Start it
 
 ```bash
 npm run dev
 ```
 
-Open **http://127.0.0.1:5173**
+Open **http://localhost:5173** and add your PDF folder under **⚙ Settings → Library folders**: browse to it, or type its path, such as `D:\Courses` or `/home/you/Courses`. Leave the terminal open while you study, and press `Ctrl+C` in it to stop.
 
-**Production-style** (builds the UI, and one Node process serves both UI and API):
+Next time, you only need to open a terminal in the `studyspace` folder and run `npm run dev`.
 
-```bash
-npm start
-```
+### Optional: a settings file
 
-Open **http://127.0.0.1:4317**
-
-**Tests:**
+Copy the example and edit it. It can set your PDF folder, the port, a phone password and the OCR language.
 
 ```bash
-npm test           # backend: migrations, discovery, path guard, CRUD, page associations, PDF editing, AI hook
-npm run typecheck  # server + web
+cp .env.example .env        # Windows: copy .env.example .env
 ```
 
-## Where data lives
+### Updating
 
-| What | Location |
+```bash
+git pull
+npm install
+```
+
+If you use `npm start` (below), it rebuilds the app on every start, so there's nothing else to do.
+
+### Bringing your notes from the old PC
+
+Your notes are not in the repository. They live in StudySpace's data folder (see [Where your data lives](#where-your-data-lives)). To move them:
+
+1. Stop StudySpace on both computers.
+2. Copy the old computer's whole data folder to the new computer's data folder. The place depends on the system (see the table), so a folder from Linux goes to `%LOCALAPPDATA%\StudySpace` on Windows. Create the folders if they don't exist yet.
+3. Copy your PDFs to the new computer, start StudySpace and add their folder in Settings. The old computer's folder is still listed there, and you can remove it.
+
+StudySpace recognises a file by its content, not its path, so notes, highlights and bookmarks find their PDFs again even in a different folder. Keep the PDFs unchanged on the way.
+
+## Commands
+
+| Command | What it does |
 | --- | --- |
-| SQLite database | `~/.local/share/studyspace/studyspace.db` (or `$XDG_DATA_HOME/studyspace/`, or `STUDYSPACE_DATA_DIR`) |
-| Previous versions of PDFs StudySpace edited (undo history, doubles as backup) | `~/.local/share/studyspace/history/<document-id>/` (last 10 per PDF) |
-| Your PDFs | Stay where they are. They are never copied into the app. |
-| Files deleted from the library | The desktop Trash, `~/.local/share/Trash/` (or `STUDYSPACE_TRASH_DIR`), so the file manager can restore them |
-| Logins of other devices | The `sessions` table (only a hash of each cookie's token) |
+| `npm run dev` | Development: the server on port 4317 (restarts on code changes) and the web page on **http://localhost:5173** (hot reload). |
+| `npm start` | Builds the web page, then serves everything from one process on **http://localhost:4317**. Use this for daily use or for a phone. |
+| `npm run check` | Checks Node, the npm packages, the optional tools and the ports. |
+| `npm test` | Server tests (Vitest). |
+| `npm run typecheck` | TypeScript checks for the server and the web page. |
+| `npm run build` | Builds `web/dist` and `server/dist` without starting anything. |
 
-The database is never placed inside the web root. The **Settings** dialog shows the exact path.
+## Configuration
 
-## Configuration (`.env`)
+Everything is optional. Settings come from `.env` in the project folder (copy [.env.example](.env.example)), and real environment variables override it. Most things, such as your library folders and what to hide, are set in the app under **⚙ Settings** instead.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `STUDYSPACE_LIBRARY_DIRS` | – | Folders added on first start (separate several with `:`). Later changes go through Settings. |
-| `STUDYSPACE_EXCLUDES` | – | Comma-separated folders or files to hide, e.g. `Offllines, *.md` (same rules as Settings: names at any depth, paths with `/`, `*` `**` `?`, `re:` regexes) |
-| `STUDYSPACE_DATA_DIR` | `~/.local/share/studyspace` | Database + backups |
-| `STUDYSPACE_HOST` / `STUDYSPACE_PORT` | `127.0.0.1` / `4317` | Address. `127.0.0.1` = this computer only; `0.0.0.0` = also devices on the same Wi-Fi (they must log in). |
-| `STUDYSPACE_PASSWORD` | – | Lets other devices (a phone over Wi-Fi or Tailscale) log in. Without it only this computer can use StudySpace. This computer never needs it. |
-| `STUDYSPACE_ALLOWED_HOSTS` | – | Extra host names other devices may use, comma-separated. This computer's IP addresses and name, `localhost` and `*.ts.net` always work. |
-| `STUDYSPACE_OCR_LANG` | `eng` | Tesseract language(s) for OCR, e.g. `eng+ben` (install `tesseract-ocr-ben`). |
-| `STUDYSPACE_OCRMYPDF` / `STUDYSPACE_TESSERACT` | `ocrmypdf` / `tesseract` | OCR programs. Install with `sudo apt install ocrmypdf tesseract-ocr`. OCR only runs when you ask for it. |
-| `STUDYSPACE_SOFFICE` | `soffice`, else `libreoffice` | LibreOffice, which turns slides (`.pptx`, `.ppt`) into a PDF when they are first opened. |
-| `STUDYSPACE_TRASH_DIR` | `~/.local/share/Trash` (or `$XDG_DATA_HOME/Trash`) | Where files deleted in the library go (freedesktop.org Trash layout: `files/` and `info/`). |
-| `STUDYSPACE_CONVERT_DIR` | snap: `~/snap/libreoffice/common/studyspace`; else `<dataDir>/convert-tmp` | Where LibreOffice works on a copy of the slides. A snap LibreOffice can't read `/tmp` or hidden folders. |
-| `STUDYSPACE_HISTORY_LIMIT` | `10` | Undoable file edits kept per PDF (each keeps the previous file version). `0` disables undo for page edits / Save to PDF. |
-| `AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL` | `none` | Optional AI integration (see below) |
+| `STUDYSPACE_LIBRARY_DIRS` | – | Folders added on the very first start. Separate several with `:` (Linux/macOS) or `;` (Windows). |
+| `STUDYSPACE_EXCLUDES` | – | Folders or files to hide, comma-separated, such as `Old, *.md` (the same rules as in Settings). |
+| `STUDYSPACE_DATA_DIR` | see below | Where the database, pictures and backups live. |
+| `STUDYSPACE_HOST` / `STUDYSPACE_PORT` | `127.0.0.1` / `4317` | `0.0.0.0` also lets devices on your Wi-Fi in (they must log in). |
+| `STUDYSPACE_PASSWORD` | – | Lets a phone or other device log in. This computer never needs it. |
+| `STUDYSPACE_ALLOWED_HOSTS` | – | Extra host names other devices may use. |
+| `STUDYSPACE_HISTORY_LIMIT` | `10` | Undoable file edits kept per PDF. |
+| `STUDYSPACE_OCR_LANG` | `eng` | Tesseract languages, such as `eng+ben`. |
+| `STUDYSPACE_OCRMYPDF` / `STUDYSPACE_TESSERACT` / `STUDYSPACE_SOFFICE` | found on the PATH | Full paths to these programs, if they're installed somewhere else. |
+| `STUDYSPACE_TRASH_DIR` | see below | Where files deleted in the library go. |
 
-Real environment variables override `.env`.
+## Where your data lives
 
-## Using it
+Your PDFs stay where they are. StudySpace never copies or uploads them, but in-app page edits and *Save to PDF* do change the original file, and the previous version is kept for undo.
 
-- **On a phone:** set `STUDYSPACE_PASSWORD`, then either `STUDYSPACE_HOST=0.0.0.0` and `http://<this computer's IP>:4317` on the same Wi-Fi, or `tailscale serve --bg 4317` and the `https://….ts.net` address from anywhere. The phone uses the built app on 4317, so run `npm run build` after updates. Step by step: [docs/PHONE_SETUP.md](docs/PHONE_SETUP.md).
-- **HTML pages and Markdown files:** `.html`/`.htm` (e.g. a Claude artifact saved from claude.ai) and `.md`/`.markdown` files are listed with the PDFs. They open as text that flows, with no pages; you can highlight their text and keep notes on them, and the file itself is never changed. An HTML page runs in a sandboxed frame (scripts allowed, no access to StudySpace or its storage).
-- **Several PDFs at once:** Ctrl+click (or middle-click) a library entry to open it in a new browser tab. Tabs notify each other through `BroadcastChannel` and re-read whatever another tab changed. File edits reload the PDF, and edits are fingerprint-checked so a stale tab can never overwrite a newer file.
-- **Unsaved work:** opening another PDF in the same tab asks first when highlights or bookmarks aren't saved into the file or a note is half written (Save to PDF and open / Open without saving / Stay here).
-- **Notes & resources:** one combined list per page, grouped by type. Every card is open when a PDF is opened, with a **Close / Expand** button right after its title. Use **+ Add note or resource** in the right panel. Pick a type (Personal Note, Summary, PYQ, AI Explanation, External Link) and a scope:
-  - *This page*
-  - *Page range*
-  - *Whole document*
+| | Windows | macOS | Linux |
+| --- | --- | --- | --- |
+| Data folder (database, note pictures, PDF versions for undo, converted slides) | `%LOCALAPPDATA%\StudySpace` | `~/Library/Application Support/StudySpace` | `~/.local/share/studyspace` |
+| Files deleted in the library | `Trash` inside the data folder | `Trash` inside the data folder | The desktop Trash (`~/.local/share/Trash`) |
 
-  Content is Markdown with `$math$` support (KaTeX).
-- **Annotate notes:** select text inside an expanded note or resource to highlight it or add a comment. Highlights are stored separately (`note_highlights` table) and anchored by quote and context, so the note's Markdown is never modified.
-- **Select text** to get a small menu: highlight it in a colour, quote it into a new note, or copy it.
-- **Tools** (toolbar or keys): `V` select · `H` highlight text · `A` highlight an area · `P` pen · `E` eraser · `Esc` back to select. Click an existing highlight to recolour it, delete it, or turn it into a note.
-- **Slides:** `.pptx` and `.ppt` files show in the library (with a slides icon) next to PDFs. The first time one opens, LibreOffice turns a copy of it into a PDF (about 30–60 s), kept in `<dataDir>/converted/` and made again only when the slides change; after that it opens at once. Notes, highlights, drawings, bookmarks, Get text and pictures work as on a PDF. The slides file is never changed: page edits, Save to PDF and OCR are off, and *Extract pages* makes an editable PDF.
-- **Text boxes:** the text box tool (`Y`) types text onto a page; it wraps in its box and can be moved, edited, recoloured and resized (all undoable). *Save to PDF* writes them as FreeText annotations drawn in Helvetica (WinAnsi: other characters are drawn as `?`; `/Contents` keeps the text).
-- **Note markers:** a marker on a page opens a note at a passage of it: select text in a note → *Pin on page* (`K`) → click the spot. The marker tool (`K`) also makes a new note with a marker. A note can have several (`note_markers`); dragging moves one, right-click removes it. Markers stay in StudySpace.
-- **Save to PDF:** highlights and drawings are stored instantly in the database. **Save to PDF** writes them into the original file as standard PDF Highlight/Ink/FreeText annotations, so Okular, Evince, Acrobat and browsers show them too. Saving again replaces StudySpace's earlier annotations instead of duplicating them, and annotations from other tools are left untouched.
-- **Page tools:** the 🗑 button (or `Shift+Delete`) deletes the current page, and 🔧 offers *insert blank pages*, *insert pages from another PDF*, *replace this page* (with pages of any library PDF, one for one, so page numbers and notes stay put), *turn pages*, *move pages* and *delete several pages*. These rewrite the original file. Notes, ranges, highlights and your reading position stay with their content as page numbers shift. Notes that belonged only to a deleted page are **never moved onto another page**: they are removed with it (undo brings them back), or kept as whole-document notes if you choose that in the dialog.
-- **New PDFs:** 🔧 → *Extract pages to a new PDF* (optionally removing them from the original), *Split this PDF* (every N pages, by page ranges, or by chapter bookmarks) and *Merge PDFs* (any library PDFs and page lists, in your order, with a bookmark per source). New files go into a library folder you pick, never overwrite existing files, show up in the library at once, and bring along the copied pages' notes, highlights and bookmarks. The source PDFs are only read.
-- **Bookmarks:** the left column's *Bookmarks* tab shows the PDF's own outline (imported the first time it opens) and lets you add (`B`), rename, nest, reorder and delete bookmarks. They jump to the exact spot on the page and follow their pages through page edits. **Save to PDF** writes them into the file as a standard outline.
-- **Undo / redo everything:** `Ctrl+Z` / `Ctrl+Shift+Z` (or `Ctrl+Y`), or the ↶ ↷ buttons. This covers notes, resources, highlights, drawings, bookmarks, page edits and Save to PDF. Undoing a page edit restores the previous file version exactly and puts every note back on its original page.
-- **Shortcuts for everything:** every feature has a key, shown beside it (menu items, buttons, tooltips) and listed in the searchable `?` help. All keys live in one registry, `web/src/lib/shortcuts.ts`, which the handlers, tooltips and help screen all read. Examples: `T` page tools, `I`/`Shift+I` insert, `R` replace, `Shift+R` turn, `M` move, `X` extract, `S` split, `Shift+M` merge, `Shift+C` copy page as image, `Shift+H` cut page in half, `B` bookmark, `N` note, `L`/`Shift+B` files/bookmarks, `/` filter, `1`–`5` colours, `Ctrl+S` save, `Ctrl+K` search.
-- **Hide the bars:** `Shift+V` (or the title bar's double-arrow button) hides the title bar and the tools bar; a small button at the top right of the page (or `Shift+V`) brings them back. Remembered in `localStorage` (`ss-bars-hidden`).
-- **Screenshot to clipboard:** `Q` (or the crop button) dims the window; click two corners or drag, and that part of the window is copied as a PNG (`Enter` takes the whole window). The window is drawn in-page with `modern-screenshot`, so no screen-sharing prompt.
-- **Save pages as pictures:** `Shift+S` saves this page, chosen pages or the whole PDF as PNG or JPEG at 100 to 300 dpi; several pages come as one `.zip` (a small store-only zip writer, `web/src/lib/zip.ts`).
-- **Side by side:** `\` (or the two-columns button on a library file, `Shift+Enter`) shows a second PDF beside the open one, with its own page and zoom (`Shift+←/→`). It is read-only (its saved highlights, copy text); `Shift+X` swaps the two, so the other one gets the tools and notes. Remembered per browser (`localStorage` `ss-side`).
-- **Download notes:** `Shift+N` (or ⬇ in the notes panel) downloads the open file's notes as one `.zip` with a Markdown file per note, numbered in reading order (`web/src/lib/notesZip.ts`).
-- **Several files at once:** select files in the library (the box beside a file, Shift+click, `Space`, `Ctrl+A`), then `Shift+F` opens one window listing them, each with *Pictures* (every page, one `.zip`), *Text* (`.md` / `.txt`, from the PDF's text) and *Notes* (one `.md` per note, in a `.zip`). Pictures and text are for files with pages. Requests queue up and download one at a time.
-- **Keyboard-first forms:** in any dialog or form, `↓` jumps to the next empty text box and `↑` to the previous one (`web/src/lib/fieldNav.ts`).
-- **Get text / OCR in one key:** PDF text of this page / chosen pages / whole PDF with `Shift+T` / `Shift+G` / `Shift+A`; OCR with `Shift+O` / `Shift+P` / `Shift+W`. *Mark my highlights* (toggle with `H`) wraps text you highlighted (StudySpace highlights, and Highlight annotations saved in the PDF by any reader) as `==text==`, which notes render highlighted.
-- **Get text of a bookmark's section, with your notes:** `Shift+E` (text) / `Shift+U` (OCR), `4` in the Get text window, or `T` / `O` on a bookmark. The text runs from the bookmark's heading to the next bookmark's heading, even mid-page (a chapter includes its sections). *Include my notes* (`I`) puts each note in as a quote after the last of its pages being read.
-- **Area highlight by corners:** with the area (`A`) or region-OCR (`O`) tool, right-click (two-finger tap) the top-left then the bottom-right corner, or drag. A plain left click makes no box.
-- **Copy pages as images:** `Shift+C` copies the current page to the clipboard as a PNG. `Shift+H` cuts it in half (top/bottom or left/right, adjustable) and lets you copy either half (`1`/`2`) or both (`B`; rich editors get two pictures), or save both as PNGs (`S`).
-- Reading position and zoom are remembered per document. **Continue reading** in the library lists recent documents.
-- **Resizable columns:** drag the dividers between the three columns (double-click resets; widths are remembered).
-- The UI is responsive: below 1024 px the side panels become slide-over drawers. There is also a dark mode.
+**⚙ Settings** shows the exact path. To back up your notes, copy the data folder while StudySpace is stopped.
 
-## How it works
+## Using it on your phone
 
-```
-studyspace/
-├── server/                 Express + TypeScript API
-│   ├── src/db/             node:sqlite, ordered transactional migrations, one store per entity
-│   ├── src/library/        recursive scanner, content fingerprints, rename-aware sync, path guard
-│   ├── src/pdf/            pdf-lib operations, display→PDF coordinate mapping, page remapping
-│   ├── src/services/       document editor (atomic write + backup + DB remap in one transaction)
-│   ├── src/ai/             provider interface + registry (disabled by default)
-│   └── test/               Vitest + Supertest
-└── web/                    React + Vite + Tailwind v4 + PDF.js + lucide-react
-    └── src/components/viewer/   virtualised viewer, page renderer, annotation overlay
-```
+1. Set a password in `.env`: `STUDYSPACE_PASSWORD=…`.
+2. On the same Wi-Fi, also set `STUDYSPACE_HOST=0.0.0.0`, run `npm start`, and open the address it prints, such as `http://192.168.0.10:4317`. From anywhere, use [Tailscale](https://tailscale.com) with `tailscale serve --bg 4317` instead.
 
-**Stable document IDs.** Each PDF gets a random UUID. Its *fingerprint* is a SHA-256 of its size plus its first and last 256 KiB, and it is used to recognise the file after a rename or move. On rescan:
-- A known path keeps its ID.
-- An unknown path whose fingerprint matches a document whose old path no longer exists is treated as a move: the same ID, so notes are kept.
-- A file that disappears is marked *missing* rather than deleted, so its notes come back when it returns.
-
-When StudySpace edits a file itself, it records the new fingerprint immediately.
-
-**File access.** PDFs are streamed from disk with HTTP Range support (big textbooks open in about a second). Every read and write resolves the real path, following symlinks, and checks that it lies inside an enabled library folder. The scanner does not follow directory symlinks, and it skips file symlinks that point outside the folder. The server listens on `127.0.0.1` only.
-
-**Edits are safe and undoable.**
-1. Edits are serialised per document.
-2. Before writing, the current file is stored in `history/`, together with a snapshot of the document's notes, page associations, highlights and reading position (`document_history` table).
-3. The new version is written to a temp file in the same folder, `fsync`ed, then atomically renamed over the original.
-4. If the client's fingerprint doesn't match the file on disk (it changed elsewhere), the edit is refused with 409.
-
-Undo (`POST /documents/:id/history/:editId/undo`, latest edit only) restores the previous file and the snapshot. Items created after the edit are mapped back through the inverse page mapping. Undo is refused if another program changed the file since.
-
-In the browser, a per-document undo stack also covers notes and annotations. Deleted items are recreated with their original IDs, so undo and redo can be replayed safely.
-
-**Page-scoped resources.** `resources` holds the content. `resource_pages(resource_id, page_start, page_end)` holds the page association, and a document-wide resource has no row. The page query is `scope = 'document' OR page_start <= p <= page_end`. The UI loads the document's resources once and filters by page in memory, so the right panel updates without a network round trip.
-
-**Annotation geometry** is stored normalised to the displayed page (0–1). It is mapped into PDF user space only when saving, which takes `/Rotate` and the CropBox into account. When viewing, annotations that StudySpace wrote into the file are hidden from the PDF.js canvas and drawn from the database instead, so they're never shown twice and stay editable.
-
-### Database schema
-
-`schema_migrations`, `directories`, `documents`, `resources` (with `styles`, colours picked for single headings or labels), `note_markers` (markers on pages that open a note at a passage: page, spot, quote + context), `resource_pages`, `annotations` (kinds `highlight`, `area`, `ink`, `text`), `reading_progress` (with `top` for documents without pages), `document_history`, `note_highlights`, `bookmarks`, `document_highlights` (text highlights on HTML / Markdown), `sessions` (other devices' logins). Migrations live in `server/src/db/migrations.ts`:
-- They are append-only and applied in order.
-- Each runs in its own transaction and is rolled back completely on failure.
-- The server refuses to open a database created by a newer version.
-
-To change the schema, add a new migration with the next version number.
-
-## Adding an AI provider
-
-The app is fully functional without AI, and the AI buttons are currently hidden from the notes panel. The server API (`/api/ai/status`, `/api/ai/generate`) and the client helper `extractText()` in `web/src/lib/pdf.ts` are kept so the buttons can come back once a provider exists. To plug in a model:
-
-1. Create `server/src/ai/providers/<name>.ts` implementing `AIProvider` from `server/src/ai/types.ts`. It needs one method, `generate({ task, documentTitle, pageStart, pageEnd, text }) → { title, content }`, and `buildPrompt()` in `ai/index.ts` gives you a ready prompt.
-2. Register it in the `registry` in `server/src/ai/index.ts`.
-3. Set `AI_PROVIDER=<name>` (plus `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL` as needed) in `.env`.
-
-The browser extracts the page text with PDF.js, the server calls the provider, and the answer is saved as a page-scoped *AI Explanation* or *Summary* resource. A test in `server/test/ai.test.ts` shows a provider end to end.
-
-## API overview
-
-All endpoints live under `/api`.
-
-**Access**
-- Requests from this computer (sent from 127.0.0.1 to `localhost` / `127.0.0.1`) need no login. Anything else (Wi-Fi, `tailscale serve`) needs the `ss_session_<port>` cookie from logging in.
-- Every write (any method but GET/HEAD/OPTIONS) must carry the header `X-StudySpace: 1`. Other websites can't send it, so they can't change anything here.
-- The `Host` must be a name of this computer (stops DNS rebinding); see `STUDYSPACE_ALLOWED_HOSTS`.
-- `GET /auth/status` → `{ local, loggedIn, passwordSet }`; `POST /auth/login` `{ password }` (5 wrong tries a minute per client, then 429); `POST /auth/logout`.
-- Adding, changing or browsing folders (`/directories` writes, `/fs/browse`) works only on this computer.
-
-**Library and folders**
-- `GET /library`, `POST /library/scan`, `GET /search?q=`, `GET /recent`
-- `GET|POST /directories`, `PATCH|DELETE /directories/:id`, `GET /fs/browse?path=`
-
-**Documents**
-- `GET /documents/:id`, `GET /documents/:id/file` (stream; slides are served as their converted PDF; HTML as `text/html` with `Content-Security-Policy: sandbox`, Markdown as `text/markdown`), `PATCH /documents/:id/meta`
-- `GET /documents/:id/asset?path=img/x.png`: a picture next to a Markdown file (pictures only, in its folder or below; sent sandboxed)
-- `POST /documents/:id/convert` (slides: turn them into a PDF if needed and wait; `{ ready: true }`)
-- `POST /documents/:id/rename` `{ name }` (same folder, the extension is kept; refuses a name that's taken), `POST /documents/:id/trash` (to the desktop Trash, `{ trashName }`; the row is kept as missing, with its notes), `POST /documents/:id/restore` `{ trashName }` (puts it back if its place is free)
-- `GET|PUT /documents/:id/progress` `{ page, zoom, top? }` (`top`: how far down an HTML / Markdown document, 0–1; left out, the stored one is kept)
-
-**Resources**
-- `GET /documents/:id/resources[?page=N]`, `POST /documents/:id/resources`
-- `GET|PATCH|DELETE /resources/:id` (body may carry `styles`: `{ "<element key>": "#rrggbb" | "none" }`)
-- `POST /images` (the picture as the raw body, `image/png|jpeg|gif|webp`; checked by its first bytes, no SVG) → `{ name, src }`; `GET /images/:name`. A picture is a note whose whole content is `![](/api/images/<sha256>.<ext>)`; the app shows those in the Pictures section (slides over the notes column), not in the notes list. Files live in `<dataDir>/images/`, named by content hash, never deleted.
-- `GET /documents/:id/note-markers`, `POST /resources/:id/markers` `{ page, x, y, quote?, prefix?, suffix? }`, `PATCH|DELETE /note-markers/:id`
-
-**Highlights inside notes**
-- `GET /documents/:id/note-highlights`, `POST /resources/:id/highlights` `{ color, quote, prefix, suffix, comment }`
-- `PATCH|DELETE /note-highlights/:id`
-
-**Highlights on HTML / Markdown documents** (anchored the same way: quote + context)
-- `GET|POST /documents/:id/text-highlights` `{ id?, color, quote, prefix, suffix, comment }`
-- `PATCH|DELETE /text-highlights/:id`
-
-**Annotations**
-- `GET|POST /documents/:id/annotations`, `PATCH|DELETE /annotations/:id` (PATCH: `color`, `opacity`, `text`, `rects`, `strokeWidth`; a text box's `strokeWidth` is its font size as a share of the page width)
-- `POST /documents/:id/annotations/save` (writes highlights, drawings and the bookmark outline into the PDF)
-
-**Bookmarks (the PDF outline)**
-- `GET /documents/:id/bookmarks` → `{ imported, bookmarks }`
-- `POST /documents/:id/bookmarks/import` `{ entries: [{ title, page, top?, children? }] }`: stores the PDF's own outline (read by the browser with pdf.js). It runs once per PDF; later calls change nothing.
-- `POST /documents/:id/bookmarks` `{ id?, title, page, top?, parentId?, position? }`, `PATCH|DELETE /bookmarks/:id` (deleting removes the nested bookmarks too)
-- `top` is the spot on the page (0 = top, 1 = bottom; `null` = top of the page). Siblings are ordered by `position`.
-
-**Page editing**
-- `POST /documents/:id/pages/insert-blank` `{ after, count, fingerprint }`
-- `POST /documents/:id/pages/insert-from` `{ after, sourceDocumentId, fromPage, toPage, fingerprint }`
-- OCR runs on a temporary copy and never changes the library file until *apply*:
-  - `GET /ocr/status`
-  - `POST /documents/:id/ocr` `{ pages, fingerprint }` → job
-  - `GET /ocr/jobs/:id` (state/progress)
-  - `GET /ocr/jobs/:id/file` (the OCRed copy)
-  - `POST /ocr/jobs/:id/apply` `{ fingerprint }`: adds the invisible text layer as an undoable edit (`kind: "ocr"`)
-  - `DELETE /ocr/jobs/:id`
-  - `POST /ocr/image` (PNG body → `{ text }`, region OCR with Tesseract)
-- `POST /documents/:id/pages/replace` `{ page, sourceDocumentId, fromPage, toPage, keepAnnotations?, fingerprint }`: replaces pages `page…page+(toPage−fromPage)`. The page count is unchanged, and highlights on the replaced pages are removed unless `keepAnnotations` is set.
-- `POST /documents/:id/pages/delete` `{ pages, fingerprint, orphans: "delete" | "document" }`
-- `POST /documents/:id/pages/rotate` `{ pages, angle: 90 | 180 | 270, fingerprint }` (clockwise; highlights turn with their pages)
-- `POST /documents/:id/pages/move` `{ pages, after, fingerprint }` (moves the pages, in order, to just after page `after`; `0` = to the start)
-
-**New PDFs (extract, split, merge)**: these only read the source PDFs.
-- `GET /library/folders`: the folders inside library folders where new PDFs can go
-- `POST /pdf-tools/create` `{ folder, newFolder?, outputs: [{ name, segments: [{ documentId, pages?, title? }] }], copyNotes, copyHighlights, copyBookmarks, bookmarkPerSource }` → `{ folder, documents }`
-  - Each output is one new file built from the segments in order. A segment without `pages` takes every page.
-  - The folder must be inside an enabled library folder (and not excluded). Names are sanitised, and existing files are never overwritten (`name (2).pdf`).
-  - The new files are added to the library with the copied pages' notes (with their note highlights), highlights and bookmarks.
-- `GET /documents/:id/history`, `POST /documents/:id/history/:editId/undo`
-
-File edits return the updated document plus an `editId` for undo.
-
-**AI**
-- `GET /ai/status`, `POST /ai/generate`
+On Windows, allow Node.js through the firewall when Windows asks. Full steps: [docs/PHONE_SETUP.md](docs/PHONE_SETUP.md).
 
 ## Troubleshooting
 
-- **"This PDF is encrypted"**: pdf-lib can't rewrite encrypted PDFs. You can still read them, add notes and highlight them (highlights stay in the database), but saving into the file and page edits aren't available.
-- **"The PDF file is read-only"**: StudySpace needs write permission on a file to save annotations or edit pages.
-- **"The PDF changed on disk since it was opened"**: another program modified it. Reopen the document and try again.
-- **Restoring a previous version by hand**: copy a file from `~/.local/share/studyspace/history/<document-id>/` back over the original while the app is stopped, then rescan. Normally `Ctrl+Z` does this for you.
+| Problem | Fix |
+| --- | --- |
+| `No such built-in module: node:sqlite`, or `EBADENGINE` while installing | Node is too old. Install Node 24 or newer, reopen the terminal, then `npm install` again. |
+| Windows: `'npm' is not recognized` | Close and reopen the terminal after installing Node.js (or restart Windows). |
+| Windows PowerShell: `npm.ps1 cannot be loaded because running scripts is disabled` | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or use Command Prompt instead. |
+| `EADDRINUSE: address already in use 127.0.0.1:4317` | StudySpace is already running in another terminal, or something else uses the port: set `STUDYSPACE_PORT=4318` in `.env`. |
+| The page opens but shows no files | Add your folder under **⚙ Settings → Library folders**. Folder settings can only be changed on the computer itself, not on a phone. |
+| Slides don't open | Install LibreOffice ([REQUIREMENTS.md](REQUIREMENTS.md)). The first opening of a deck takes 30–60 s. |
+| "OCR isn't installed" | Install Tesseract and OCRmyPDF ([REQUIREMENTS.md](REQUIREMENTS.md)). No restart needed. |
+| "This PDF is encrypted" | You can read, highlight and take notes, but saving into the file and page edits aren't possible. |
+| "The PDF file is read-only" | StudySpace needs write permission on the file to save into it or edit pages. |
+| "The PDF changed on disk since it was opened" | Another program changed it. Reopen it and try again. |
+| Restore an older version of a PDF by hand | Stop StudySpace, copy a file from `<data folder>/history/<document-id>/` over the original, start it again and press ⟳ Rescan. Normally `Ctrl+Z` does this for you. |
+
+## Project layout
+
+```
+studyspace/
+├── server/            the API: Express 5 + TypeScript, Node's built-in SQLite, pdf-lib
+│   ├── src/           routes, database and migrations, library scanner, PDF editing, OCR, slides
+│   └── test/          Vitest + Supertest
+├── web/               the page: React + Vite + Tailwind CSS + PDF.js
+│   └── src/           app state, viewer, notes, dialogs, keyboard shortcuts
+├── scripts/           check-requirements.mjs (npm run check), shortcut-tables.mts
+└── docs/              user guide, phone setup, developer notes
+```
+
+## Documentation
+
+- [docs/USER_GUIDE.md](docs/USER_GUIDE.md): every feature, step by step.
+- [REQUIREMENTS.md](REQUIREMENTS.md): what to install, per system.
+- [docs/PHONE_SETUP.md](docs/PHONE_SETUP.md): using StudySpace on a phone.
+- [docs/DEVELOPER.md](docs/DEVELOPER.md): how it works, the HTTP API and the database.
+- [CLAUDE.md](CLAUDE.md) and [HANDOFF.md](HANDOFF.md): the full development notes and feature history.

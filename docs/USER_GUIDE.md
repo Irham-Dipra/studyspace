@@ -18,6 +18,8 @@ This guide walks through every feature of StudySpace, step by step. Press **`?`*
 
 The first time you start, StudySpace adds the folder from your `.env` file (`/home/dipra/Buet/3-1`, skipping `Offllines`) and scans it. Your PDFs are read where they are. Nothing is copied or uploaded.
 
+> **On another computer** (Windows, macOS or Linux), first install Node.js and the npm packages: see the [README](../README.md#run-it-on-another-pc-step-by-step) and [REQUIREMENTS.md](../REQUIREMENTS.md). Then `cd` into the folder you cloned and run `npm run dev` as above. Without a `.env` file, add your PDF folder under **⚙ Settings → Library folders**.
+
 ---
 
 ## 2. The screen at a glance
@@ -71,9 +73,9 @@ Press **`Shift+V`** (or the double-arrow button in the title bar) to hide **both
 - **Continue reading:** your recently opened PDFs are listed at the top with the page you were on. Click one to jump back in.
 - **Search everything:** press **`Ctrl+K`** (or click the search box), type part of a file name or of a note, use **↑/↓** to choose, and press **Enter**. Choosing a note opens its PDF on the note's page.
 - **Rename a file:** hover over it and click ✏ (or select it and press **`F2`**; **`F2`** anywhere renames the open PDF). Type the new name and press **Enter** (**Esc** cancels). Only the part before `.pdf` is selected, and the extension is always kept. The file is renamed on disk in the same folder, and keeps its notes, highlights and bookmarks. **Ctrl+Z** renames it back.
-- **Delete a file:** hover over it and click 🗑 (or select it and press **`Del`**), then confirm with **Enter**. The file goes to the **desktop Trash**, not away for good. Its notes, highlights and bookmarks stay in StudySpace.
+- **Delete a file:** hover over it and click 🗑 (or select it and press **`Del`**), then confirm with **Enter**. The file goes to the **desktop Trash** (on Windows and macOS: the `Trash` folder inside StudySpace's data folder, §13), not away for good. Its notes, highlights and bookmarks stay in StudySpace.
   - **Ctrl+Z** right away puts it back where it was, with everything. (If the deleted file was open, it closes; press Ctrl+Z before opening another PDF, since each PDF has its own undo.)
-  - Later, restore it from the Trash in your file manager, then click **⟳ Rescan**: its notes come back too.
+  - Later, restore it from the Trash in your file manager (on Windows and macOS: move it out of `Trash/files` back to its folder), then click **⟳ Rescan**: its notes come back too.
 - **Keyboard in the file list:** press **`/`**, then **↓** to step into the list. **↑/↓** move between files and folders, **→/←** open and close folders, **Enter** opens.
 - **Side by side:** point at a file and click the two-columns button (or press **`Shift+Enter`** on it) to show it beside the open PDF. See *Two PDFs side by side* (§4).
 - **Several files at once:** select files (the box beside a file, Shift+click, or **`Space`**), then **`Shift+F`** gets each one's pictures, text or notes from one window. See *Pictures, text and notes of several files at once* (§4).
@@ -588,7 +590,7 @@ You can pull the text out of a page, a range of pages, the whole PDF, or just a 
 
 ### Installing OCR (once)
 
-OCR uses the free programs OCRmyPDF and Tesseract. In a terminal:
+OCR uses the free programs OCRmyPDF and Tesseract. In a terminal (Ubuntu / Debian; for Windows, macOS and other Linux systems, see [REQUIREMENTS.md](../REQUIREMENTS.md#install-commands)):
 
 ```
 sudo apt install ocrmypdf tesseract-ocr
@@ -1016,7 +1018,10 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | Files you deleted in the library | The desktop Trash (`~/.local/share/Trash/`); restore them from your file manager, then click **⟳ Rescan** |
 | Logins of your phone (or other devices) | In the same database; *Log out of this device* in ⚙ Settings on the phone ends one |
 
+These are the places on Linux. On **Windows** the data folder (`~/.local/share/studyspace/` above) is `%LOCALAPPDATA%\StudySpace`, and on **macOS** it is `~/Library/Application Support/StudySpace`. On both, deleted files go to the `Trash` folder inside it. ⚙ Settings shows the exact path.
+
 - **Back up your notes:** copy `~/.local/share/studyspace/` somewhere safe while the app is stopped.
+- **Move your notes to another computer:** stop StudySpace on both, copy the whole data folder into the new computer's data folder, then add your PDF folder there in ⚙ Settings. Files are recognised by their content, so the notes find their PDFs even in a different folder (README, *Bringing your notes from the old PC*).
 - **Recover an older version of a PDF by hand:** the newest files in `history/<document-id>/` are the versions before your most recent edits. Copy one back over the original while the app is stopped, then click **Rescan**.
 
 ## 14. Troubleshooting

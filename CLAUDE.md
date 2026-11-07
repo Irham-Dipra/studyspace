@@ -3,9 +3,11 @@
 StudySpace is a local-first PDF study app: library on the left, PDF viewer in the middle, notes on the right.
 It reads the user's course PDFs in place from `/home/dipra/Buet/3-1` and works fully offline.
 
-Status as of **2026-11-01**. Items up to 32 are committed; items 33 (side by side), 34 (text boxes, note markers), 35 (markers at a passage), 36 (pictures as notes), 37 (whole-PDF notes apart) and 38 (Pictures section), 39 (Back button for jumps) 40 (hide files, root files row) 41 (hide chosen files) and 42 (hide folders) are not yet. Other docs:
+Status as of **2026-11-08**. Items up to 43 are committed (43: runs on Windows and macOS, GitHub-ready docs). The repo is meant for GitHub under the user's own name: commits carry no `Co-Authored-By: Claude` trailer (the user asked for that). Other docs:
 - [HANDOFF.md](HANDOFF.md): the long version, with the detailed history of every feature and the problems already solved.
-- [README.md](README.md): setup, configuration, the HTTP API and the schema.
+- [README.md](README.md): the GitHub landing page: features, setup on any PC, commands, configuration, data folders, troubleshooting.
+- [REQUIREMENTS.md](REQUIREMENTS.md): what to install per system (winget, brew, apt, dnf, pacman) and the npm packages.
+- [docs/DEVELOPER.md](docs/DEVELOPER.md): how it works, the HTTP API and the schema (moved out of the README).
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md): every feature, explained for the user.
 - [docs/PHONE_SETUP.md](docs/PHONE_SETUP.md): the user's step-by-step phone setup (Wi-Fi and Tailscale). Keep it in step with `auth.ts` and the guide's §15.
 
@@ -15,8 +17,8 @@ After **any** work in this project, before reporting back:
 
 1. **Progress report:** add or update the feature's line in [Progress to date](#progress-to-date). Mark anything unfinished or untested as such.
 2. **Code changes:** add a dated entry to the [Change log](#change-log): what changed and in which files, and how it was verified. Update [Codebase](#codebase) when files, modules, tables or conventions are added or change.
-3. Also update `HANDOFF.md` (the detailed feature item), the user guide and the README when users would notice the change.
-4. The project is a git repo (branch `main`). Commit only when the user asks.
+3. Also update `HANDOFF.md` (the detailed feature item), the user guide and the README when users would notice the change; API and schema changes go in `docs/DEVELOPER.md`.
+4. The project is a git repo (branch `main`). Commit only when the user asks, as the user, with no Claude co-author trailer.
 
 ## Run it
 
@@ -27,6 +29,7 @@ npm run typecheck    # server + web
 npm test             # server tests (vitest): 115 passing
 npm run build        # web/dist + server/dist; `npm start` serves the built app on 4317
                      # the dev server on 4317 also serves web/dist; the user works on 5173
+npm run check        # setup checker (scripts/check-requirements.mjs): Node, packages, optional tools, ports
 ```
 
 Config lives in `.env`, the user's file, which is not committed. See `.env.example` for:
@@ -59,7 +62,7 @@ The user's real PDFs are in `/home/dipra/Buet/3-1`. In-app edits overwrite the o
 
 ## Codebase
 
-npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. In dev, Vite proxies `/api` to the server; in production the server also serves `web/dist`.
+npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers (`shortcut-tables.mts`; `check-requirements.mjs`, `npm run check`, plain JS with no dependencies so it runs before `npm install` and on an old Node). In dev, Vite proxies `/api` to the server; in production the server also serves `web/dist`.
 
 ### Server: `server/src` (Node 24, Express 5, TypeScript)
 
@@ -68,7 +71,7 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. I
 
 | Path | What it does |
 |---|---|
-| `index.ts`, `config.ts` | Start-up and env config. The library folders are seeded from the env on the first run. |
+| `index.ts`, `config.ts` | Start-up and env config. The library folders are seeded from the env on the first run. Per-system defaults: data dir (Linux XDG, Windows `%LOCALAPPDATA%\StudySpace`, macOS `~/Library/Application Support/StudySpace`), Trash (Linux desktop Trash, else `<dataDir>/Trash`); `expandHome`. |
 | `app.ts` | Every `/api` route, in one Express app (see the README for the list). |
 | `auth.ts` | Who may use it: this computer always; other devices (phone over Wi-Fi or `tailscale serve`) log in with `STUDYSPACE_PASSWORD` (session cookie). Host allowlist, `X-StudySpace` header on writes, folder routes local-only. |
 | `types.ts` | Shared server types. |
@@ -146,6 +149,7 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers. I
 - **Undo.** Every change must be undoable.
 - **Phones.** The app also runs on plain http (Wi-Fi): never call `crypto.randomUUID` (use `uuid()`), and say why copying fails (`copyText`). Anything that opens on mouseup also needs `useTouchSelection`, and hover-only buttons need `[@media(hover:none)]:flex`.
 - **Kinds.** Check `isPaged` / `canEditFile`, not `kind === "slides"`: HTML and Markdown have no pages.
+- **Other systems.** It must also run on Windows and macOS. Use `os.homedir()` (Windows has no `HOME`) and `path.delimiter`; `relPath` always uses `/`, but absolute `doc.path` may use `\`. Programs are found as `name.exe` on Windows (`execFile` can't run `.cmd`). Tests with `#!` stub programs use `describe.skipIf(process.platform === "win32")`. Only Linux is tested here; a fresh clone on Node 24 and 26 is the check (see the 2026-11-08 change log).
 - **Coordinates.** Annotations and bookmark `top`s are normalized display coordinates: 0..1 from the top-left of the page as shown.
 - **Note colours.** The default note colours live in `index.css` as `--ss-note-*` on `:root`; a new kind needs a variable there and an entry in `NOTE_COLORS`.
 - **Style.** Comments are short and explain *why*. UI text is plain, short English.
@@ -199,6 +203,7 @@ Everything below is done and verified in the browser on scratch copies.
 40. Settings → *Hide folders and files* hides files too: names at any depth (`*.md`), paths from the library folder (`CSE 301/*.md`, `**`), only the top (`/*.html`), regexes (`re:…`); hidden files keep their notes. The files lying in a library folder itself sit under one closable row, *Files in <label>*. Made in a worktree; copied into the main tree on 2026-11-01. Tested in Chromium only.
 41. Hide chosen files: `H` on a file, or select files and press *Hide*; the crossed-eye count at the top of the list (or `Shift+K`) opens the hidden files to unhide them. Migration v12 (`documents.hidden`). Made in the main tree (2026-11-01). Tested in Chromium only.
 42. Hide folders from the sidebar: hover button or `H` on a folder; listed in *Hidden files and folders* (`Shift+K`) to unhide. A rule `/<path>` in the library folder's excludes; no schema change. Chromium only.
+43. Runs on any PC, ready for GitHub: Windows and macOS fixes (data and Trash folders per system, home folder, LibreOffice found in its install folder, install hints per system, Windows-safe file names and writes), `npm run check` (setup checker), a new README (GitHub landing page, step-by-step setup on another PC, moving notes), `REQUIREMENTS.md` (install commands per system, the npm packages), `docs/DEVELOPER.md` (API and schema moved there), `.gitattributes`, `.nvmrc`. Tested on Linux only: fresh clone with `npm ci` on Node 24 and 26 (tests, build, dev and built servers, moving notes to a new folder). **Not tested on Windows or macOS.**
 28. Change the notes' default highlighter colours (title, heading levels, bullet header and label, `==marks==`) in Settings → Note colours; per browser, reset per colour or all. Tested in Chromium only.
 
 ## Change log
@@ -371,6 +376,13 @@ Everything below is done and verified in the browser on scratch copies.
   - Verified: typecheck, 115 tests; Chromium on scratch 4399/5199. Real PDFs untouched.
 
 - **2026-11-01: hide folders (item 42, HANDOFF 50).** Main tree. `lib/types.ts` (`folderRule`, `hiddenFolderRules`), `App.tsx` (`setFolderHidden`, `hiddenFolders`), `LibraryPanel.tsx` (folder button, `H`, `onHideFolder`), `HiddenFilesDialog.tsx` (folders section). Docs: user guide §3, HANDOFF 50. Verified: typecheck; Chromium on scratch 4399/5199.
+
+- **2026-11-08: any PC, GitHub-ready (item 43, HANDOFF 51).** Made in a worktree (branch `publish`) while the user read on 5173. Commit messages rewritten to drop the `Co-Authored-By: Claude` trailers, at the user's request ("the contributor should be me").
+  - Server: `config.ts` (per-system `defaultDataDir`, `defaultTrashDir(dataDir)`, `expandHome` exported, `~\`), `app.ts` (`os.homedir()` instead of `$HOME` in `/directories` and `/fs/browse`), `services/slides.ts` (`installedSoffice`, `.exe` on the PATH, `LIBREOFFICE_HINT` per system), `services/ocr.ts` (`INSTALL_COMMAND`, `installCommand` in the status), `services/fileOps.ts` (Windows-invalid name characters), `services/fileWriter.ts` (`renameRetrying` on Windows); `test/ocr.test.ts`, `test/slides.test.ts` skipped on Windows.
+  - Web: `GetTextDialog.tsx` (install note from the server's `installCommand` / `installHint`), `lib/api.ts`, `PdfToolsDialog.tsx` (`docDir` with `\`), `SettingsDialog.tsx` (placeholder).
+  - New: `scripts/check-requirements.mjs` (`npm run check`), `REQUIREMENTS.md`, `docs/DEVELOPER.md`, `.gitattributes`, `.nvmrc`. Changed: `README.md` (rewritten), `.env.example`, `.gitignore`, `package.json` / `package-lock.json` (`check`, engines `>=24`), user guide §1, §3, §9, §13.
+  - Verified: typecheck, 115 tests; fresh clone + `npm ci` on Node 26.13.0 (check, tests, typecheck, build); a smoke script on 4399 against the clone's built server on Node 24 and 26 (seeding, UI served, range requests, home folder, OCR status, PDFs moved to a new folder keep id and notes, old folder removed); `npm run dev -w server` + Vite on 4399/5199. `npm run check` also run without tools on the PATH and without `node_modules`. Not run on Windows or macOS.
+  - Open: `npm audit` reports advisories in body-parser, qs, zod (fixable in range) and KaTeX (needs 0.19, kept at 0.16 on purpose).
 
 ## Open questions for the user
 
