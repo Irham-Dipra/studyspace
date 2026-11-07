@@ -1,8 +1,9 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { z, ZodError } from "zod";
-import type { AppConfig } from "./config.js";
+import { expandHome, type AppConfig } from "./config.js";
 import { transaction, type DB } from "./db/index.js";
 import type { AIProvider } from "./ai/index.js";
 import { deleteDirectory, insertDirectory, listDirectories, updateDirectory } from "./db/directories.js";
@@ -198,7 +199,8 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
 
   api.post("/directories", auth.localOnly, async (req, res) => {
     const body = directoryCreate.parse(req.body);
-    const abs = path.resolve(body.path.replace(/^~(?=$|\/)/, process.env.HOME ?? "~"));
+    // os.homedir(), not $HOME: Windows has no HOME.
+    const abs = path.resolve(expandHome(body.path.trim()));
     let real: string;
     try {
       real = fs.realpathSync(abs);
@@ -235,8 +237,8 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
 
   /** Lists sub-directories of a path so the settings UI can offer a folder picker. Directories only. */
   api.get("/fs/browse", auth.localOnly, (req, res) => {
-    const requested = typeof req.query.path === "string" && req.query.path ? req.query.path : (process.env.HOME ?? "/");
-    const abs = path.resolve(requested);
+    const requested = typeof req.query.path === "string" && req.query.path.trim() ? req.query.path.trim() : os.homedir();
+    const abs = path.resolve(expandHome(requested));
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(abs, { withFileTypes: true });

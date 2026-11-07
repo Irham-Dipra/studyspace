@@ -70,7 +70,8 @@ async function waitForJob(app: Parameters<typeof request>[0], id: string) {
   throw new Error("OCR job did not finish");
 }
 
-describe("OCR", () => {
+// The stub programs are scripts with a #! line, which Windows can't run.
+describe.skipIf(process.platform === "win32")("OCR", () => {
   it("reports when OCR isn't installed, and refuses to run", async () => {
     const ctx = createTestContext({ ocr: { ocrmypdf: "/nonexistent/ocrmypdf", tesseract: "/nonexistent/tesseract", language: "eng" } });
     const root = tempDir();

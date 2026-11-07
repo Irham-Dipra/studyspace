@@ -46,7 +46,8 @@ async function setup(mode: "ok" | "fail" = "ok") {
   return { ...ctx, root, docs, deck, stub, workDir, original };
 }
 
-describe("slides", () => {
+// The stub soffice is a script with a #! line, which Windows can't run.
+describe.skipIf(process.platform === "win32")("slides", () => {
   it("lists .pptx and .ppt files as slides next to PDFs", async () => {
     const { docs } = await setup();
     expect(docs.map((d) => [d.title, d.kind])).toEqual([

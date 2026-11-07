@@ -16,7 +16,12 @@ import { HttpError } from "../types.js";
  * as an undoable edit.
  */
 
-export const INSTALL_HINT = "Install it once with: sudo apt install ocrmypdf tesseract-ocr";
+const INSTALL_COMMAND =
+  process.platform === "linux" ? "sudo apt install ocrmypdf tesseract-ocr" : process.platform === "darwin" ? "brew install ocrmypdf" : null;
+
+export const INSTALL_HINT = INSTALL_COMMAND
+  ? `Install it once with: ${INSTALL_COMMAND}`
+  : "Install Tesseract, Ghostscript and OCRmyPDF (see REQUIREMENTS.md), put them on the PATH, then try again.";
 
 interface RunResult {
   code: number | null;
@@ -75,6 +80,8 @@ export interface OcrStatus {
   tesseract: { available: boolean; version?: string; languages: string[] };
   language: string;
   installHint: string;
+  /** A one-line install command for this system, when there is one (none on Windows). */
+  installCommand: string | null;
 }
 
 let cached: { at: number; key: string; value: OcrStatus } | null = null;
@@ -112,6 +119,7 @@ export async function ocrStatus(cfg: OcrConfig): Promise<OcrStatus> {
     tesseract: { available: !!tesseractVersion, version: tesseractVersion, languages },
     language: cfg.language,
     installHint: INSTALL_HINT,
+    installCommand: INSTALL_COMMAND,
   };
   cached = { at: Date.now(), key, value };
   return value;

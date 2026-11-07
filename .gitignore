@@ -3,3 +3,7 @@ dist
 .env
 *.log
 .studyspace-data
+coverage
+*.tsbuildinfo
+.DS_Store
+Thumbs.db

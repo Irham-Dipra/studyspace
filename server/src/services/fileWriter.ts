@@ -21,9 +21,23 @@ export async function writeFileAtomic(target: string, bytes: Uint8Array): Promis
   }
   await handle.close();
   try {
-    await fs.rename(tmp, target);
+    await renameRetrying(tmp, target);
   } catch (err) {
     await fs.rm(tmp, { force: true });
     throw err;
+  }
+}
+
+/** On Windows a virus scanner or the search indexer can hold a file for a moment, so try again briefly. */
+async function renameRetrying(from: string, to: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fs.rename(from, to);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      const busy = code === "EPERM" || code === "EACCES" || code === "EBUSY";
+      if (process.platform !== "win32" || !busy || attempt >= 8) throw err;
+      await new Promise((r) => setTimeout(r, 100 * attempt));
+    }
   }
 }

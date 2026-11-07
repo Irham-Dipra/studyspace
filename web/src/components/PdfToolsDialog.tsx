@@ -62,7 +62,7 @@ const TITLES: Record<PdfTool, string> = {
 };
 
 export function PdfToolsDialog(p: Props) {
-  const docDir = p.doc.path.slice(0, p.doc.path.lastIndexOf("/"));
+  const docDir = p.doc.path.replace(/[\\/][^\\/]*$/, ""); // "\" too: Windows paths
 
   // ---- Where to save ----------------------------------------------------------------
   const [folders, setFolders] = useState<LibraryFolder[] | null>(null);

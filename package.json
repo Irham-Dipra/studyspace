@@ -2,12 +2,13 @@
   "name": "studyspace",
   "private": true,
   "version": "1.0.0",
-  "description": "Local PDF study workspace with context-aware notes and resources",
+  "description": "Local-first PDF study workspace: your course PDFs, page-aware notes, highlights and page tools, fully offline",
   "workspaces": [
     "server",
     "web"
   ],
   "scripts": {
+    "check": "node scripts/check-requirements.mjs",
     "dev": "concurrently -k -n server,web -c blue,magenta \"npm:dev -w server\" \"npm:dev -w web\"",
     "build": "npm run build -w server && npm run build -w web",
     "start": "npm run build && npm run start -w server",
@@ -15,7 +16,7 @@
     "typecheck": "npm run typecheck -w server && npm run typecheck -w web"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "devDependencies": {
     "concurrently": "^10.0.6"

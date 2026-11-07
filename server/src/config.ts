@@ -60,21 +60,31 @@ export interface AppConfig {
   slides: SlidesConfig;
 }
 
+/** Each system's usual place for app data (Linux: XDG). */
 function defaultDataDir(): string {
+  if (process.platform === "win32") {
+    return path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "StudySpace");
+  }
+  if (process.platform === "darwin") return path.join(os.homedir(), "Library", "Application Support", "StudySpace");
   const xdg = process.env.XDG_DATA_HOME;
   const base = xdg && path.isAbsolute(xdg) ? xdg : path.join(os.homedir(), ".local", "share");
   return path.join(base, "studyspace");
 }
 
-function defaultTrashDir(): string {
+/**
+ * Linux: the desktop Trash (freedesktop.org), so the file manager can restore files. Windows and
+ * macOS bins can't be written from Node without a native module, so StudySpace keeps its own.
+ */
+function defaultTrashDir(dataDir: string): string {
+  if (process.platform === "win32" || process.platform === "darwin") return path.join(dataDir, "Trash");
   const xdg = process.env.XDG_DATA_HOME;
   const base = xdg && path.isAbsolute(xdg) ? xdg : path.join(os.homedir(), ".local", "share");
   return path.join(base, "Trash");
 }
 
-function expandHome(p: string): string {
+export function expandHome(p: string): string {
   if (p === "~") return os.homedir();
-  if (p.startsWith("~/")) return path.join(os.homedir(), p.slice(2));
+  if (p.startsWith("~/") || p.startsWith("~\\")) return path.join(os.homedir(), p.slice(2));
   return p;
 }
 
@@ -87,17 +97,18 @@ function list(value: string | undefined, sep: string): string[] {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const historyLimit = Number.parseInt(env.STUDYSPACE_HISTORY_LIMIT ?? env.STUDYSPACE_BACKUP_COUNT ?? "10", 10);
+  const dataDir = path.resolve(expandHome(env.STUDYSPACE_DATA_DIR ?? defaultDataDir()));
   return {
     host: env.STUDYSPACE_HOST ?? "127.0.0.1",
     port: Number.parseInt(env.STUDYSPACE_PORT ?? env.PORT ?? "4317", 10),
     password: env.STUDYSPACE_PASSWORD ?? "",
     allowedHosts: list(env.STUDYSPACE_ALLOWED_HOSTS, ",").map((h) => h.toLowerCase()),
     requireCsrfHeader: true,
-    dataDir: path.resolve(expandHome(env.STUDYSPACE_DATA_DIR ?? defaultDataDir())),
+    dataDir,
     seedLibraryDirs: list(env.STUDYSPACE_LIBRARY_DIRS, path.delimiter).map((d) => path.resolve(expandHome(d))),
     seedExcludes: list(env.STUDYSPACE_EXCLUDES, ","),
     historyLimit: Number.isFinite(historyLimit) && historyLimit >= 0 ? historyLimit : 10,
-    trashDir: env.STUDYSPACE_TRASH_DIR ? path.resolve(expandHome(env.STUDYSPACE_TRASH_DIR)) : defaultTrashDir(),
+    trashDir: env.STUDYSPACE_TRASH_DIR ? path.resolve(expandHome(env.STUDYSPACE_TRASH_DIR)) : defaultTrashDir(dataDir),
     webDistDir: env.STUDYSPACE_WEB_DIST,
     ocr: {
       ocrmypdf: env.STUDYSPACE_OCRMYPDF || "ocrmypdf",

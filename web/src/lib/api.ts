@@ -23,6 +23,7 @@ export interface OcrStatus {
   tesseract: { available: boolean; version?: string; languages: string[] };
   language: string;
   installHint: string;
+  installCommand: string | null;
 }
 
 export interface OcrJob {

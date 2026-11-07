@@ -9,7 +9,12 @@ import type { SlidesConfig } from "../config.js";
 import type { DocumentRecord } from "../types.js";
 import { HttpError } from "../types.js";
 
-export const LIBREOFFICE_HINT = "Install LibreOffice (sudo snap install libreoffice, or sudo apt install libreoffice-impress) to open slides.";
+export const LIBREOFFICE_HINT =
+  process.platform === "linux"
+    ? "Install LibreOffice (sudo snap install libreoffice, or sudo apt install libreoffice-impress) to open slides."
+    : process.platform === "darwin"
+      ? "Install LibreOffice (brew install --cask libreoffice, or from libreoffice.org) to open slides."
+      : "Install LibreOffice from libreoffice.org (or: winget install TheDocumentFoundation.LibreOffice) to open slides.";
 
 /** Generous: the first start of a snap LibreOffice alone takes ~30 s, and big decks take longer. */
 const TIMEOUT_MS = 10 * 60_000;
@@ -57,7 +62,7 @@ export class SlideConverter {
 
   private async run(doc: DocumentRecord, file: string, out: string): Promise<string> {
     if (existsSync(out)) return out;
-    const soffice = this.config.soffice || findOnPath(["soffice", "libreoffice"]);
+    const soffice = this.config.soffice || findOnPath(["soffice", "libreoffice"]) || installedSoffice();
     if (!soffice) throw new HttpError(501, `LibreOffice is not installed. ${LIBREOFFICE_HINT}`);
     const workRoot = this.config.workDir || defaultWorkDir(soffice, this.dataDir);
     const jobDir = path.join(workRoot, randomUUID());
@@ -117,10 +122,25 @@ export function convertedPdfPath(dataDir: string, doc: Pick<DocumentRecord, "id"
   return path.join(dataDir, "converted", `${doc.id}-${fp}.pdf`);
 }
 
+/** The Windows and macOS installers don't put LibreOffice on the PATH, so look where they put it. */
+function installedSoffice(): string | null {
+  const places =
+    process.platform === "win32"
+      ? [process.env.ProgramFiles, process.env["ProgramFiles(x86)"]]
+          .filter((d): d is string => !!d)
+          .map((d) => path.join(d, "LibreOffice", "program", "soffice.exe"))
+      : process.platform === "darwin"
+        ? ["/Applications/LibreOffice.app/Contents/MacOS/soffice"]
+        : [];
+  return places.find((f) => existsSync(f)) ?? null;
+}
+
 function findOnPath(names: string[]): string | null {
+  // execFile can't start .cmd/.bat files without a shell, so only .exe counts on Windows.
+  const ext = process.platform === "win32" ? ".exe" : "";
   for (const name of names) {
     for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
-      const file = path.join(dir, name);
+      const file = path.join(dir, name + ext);
       if (dir && existsSync(file)) return file;
     }
   }

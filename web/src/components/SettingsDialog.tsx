@@ -111,7 +111,7 @@ export function SettingsDialog({ directories, config, onClose, onChanged, onErro
         <div className="mt-4 rounded-lg border border-line p-3">
           <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
             <Field label="Add folder">
-              <input className={inputCls} placeholder="/home/you/University/Semester" value={path} onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+              <input className={inputCls} placeholder="/home/you/Courses or D:\Courses" value={path} onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
             </Field>
             <Button className="self-end" onClick={() => browse(path || undefined)}>
               <Folder className="size-4" /> Browse

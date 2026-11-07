@@ -32,7 +32,10 @@ async function moveFile(from: string, to: string): Promise<void> {
 function checkName(raw: string, current: string): string {
   let name = raw.trim();
   if (!name) throw new HttpError(400, "The name can't be empty.");
-  if (/[/\0]/.test(name)) throw new HttpError(400, "A name can't contain “/”.");
+  if (process.platform === "win32") {
+    // Windows forbids these in names, and "\" would move the file into another folder.
+    if (/[\\/:*?"<>|\0]/.test(name)) throw new HttpError(400, "A name can't contain \\ / : * ? \" < > |");
+  } else if (/[/\0]/.test(name)) throw new HttpError(400, "A name can't contain “/”.");
   if (name.startsWith(".")) throw new HttpError(400, "A name can't start with “.” (the file would be hidden).");
   // The extension decides how the file is opened, so it is kept.
   const ext = path.extname(current);

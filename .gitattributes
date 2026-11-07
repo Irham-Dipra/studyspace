@@ -1,0 +1,7 @@
+# Same line endings on every system (Windows checkouts too), so diffs and scripts behave the same.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
+*.ico binary
+*.zip binary

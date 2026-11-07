@@ -511,11 +511,19 @@ export function GetTextDialog({ request, doc, page, pageCount, getPdf, highlight
     window.addEventListener("keydown", on);
     return () => window.removeEventListener("keydown", on);
   }, []);
+  // The server knows the system: apt on Linux, brew on macOS, no one-liner on Windows.
+  const installCommand = status ? status.installCommand : "sudo apt install ocrmypdf tesseract-ocr";
   const installNote = (
     <div className="rounded-md bg-subtle px-3 py-2 text-xs leading-relaxed text-ink-2">
-      OCR isn't installed. Install it once in a terminal:
-      <code className="mt-1 block select-all rounded bg-panel px-2 py-1 font-mono text-[11px] text-ink">sudo apt install ocrmypdf tesseract-ocr</code>
-      Other languages: add e.g. <code>tesseract-ocr-ben</code> and set <code>STUDYSPACE_OCR_LANG=eng+ben</code> in <code>.env</code>. Then try again; no restart needed.
+      {installCommand ? (
+        <>
+          OCR isn't installed. Install it once in a terminal:
+          <code className="mt-1 block select-all rounded bg-panel px-2 py-1 font-mono text-[11px] text-ink">{installCommand}</code>
+        </>
+      ) : (
+        <p className="mb-1">OCR isn't installed. {status?.installHint}</p>
+      )}
+      Other languages: add the language's Tesseract data (e.g. <code>tesseract-ocr-ben</code>) and set <code>STUDYSPACE_OCR_LANG=eng+ben</code> in <code>.env</code>. Then try again; no restart needed.
     </div>
   );
 
