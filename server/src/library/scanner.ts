@@ -42,6 +42,7 @@ function globSource(glob: string): string {
         else (out += ".*"), i++;
       } else out += "[^/]*";
     } else if (c === "?") out += "[^/]";
+    else if (c === "/") out += "\\s*/"; // a folder name may end in a space
     else out += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
   }
   return out;
@@ -64,7 +65,9 @@ export function parseExclude(raw: string): Rule | null {
     const glob = text.replace(/^\/+|\/+$/g, "");
     if (glob) {
       const kind = anchored || glob.includes("/") ? "path" : "name";
-      rule = { kind, re: new RegExp(`^${globSource(glob)}$`, "i") };
+      // Settings trims a rule, but a folder's name may end in a space ("RRR ma_am "): allow it.
+      const src = globSource(glob);
+      rule = { kind, re: new RegExp(`^${src}\\s*$`, "i") };
     }
   }
   ruleCache.set(raw, rule);

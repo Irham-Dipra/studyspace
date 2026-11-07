@@ -58,6 +58,8 @@ interface Props {
   onOpenBeside: (doc: DocumentRecord) => void;
   /** Hides files from this list (`documents` holds only the files not hidden). */
   onHide: (docs: DocumentRecord[]) => void;
+  /** Hides a folder (a rule on its library folder: new files in it stay hidden too). */
+  onHideFolder: (dirId: number, rel: string, name: string) => void;
   hiddenCount: number;
   onShowHidden: () => void;
 }
@@ -249,6 +251,10 @@ export function LibraryPanel(p: Props) {
         const parent = folder ? folder.slice(0, folder.lastIndexOf("/")) : doc && folderKeys(doc).at(-1);
         rows.find((r) => r.dataset.folder === parent)?.focus();
       }
+    } else if (matches(n, "fileHide") && !selectedCount && folder && !folder.endsWith(":files")) {
+      const next = rows.slice(i + 1).find((r) => !r.dataset.folder?.startsWith(`${folder}/`)) ?? rows[i - 1];
+      next?.focus();
+      hideFolder(folder, row.textContent ?? "");
     } else if (matches(n, "fileHide") && (selectedCount || doc)) {
       // With files selected, all of them; otherwise the file you're on. The focus moves on.
       const hide = selectedCount ? documents.filter((d) => selected.has(d.id)) : [doc!];
@@ -265,10 +271,10 @@ export function LibraryPanel(p: Props) {
     }
   };
 
-  const rowAction = (label: string, icon: React.ReactNode, onClick: () => void) => (
+  const rowAction = (label: string, icon: React.ReactNode, onClick: () => void, extra = "") => (
     <button
       tabIndex={-1}
-      className="grid size-6 shrink-0 place-items-center rounded text-ink-3 hover:bg-panel hover:text-ink"
+      className={cx("grid size-6 shrink-0 place-items-center rounded text-ink-3 hover:bg-panel hover:text-ink", extra)}
       title={label}
       aria-label={label}
       onClick={(e) => {
@@ -292,9 +298,16 @@ export function LibraryPanel(p: Props) {
     onOpen(d);
   };
 
+  /** "d3/CSE 301/Books" → library folder 3, "CSE 301/Books". */
+  const hideFolder = (key: string, name: string) => {
+    const m = /^d(\d+)\/(.+)$/.exec(key);
+    if (m) p.onHideFolder(Number(m[1]), m[2], name);
+  };
+
   const folderRow = (key: string, name: string, count: number, depth: number, files = false) => {
     const expanded = isOpen(key);
     return (
+      <div className="group relative">
       <button
         data-lib-row
         data-folder={key}
@@ -316,8 +329,10 @@ export function LibraryPanel(p: Props) {
           <Folder className="size-4 shrink-0 text-ink-3" />
         )}
         <span className={cx("truncate", files && "italic")}>{name}</span>
-        <span className="ml-auto pl-2 text-[11px] font-normal text-ink-3">{count}</span>
+        <span className="ml-auto pl-2 text-[11px] font-normal text-ink-3 group-hover:invisible [@media(hover:none)]:invisible">{count}</span>
       </button>
+      {!files && rowAction(withKey("Hide this folder from the list", "fileHide"), <EyeOff className="size-3.5" />, () => hideFolder(key, name), "absolute right-1 top-1/2 hidden -translate-y-1/2 group-hover:grid [@media(hover:none)]:grid")}
+      </div>
     );
   };
 

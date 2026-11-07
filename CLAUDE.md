@@ -3,7 +3,7 @@
 StudySpace is a local-first PDF study app: library on the left, PDF viewer in the middle, notes on the right.
 It reads the user's course PDFs in place from `/home/dipra/Buet/3-1` and works fully offline.
 
-Status as of **2026-11-01**. Items up to 32 are committed; items 33 (side by side), 34 (text boxes, note markers), 35 (markers at a passage), 36 (pictures as notes), 37 (whole-PDF notes apart) and 38 (Pictures section), 39 (Back button for jumps) 40 (hide files, root files row) and 41 (hide chosen files) are not yet. Other docs:
+Status as of **2026-11-01**. Items up to 32 are committed; items 33 (side by side), 34 (text boxes, note markers), 35 (markers at a passage), 36 (pictures as notes), 37 (whole-PDF notes apart) and 38 (Pictures section), 39 (Back button for jumps) 40 (hide files, root files row) 41 (hide chosen files) and 42 (hide folders) are not yet. Other docs:
 - [HANDOFF.md](HANDOFF.md): the long version, with the detailed history of every feature and the problems already solved.
 - [README.md](README.md): setup, configuration, the HTTP API and the schema.
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md): every feature, explained for the user.
@@ -198,6 +198,7 @@ Everything below is done and verified in the browser on scratch copies.
 37. The notes panel has two tabs, *On this page* (page and range notes) and *Whole PDF*, each grouped by kind; *Open all* / *Close all* under the tabs (notes open by default) and an *Index* of numbered chips (2+ notes) that opens and scrolls to a note. Tested in Chromium only; phones and Firefox not tested.
 40. Settings → *Hide folders and files* hides files too: names at any depth (`*.md`), paths from the library folder (`CSE 301/*.md`, `**`), only the top (`/*.html`), regexes (`re:…`); hidden files keep their notes. The files lying in a library folder itself sit under one closable row, *Files in <label>*. Made in a worktree; copied into the main tree on 2026-11-01. Tested in Chromium only.
 41. Hide chosen files: `H` on a file, or select files and press *Hide*; the crossed-eye count at the top of the list (or `Shift+K`) opens the hidden files to unhide them. Migration v12 (`documents.hidden`). Made in the main tree (2026-11-01). Tested in Chromium only.
+42. Hide folders from the sidebar: hover button or `H` on a folder; listed in *Hidden files and folders* (`Shift+K`) to unhide. A rule `/<path>` in the library folder's excludes; no schema change. Chromium only.
 28. Change the notes' default highlighter colours (title, heading levels, bullet header and label, `==marks==`) in Settings → Note colours; per browser, reset per colour or all. Tested in Chromium only.
 
 ## Change log
@@ -368,6 +369,8 @@ Everything below is done and verified in the browser on scratch copies.
   - Web: new `components/HiddenFilesDialog.tsx`; `App.tsx` (`setFilesHidden`, `shownDocuments`), `LibraryPanel.tsx`, `lib/api.ts`, `lib/tabSync.ts`, `lib/types.ts`, `lib/shortcuts.ts` (`hiddenFiles`, `fileHide`, `hf*`).
   - Docs: user guide §3, §12 (regenerated); HANDOFF 49.
   - Verified: typecheck, 115 tests; Chromium on scratch 4399/5199. Real PDFs untouched.
+
+- **2026-11-01: hide folders (item 42, HANDOFF 50).** Main tree. `lib/types.ts` (`folderRule`, `hiddenFolderRules`), `App.tsx` (`setFolderHidden`, `hiddenFolders`), `LibraryPanel.tsx` (folder button, `H`, `onHideFolder`), `HiddenFilesDialog.tsx` (folders section). Docs: user guide §3, HANDOFF 50. Verified: typecheck; Chromium on scratch 4399/5199.
 
 ## Open questions for the user
 

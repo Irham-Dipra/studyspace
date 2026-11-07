@@ -11,6 +11,8 @@ import {
   isPaged,
   SLIDES_READ_ONLY,
   type Annotation,
+  folderRule,
+  hiddenFolderRules,
   type AppConfigInfo,
   type Bookmark,
   type Directory,
@@ -550,6 +552,29 @@ export default function App() {
         },
       });
       if (!quiet) toast(hidden ? `Hid ${what} · Shift+K lists hidden files · Ctrl+Z to undo` : `Unhid ${what}`, "success");
+    } catch (e) {
+      toastError(e);
+    }
+  };
+
+  /** Hides a folder by adding a rule to its library folder, or takes the rule out again. Undoable. */
+  const setFolderHidden = async (dirId: number, rule: string, name: string, hidden: boolean) => {
+    const dir = directories.find((d) => d.id === dirId);
+    if (!dir) return;
+    const before = dir.excludes;
+    const after = hidden ? (before.includes(rule) ? before : [...before, rule]) : before.filter((x) => x !== rule);
+    const apply = async (excludes: string[]) => {
+      await api.updateDirectory(dirId, { excludes });
+      await refreshLibrary();
+    };
+    try {
+      await apply(after);
+      history.push(docRef.current?.id ?? LIBRARY_UNDO, {
+        label: `${hidden ? "Hide" : "Unhide"} folder “${name}”`,
+        undo: () => apply(before),
+        redo: () => apply(after),
+      });
+      toast(hidden ? `Hid folder “${name}” · Shift+K lists hidden files and folders · Ctrl+Z to undo` : `Unhid folder “${name}”`, "success");
     } catch (e) {
       toastError(e);
     }
@@ -1787,6 +1812,10 @@ export default function App() {
   // Files the user hid stay in `documents` (the open file, notes, the hidden list) but not in the lists.
   const shownDocuments = useMemo(() => documents.filter((d) => !d.hidden), [documents]);
   const hiddenDocuments = useMemo(() => documents.filter((d) => d.hidden), [documents]);
+  const hiddenFolders = useMemo(
+    () => directories.flatMap((d) => hiddenFolderRules(d).map((rule) => ({ dirId: d.id, rule, name: rule.slice(1), library: d.label }))),
+    [directories],
+  );
   const pagedDocuments = useMemo(() => shownDocuments.filter((d) => isPaged(d.kind)), [shownDocuments]);
 
   const course = useMemo(() => {
@@ -1821,7 +1850,8 @@ export default function App() {
       activeId={doc?.id ?? null}
       scanning={scanning}
       onHide={(ds) => void setFilesHidden(ds, true)}
-      hiddenCount={hiddenDocuments.length}
+      onHideFolder={(dirId, rel, name) => void setFolderHidden(dirId, folderRule(rel), name, true)}
+      hiddenCount={hiddenDocuments.length + hiddenFolders.length}
       onShowHidden={() => setHiddenOpen(true)}
       onOpen={(d) => requestOpen(d)}
       onRename={(d, name) => void renameFile(d, name)}
@@ -2381,6 +2411,8 @@ export default function App() {
       {hiddenOpen && (
         <HiddenFilesDialog
           documents={hiddenDocuments}
+          folders={hiddenFolders}
+          onUnhideFolder={(f) => void setFolderHidden(f.dirId, f.rule, f.name.split("/").pop() ?? f.name, false)}
           directories={directories}
           onUnhide={(ds) => void setFilesHidden(ds, false, true)}
           onOpen={(d) => (setHiddenOpen(false), requestOpen(d))}

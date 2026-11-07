@@ -155,6 +155,11 @@ export interface TextHighlight extends TextAnchoredHighlight {
   updatedAt: string;
 }
 
+/** The exclude entry that hides one folder (made by the Hide button; "/" = from the library folder). */
+export const folderRule = (rel: string) => `/${rel}`;
+/** The folders hidden by the Hide button: their rules start with "/" and have no wildcards or regex. */
+export const hiddenFolderRules = (d: Directory) => d.excludes.filter((x) => x.startsWith("/") && !/[*?]/.test(x));
+
 export interface ScanResult {
   scanned: number;
   added: number;

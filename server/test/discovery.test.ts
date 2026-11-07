@@ -54,6 +54,9 @@ describe("file discovery", () => {
     // A leading "/": only in the library folder itself.
     expect(isExcluded("a.md", ["/*.md"])).toBe(true);
     expect(isExcluded("CSE 301/a.md", ["/*.md"])).toBe(false);
+    // A folder whose name ends in a space is still matched by the trimmed rule.
+    expect(isExcluded("CSE 313/RRR ma_am /a.pdf", ["/CSE 313/RRR ma_am"])).toBe(true);
+    expect(isExcluded("CSE 313/RRR ma_am /a.pdf", ["/CSE 313/RRR ma_am "])).toBe(true);
     // Regular expressions on the whole relative path.
     expect(isExcluded("CSE 301/Lecture 3 (old).pdf", ["re:\\(old\\)\\.pdf$"])).toBe(true);
     expect(isExcluded("CSE 301/Lecture 3.pdf", ["re:\\(old\\)\\.pdf$"])).toBe(false);

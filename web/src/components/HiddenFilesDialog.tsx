@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { Eye, EyeOff, FileText } from "lucide-react";
+import { Eye, EyeOff, FileText, Folder } from "lucide-react";
 import type { Directory, DocumentRecord } from "../lib/types";
 import { matches, withKey } from "../lib/shortcuts";
 import { Button, KeyHint, Modal } from "./ui";
@@ -8,6 +8,9 @@ interface Props {
   /** The hidden files (only those). */
   documents: DocumentRecord[];
   directories: Directory[];
+  /** Folders hidden with the Hide button. */
+  folders: { dirId: number; rule: string; name: string; library: string }[];
+  onUnhideFolder: (f: { dirId: number; rule: string; name: string }) => void;
   onUnhide: (docs: DocumentRecord[]) => void;
   onOpen: (doc: DocumentRecord) => void;
   onClose: () => void;
@@ -16,7 +19,7 @@ interface Props {
 const natural = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 
 /** The files hidden from the library list, to unhide (or open) them. */
-export function HiddenFilesDialog({ documents, directories, onUnhide, onOpen, onClose }: Props) {
+export function HiddenFilesDialog({ documents, folders, onUnhideFolder, directories, onUnhide, onOpen, onClose }: Props) {
   const listRef = useRef<HTMLUListElement>(null);
   const label = (d: DocumentRecord) => directories.find((x) => x.id === d.directoryId)?.label ?? "";
   const docs = useMemo(
@@ -54,7 +57,7 @@ export function HiddenFilesDialog({ documents, directories, onUnhide, onOpen, on
 
   return (
     <Modal
-      title={`Hidden files (${docs.length})`}
+      title={`Hidden files and folders (${docs.length + folders.length})`}
       onClose={onClose}
       wide
       footer={
@@ -69,11 +72,26 @@ export function HiddenFilesDialog({ documents, directories, onUnhide, onOpen, on
       }
     >
       <p className="mb-3 text-xs text-ink-3">
-        These files are left out of the files list and the search. They stay on disk with their notes, highlights and bookmarks. Hide a file with{" "}
+        These files are left out of the files list and the search. They stay on disk with their notes, highlights and bookmarks. Hide a file or folder with{" "}
         <EyeOff className="inline size-3" /> on its row, <KeyHint id="fileHide" /> in the files list, or <em>Hide</em> with several files selected.
         Files hidden by a rule in Settings (<em>Hide folders and files</em>) aren't listed here.
       </p>
-      {docs.length === 0 ? (
+      {folders.length > 0 && (
+        <ul className="mb-2 space-y-0.5 border-b border-line pb-2">
+          {folders.map((f) => (
+            <li key={`${f.dirId}${f.rule}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] hover:bg-hover">
+              <Folder className="size-4 shrink-0 text-ink-3" />
+              <span className="min-w-0 flex-1 truncate">
+                {f.name} <span className="text-[11px] text-ink-3">folder{folders.some((x) => x.library !== f.library) ? ` in ${f.library}` : ""}</span>
+              </span>
+              <Button size="sm" onClick={() => onUnhideFolder(f)}>
+                <Eye className="size-3.5" /> Unhide
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {docs.length === 0 && folders.length > 0 ? null : docs.length === 0 ? (
         <p className="rounded-lg border border-dashed border-line p-4 text-center text-sm text-ink-3">No hidden files.</p>
       ) : (
         <ul ref={listRef} className="ss-scroll max-h-[55vh] space-y-0.5 overflow-y-auto" onKeyDown={onKey}>
