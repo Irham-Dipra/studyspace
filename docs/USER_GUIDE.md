@@ -1077,7 +1077,7 @@ Your files stay on the computer. The phone opens StudySpace in its browser, like
 
 **Tip:** in Chrome's menu on the phone, choose *Add to Home screen* → *Install*. StudySpace then opens as its own full-screen app, without the browser's bars. Do this from the Tailscale address.
 
-**The phone layout:** the page gets the whole screen; the **☰** button in the top right corner opens files, notes, search, page and zoom controls and all the tools. Under ☰ sit small see-through quick buttons for the tools you switch between most (*Select* and *Area* at first); pick which tools get one at the bottom of the ☰ menu. The page fits the screen's width, also after turning the phone. Sideways, a wide page (slides) fills the screen; ☰ → **Sideways** does the same when auto-rotate is off.
+**The phone layout:** the page gets the whole screen; the **☰** button in the top right corner opens files, notes, search, page and zoom controls and all the tools. Under ☰ sit small see-through quick buttons for the tools you switch between most (*Select*, *Area*, the highlight *Colour* and *Undo* at first); pick which ones are there, or switch them all off, at the bottom of the ☰ menu. The page fits the screen's width, also after turning the phone. Sideways, a wide page (slides) fills the screen; ☰ → **Sideways** does the same when auto-rotate is off.
 
 **On the phone you can** open files, read, write notes, highlight (long-press the text, drag the handles, then pick a colour in the bar below it), rename or delete files, and undo. Search is the 🔍 button. ⚙ Settings has *Log out of this device*.
 

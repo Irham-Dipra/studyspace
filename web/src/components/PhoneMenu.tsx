@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { CircleHelp, Library, Menu, Moon, RectangleHorizontal, Settings, StickyNote, Sun, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { CircleHelp, Library, Menu, Moon, Palette, RectangleHorizontal, Settings, StickyNote, Sun, Undo2, X } from "lucide-react";
 import { cx } from "./ui";
 import type { Tool } from "./viewer/geometry";
 
@@ -10,6 +10,12 @@ export interface QuickTool {
   name: string;
   icon: (p: { className?: string }) => ReactNode;
 }
+
+/** Quick buttons that aren't tools. */
+const EXTRA: { id: string; name: string; icon: (p: { className?: string }) => ReactNode }[] = [
+  { id: "colour", name: "Colour", icon: Palette },
+  { id: "undo", name: "Undo", icon: Undo2 },
+];
 
 interface Props {
   open: boolean;
@@ -26,8 +32,18 @@ interface Props {
   tools: QuickTool[];
   tool: Tool;
   onTool: (t: Tool) => void;
-  pins: Tool[];
-  onPins: (pins: Tool[]) => void;
+  /** Tool ids, plus "colour" and "undo". */
+  pins: string[];
+  onPins: (pins: string[]) => void;
+  /** The quick buttons can be switched off altogether (the choice of buttons is kept). */
+  quickOn: boolean;
+  onQuickOn: (on: boolean) => void;
+  /** The colour of the tool that is on (the highlight colour with Select), and the colours it can take. */
+  color: string;
+  colors: string[];
+  onColor: (c: string) => void;
+  canUndo: boolean;
+  onUndo: () => void;
   onFiles: () => void;
   onNotes: (() => void) | null;
   onLandscape: () => void;
@@ -57,11 +73,17 @@ export function PhoneMenu(p: Props) {
   );
   const ic = "size-5";
   const quick = p.tools.filter((t) => p.pins.includes(t.id));
+  const showColour = p.tools.length > 0 && p.pins.includes("colour");
+  const showUndo = p.tools.length > 0 && p.pins.includes("undo");
+  const [palette, setPalette] = useState(false);
+  useEffect(() => setPalette(false), [p.open, p.tool]);
+  const faint = "border-line bg-panel/60 text-ink opacity-50 active:opacity-100";
+  const round = "flex size-8 items-center justify-center rounded-full border shadow-sm";
   return (
     <>
       {/* Quick tools: small and see-through, so the page under them can still be read. */}
-      {!p.open && quick.length > 0 && (
-        <div className="absolute right-1.5 top-14 z-20 flex flex-col gap-1">
+      {!p.open && p.quickOn && (quick.length > 0 || showColour || showUndo) && (
+        <div className="absolute right-1.5 top-14 z-20 flex flex-col items-end gap-1">
           {quick.map((t) => (
             <button
               key={t.id}
@@ -77,6 +99,35 @@ export function PhoneMenu(p: Props) {
               <t.icon className="size-4" />
             </button>
           ))}
+          {showColour && (
+            <div className="flex items-center gap-1">
+              {palette && (
+                <div className="flex items-center gap-1.5 rounded-full border border-line bg-panel/95 px-2 py-1 shadow">
+                  {p.colors.map((c, i) => (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-label={`Colour ${i + 1}`}
+                      onClick={() => {
+                        p.onColor(c);
+                        setPalette(false);
+                      }}
+                      className={cx("size-6 rounded-full border", p.color === c ? "border-ink ring-2 ring-accent/40" : "border-black/10")}
+                      style={{ background: c }}
+                    />
+                  ))}
+                </div>
+              )}
+              <button type="button" onClick={() => setPalette((o) => !o)} aria-label="Colour" aria-expanded={palette} className={cx(round, "border-line bg-panel/60", palette ? "opacity-100" : "opacity-70")}>
+                <span className="size-4 rounded-full border border-black/20" style={{ background: p.color }} />
+              </button>
+            </div>
+          )}
+          {showUndo && (
+            <button type="button" onClick={p.onUndo} disabled={!p.canUndo} aria-label="Undo" className={cx(round, faint, "disabled:opacity-25")}>
+              <Undo2 className="size-4" />
+            </button>
+          )}
         </div>
       )}
       {!p.open && (
@@ -128,8 +179,20 @@ export function PhoneMenu(p: Props) {
         {p.children}
         {p.tools.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 border-t border-line px-2 py-2">
-            <span className="w-full text-[11px] text-ink-3">Quick buttons kept on the page (tap to add or remove):</span>
-            {p.tools.map((t) => {
+            <div className="flex w-full items-center gap-2">
+              <span className="flex-1 text-[11px] text-ink-3">Quick buttons kept on the page (tap to add or remove):</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={p.quickOn}
+                aria-label="Show the quick buttons"
+                onClick={() => p.onQuickOn(!p.quickOn)}
+                className={cx("flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium", p.quickOn ? "border-accent bg-accent text-accent-ink" : "border-line text-ink-2")}
+              >
+                {p.quickOn ? "On" : "Off"}
+              </button>
+            </div>
+            {[...p.tools, ...EXTRA].map((t) => {
               const on = p.pins.includes(t.id);
               return (
                 <button
@@ -138,7 +201,7 @@ export function PhoneMenu(p: Props) {
                   aria-pressed={on}
                   aria-label={`${t.name}: ${on ? "on the page" : "only in this menu"}`}
                   onClick={() => p.onPins(on ? p.pins.filter((x) => x !== t.id) : [...p.pins, t.id])}
-                  className={cx("flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-xs", on ? "border-accent bg-accent-soft text-accent" : "border-line text-ink-2")}
+                  className={cx("flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-xs", on ? "border-accent bg-accent-soft text-accent" : "border-line text-ink-2", !p.quickOn && "opacity-50")}
                 >
                   <t.icon className="size-3.5" />
                   {t.name}

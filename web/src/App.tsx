@@ -171,7 +171,8 @@ export default function App() {
   const isPhone = useMediaQuery(PHONE);
   const [phoneMenu, setPhoneMenu] = useState(false);
   /** Phones: the tools kept on the page as small buttons, outside the menu. */
-  const [phonePins, setPhonePins] = usePersistentState<Tool[]>("ss-phone-pins", ["select", "area"]);
+  const [phonePins, setPhonePins] = usePersistentState<string[]>("ss-phone-buttons", ["select", "area", "colour", "undo"]);
+  const [phoneQuick, setPhoneQuick] = usePersistentState("ss-phone-quick", true);
   const [fullscreen, setFullscreen] = useState(isFullscreen);
   useEffect(() => {
     const on = () => setFullscreen(isFullscreen());
@@ -2170,7 +2171,14 @@ export default function App() {
             onTool={setTool}
             pins={phonePins}
             onPins={setPhonePins}
-            toolChip={doc && tool !== "select" && !phonePins.includes(tool) ? { label: TOOL_CHIP[tool] ?? tool, color: tool === "eraser" || tool === "ocr" || tool === "marker" ? null : toolColor } : null}
+            quickOn={phoneQuick}
+            onQuickOn={setPhoneQuick}
+            color={toolColor}
+            colors={tool === "pen" || tool === "text" ? PEN_COLORS : HIGHLIGHT_COLORS}
+            onColor={setToolColor}
+            canUndo={!!history.undoLabel && !history.running && !busy}
+            onUndo={() => void history.undo()}
+            toolChip={doc && tool !== "select" && !(phoneQuick && phonePins.includes(tool)) ? { label: TOOL_CHIP[tool] ?? tool, color: tool === "eraser" || tool === "ocr" || tool === "marker" ? null : toolColor } : null}
             onToolOff={() => setTool("select")}
             onFiles={() => setMobilePanel("left")}
             onNotes={doc ? () => setMobilePanel("right") : null}
