@@ -161,7 +161,8 @@ On a phone the page gets the whole screen. There are no bars: everything is behi
 - **Page size:** the page always fits the screen's width. Turn the phone and it fits again by itself.
 - **Wide pages (slides, 16:9 notes):** turn the phone sideways and one whole page fills the screen. If the phone's auto-rotate is off, use ☰ → **Sideways**: it goes full screen and turns the page for you. ☰ → **Upright** goes back.
 - **Zoom:** pinch with two fingers. **Double tap** the page to fit it to the screen again. The − / + buttons are in the ☰ menu.
-- **Tools:** pick one in the ☰ menu. A small chip beside ☰ shows the tool that is on; tap the chip to go back to Select.
+- **Quick buttons:** small see-through tool buttons sit under ☰, so you can switch tools without opening the menu. At first they are *Select* and *Area* (highlight an area: drag a box with a finger). To change them, open ☰ and tap the tools under **Quick buttons kept on the page**; the choice is remembered on this phone.
+- **Other tools:** pick one in the ☰ menu. A small chip beside ☰ shows a tool that is on but has no quick button; tap the chip to go back to Select.
 - **Highlight:** long-press a word, drag the handles over the text, then tap a colour in the bar that appears below it. The bar also has *Note* (the text into a new note) and *Copy*.
 - The phone's zoom isn't saved for the computer, so the computer keeps its own zoom for each file. The page you were on is saved.
 - **Log out:** ⚙ → **Log out of this device**.

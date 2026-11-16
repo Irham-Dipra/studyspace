@@ -34,7 +34,7 @@ import { PicturePanel } from "./components/PicturePanel";
 import { PicturePagesDialog } from "./components/PicturePagesDialog";
 import { isPicture, picturesOnPage } from "./lib/notePictures";
 import { PdfViewer, MAX_ZOOM, MIN_ZOOM, type PdfViewerHandle } from "./components/viewer/PdfViewer";
-import { ViewerToolbar } from "./components/viewer/ViewerToolbar";
+import { TEXT_TOOLS, TOOLS, ViewerToolbar } from "./components/viewer/ViewerToolbar";
 import { TextDocViewer } from "./components/viewer/TextDocViewer";
 import { HIGHLIGHT_COLORS, PEN_COLORS, TEXT_SIZES, type Tool } from "./components/viewer/geometry";
 import type { PageMarker } from "./components/viewer/NoteMarkers";
@@ -85,7 +85,7 @@ function useWindowWidth() {
 /** A phone, upright or on its side (a touch screen that is narrow one way). */
 const PHONE = "(pointer: coarse) and (max-width: 639px), (pointer: coarse) and (max-height: 500px)";
 /** Short names for the chip that shows which tool is on (phones). */
-const TOOL_CHIP: Record<string, string> = { highlight: "Highlight", area: "Area", pen: "Pen", eraser: "Eraser", ocr: "Get text", text: "Text box", marker: "Marker" };
+const TOOL_CHIP: Record<string, string> = { select: "Select", highlight: "Highlight", area: "Area", pen: "Pen", eraser: "Eraser", ocr: "Get text", text: "Text box", marker: "Marker" };
 
 /** Resizable side-panel widths in px (desktop layout). */
 const PANEL = {
@@ -170,6 +170,8 @@ export default function App() {
   /** Phones: no bars at all, only the page; a menu button in the corner opens what the bars held. */
   const isPhone = useMediaQuery(PHONE);
   const [phoneMenu, setPhoneMenu] = useState(false);
+  /** Phones: the tools kept on the page as small buttons, outside the menu. */
+  const [phonePins, setPhonePins] = usePersistentState<Tool[]>("ss-phone-pins", ["select", "area"]);
   const [fullscreen, setFullscreen] = useState(isFullscreen);
   useEffect(() => {
     const on = () => setFullscreen(isFullscreen());
@@ -2163,7 +2165,12 @@ export default function App() {
             title={doc?.title ?? null}
             dark={dark}
             fullscreen={fullscreen}
-            toolChip={doc && tool !== "select" ? { label: TOOL_CHIP[tool] ?? tool, color: tool === "eraser" || tool === "ocr" || tool === "marker" ? null : toolColor } : null}
+            tools={doc ? TOOLS.filter((t) => isPaged(doc.kind) || TEXT_TOOLS.has(t.id)).map((t) => ({ id: t.id, name: TOOL_CHIP[t.id] ?? t.id, icon: t.icon })) : []}
+            tool={tool}
+            onTool={setTool}
+            pins={phonePins}
+            onPins={setPhonePins}
+            toolChip={doc && tool !== "select" && !phonePins.includes(tool) ? { label: TOOL_CHIP[tool] ?? tool, color: tool === "eraser" || tool === "ocr" || tool === "marker" ? null : toolColor } : null}
             onToolOff={() => setTool("select")}
             onFiles={() => setMobilePanel("left")}
             onNotes={doc ? () => setMobilePanel("right") : null}

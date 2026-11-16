@@ -1,6 +1,15 @@
 import type { ReactNode } from "react";
 import { CircleHelp, Library, Menu, Moon, RectangleHorizontal, Settings, StickyNote, Sun, X } from "lucide-react";
 import { cx } from "./ui";
+import type { Tool } from "./viewer/geometry";
+
+/** A tool as the quick buttons and their picker show it. */
+export interface QuickTool {
+  id: Tool;
+  /** One or two words. */
+  name: string;
+  icon: (p: { className?: string }) => ReactNode;
+}
 
 interface Props {
   open: boolean;
@@ -13,6 +22,12 @@ interface Props {
   /** Shown beside the menu button while a tool other than Select is on; a tap goes back to Select. */
   toolChip: { label: string; color: string | null } | null;
   onToolOff: () => void;
+  /** The tools this file has (none on the start screen), the one that is on, and those kept on the page. */
+  tools: QuickTool[];
+  tool: Tool;
+  onTool: (t: Tool) => void;
+  pins: Tool[];
+  onPins: (pins: Tool[]) => void;
   onFiles: () => void;
   onNotes: (() => void) | null;
   onLandscape: () => void;
@@ -41,8 +56,29 @@ export function PhoneMenu(p: Props) {
     </button>
   );
   const ic = "size-5";
+  const quick = p.tools.filter((t) => p.pins.includes(t.id));
   return (
     <>
+      {/* Quick tools: small and see-through, so the page under them can still be read. */}
+      {!p.open && quick.length > 0 && (
+        <div className="absolute right-1.5 top-14 z-20 flex flex-col gap-1">
+          {quick.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => p.onTool(t.id)}
+              aria-label={t.name}
+              aria-pressed={p.tool === t.id}
+              className={cx(
+                "flex size-8 items-center justify-center rounded-full border shadow-sm",
+                p.tool === t.id ? "border-accent bg-accent-soft/80 text-accent opacity-90" : "border-line bg-panel/60 text-ink opacity-50 active:opacity-100",
+              )}
+            >
+              <t.icon className="size-4" />
+            </button>
+          ))}
+        </div>
+      )}
       {!p.open && (
         <div className="absolute right-1.5 top-1.5 z-20 flex items-center gap-1.5">
           {p.toolChip && (
@@ -90,6 +126,27 @@ export function PhoneMenu(p: Props) {
           {action(<Settings className={ic} />, "Settings", p.onSettings)}
         </div>
         {p.children}
+        {p.tools.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-line px-2 py-2">
+            <span className="w-full text-[11px] text-ink-3">Quick buttons kept on the page (tap to add or remove):</span>
+            {p.tools.map((t) => {
+              const on = p.pins.includes(t.id);
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={`${t.name}: ${on ? "on the page" : "only in this menu"}`}
+                  onClick={() => p.onPins(on ? p.pins.filter((x) => x !== t.id) : [...p.pins, t.id])}
+                  className={cx("flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-xs", on ? "border-accent bg-accent-soft text-accent" : "border-line text-ink-2")}
+                >
+                  <t.icon className="size-3.5" />
+                  {t.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </>
   );

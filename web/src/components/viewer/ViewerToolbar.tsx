@@ -82,7 +82,7 @@ interface Props {
   onRedo: () => void;
 }
 
-const TOOLS: { id: Tool; label: string; icon: typeof Highlighter }[] = [
+export const TOOLS: { id: Tool; label: string; icon: typeof Highlighter }[] = [
   { id: "select", label: "Select text", icon: MousePointer2 },
   { id: "highlight", label: "Highlight text", icon: Highlighter },
   { id: "area", label: "Highlight area: right-click (two-finger tap) two corners, or drag", icon: SquareDashed },
@@ -96,7 +96,7 @@ const TOOLS: { id: Tool; label: string; icon: typeof Highlighter }[] = [
 const TEXT_SIZE_LABELS = ["Small", "Medium", "Large"];
 
 /** The tools for text that flows (HTML, Markdown): the others draw on pages. */
-const TEXT_TOOLS = new Set<Tool>(["select", "highlight"]);
+export const TEXT_TOOLS = new Set<Tool>(["select", "highlight"]);
 
 const PEN_WIDTHS = [
   { w: 0.0015, label: "Fine" },
