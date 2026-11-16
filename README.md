@@ -2,11 +2,9 @@
 
 **A local-first study workspace for PDFs: your library on the left, the PDF in the middle, and the notes for the page you're reading on the right.** It runs on your own computer, reads your files where they already are, and works offline, with no account, no upload and no API key.
 
-## Why I built it
+While studying for my courses I kept switching between a PDF reader, AI chats, a notes app and a folder full of slides, and my notes never stayed with the page they were about. Finding what I had written about one page meant searching three or four places.
 
-While studying I kept switching between a PDF reader, a notes app and a folder full of slides, and my notes never stayed with the page they were about. Finding what I had written about one page meant searching three places.
-
-So I built a reader where every note belongs to a page. When I come back to a page, everything I wrote about it is already beside it: my own notes, summaries, past questions, explanations and links. Over time it grew into the one tool I study in: highlighting, page editing, OCR, bookmarks, and a phone view for reading away from the desk.
+So I built a reader where every note belongs to a page. When I come back to a page, everything I wrote about it is already beside it: my own notes, summaries, past questions, AI explanations and links. Over time it grew into the one tool I study in: highlighting, page editing, OCR, bookmarks, and a phone view for reading away from the desk.
 
 ## Features
 
