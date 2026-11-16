@@ -44,11 +44,13 @@ export default defineConfig(({ mode }) => {
   // Shares the repo-root .env with the server so both agree on the API port.
   const env = { ...loadEnv(mode, path.resolve(import.meta.dirname, ".."), "STUDYSPACE_"), ...process.env };
   const apiPort = env.STUDYSPACE_PORT ?? "4317";
+  // The page's own port while developing. If it is taken, Vite uses the next free one and prints it.
+  const webPort = Number(env.STUDYSPACE_WEB_PORT) || 5173;
   return {
     plugins: [react(), tailwindcss(), pdfjsAssets()],
     server: {
       host: "127.0.0.1",
-      port: 5173,
+      port: webPort,
       strictPort: false,
       proxy: { "/api": `http://127.0.0.1:${apiPort}` },
     },

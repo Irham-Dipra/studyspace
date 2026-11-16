@@ -1,28 +1,14 @@
 # StudySpace
 
-**A study workspace for my course PDFs, running on my own computer.** The library is on the left, the PDF in the middle, and my notes for the page I'm reading on the right.
+**A local-first study workspace for PDFs: your library on the left, the PDF in the middle, and the notes for the page you're reading on the right.** It runs on your own computer, reads your files where they already are, and works offline, with no account, no upload and no API key.
 
-![StudySpace on a computer: library, PDF and notes](docs/screenshots/desktop.png)
+## Why I built it
 
-I'm Irham Dipra, a CSE student at BUET. I built StudySpace while preparing for my term finals, because I kept switching between a PDF reader, a notes app and a folder of slides, and my notes never stayed with the page they were about. In StudySpace every note belongs to a page, so when I come back to a page, everything I wrote about it is already beside it.
+While studying I kept switching between a PDF reader, a notes app and a folder full of slides, and my notes never stayed with the page they were about. Finding what I had written about one page meant searching three places.
 
-It reads the PDFs where they already are on my disk. Nothing is uploaded, there is no account and no API key, and it works offline. It runs on **Windows, macOS and Linux**, and I also use it from my phone.
+So I built a reader where every note belongs to a page. When I come back to a page, everything I wrote about it is already beside it: my own notes, summaries, past questions, explanations and links. Over time it grew into the one tool I study in: highlighting, page editing, OCR, bookmarks, and a phone view for reading away from the desk.
 
-## What it looks like
-
-| Dark mode | Page tools |
-| --- | --- |
-| ![Dark mode](docs/screenshots/desktop-dark.png) | ![The Page tools menu](docs/screenshots/page-tools.png) |
-
-On a phone the page gets the whole screen. One menu button in the corner opens everything, and a few small quick buttons stay on the page for the tools I switch between most.
-
-| Reading | The menu | Slides, phone turned sideways |
-| --- | --- | --- |
-| <img src="docs/screenshots/phone.png" width="230" alt="Reading on a phone"> | <img src="docs/screenshots/phone-menu.png" width="230" alt="The phone menu"> | <img src="docs/screenshots/phone-sideways.png" width="420" alt="A slide on a phone turned sideways"> |
-
-The PDFs in these screenshots are small samples I made for this page.
-
-## What it does
+## Features
 
 - **Library:** it finds the PDFs, slides (`.pptx`, `.ppt`), HTML pages and Markdown files in my folders, groups them by folder, and remembers where I stopped reading. I can rename, delete and hide files, and search everything with `Ctrl+K`.
 - **Notes that follow the page:** each note belongs to a page, a page range or the whole file, and the notes panel always shows the ones for the page in view. Notes are Markdown with LaTeX math, tables and pictures. I keep five kinds: my own notes, summaries, previous-year questions, AI explanations and links.
@@ -64,20 +50,20 @@ npm run dev
 
 - `npm install` downloads the packages (a minute or two; no compiler needed).
 - `npm run check` looks at your computer. Each line is `[ok]`, `[--]` (optional and missing, which is fine) or `[!!]` (required and missing: fix it and run the check again).
-- `npm run dev` starts StudySpace. Leave that terminal open while you study; `Ctrl+C` stops it.
+- `npm run dev` starts StudySpace and prints its address after **Local:**. Leave that terminal open while you study; `Ctrl+C` stops it.
 
 Without Git, use **Code → Download ZIP** on GitHub, unzip it, and open a terminal in that folder.
 
 ### 3. Add your PDFs
 
-Open **http://localhost:5173**, click **⚙ Settings → Library folders**, and add the folder that holds your PDFs (browse to it, or type its path, such as `D:\Courses` or `/home/you/Courses`). Your files show up on the left. Click one and start reading.
+Open the address `npm run dev` printed (normally `http://localhost:5173`; if that port is busy it picks the next free one), click **⚙ Settings → Library folders**, and add the folder that holds your PDFs (browse to it, or type its path, such as `D:\Courses` or `/home/you/Courses`). Your files show up on the left. Click one and start reading.
 
 Next time, open a terminal in the `studyspace` folder and run `npm run dev`.
 
 ### Optional extras
 
 - **Slides and OCR:** LibreOffice opens `.pptx` files, and OCRmyPDF with Tesseract reads scanned pages. Install commands for each system are in [REQUIREMENTS.md](REQUIREMENTS.md). You can add them at any time.
-- **A settings file:** copy `.env.example` to `.env` to set your PDF folder, the port, a phone password or the OCR language.
+- **A settings file:** copy `.env.example` to `.env` to set your PDF folder, the ports, a phone password or the OCR language.
 - **Updating:** `git pull`, then `npm install`.
 
 ### Moving your notes to another PC
@@ -90,11 +76,40 @@ The notes are not in this repository. They live in StudySpace's data folder (see
 
 StudySpace recognises a file by its content, not its path, so notes, highlights and bookmarks find their PDFs again even in a different folder. Keep the PDFs unchanged on the way.
 
+## What it looks like
+
+**On a computer:** the library, the PDF and the notes for the current page.
+
+![StudySpace on a computer](docs/screenshots/desktop.png)
+
+**On a phone:** the page gets the whole screen. The ☰ button opens everything else, and the small buttons under it switch tools without opening the menu.
+
+<img src="docs/screenshots/phone.png" width="300" alt="StudySpace on a phone">
+
+### The tools
+
+| Tool | Key | What it does |
+| --- | --- | --- |
+| Select | `V` | Select text to copy it, highlight it or quote it into a note. Click a highlight to recolour or delete it. |
+| Highlight | `H` | Every selection becomes a highlight in the current colour. |
+| Highlight area | `A` | Drag a box over a figure, a table or scanned text. |
+| Pen | `P` | Draw freehand, in three widths. |
+| Eraser | `E` | Click or drag over highlights and drawings to remove them. |
+| Get text from a region | `O` | Drag a box; the text inside it is read out (OCR for scanned pages). |
+| Text box | `Y` | Click on the page and type. |
+| Note marker | `K` | Put a pin on the page that opens a note. |
+| Colours | `1`–`5` | The colour for the tool that is on. |
+| Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` | Every change, including page edits. |
+| Save to PDF | `Ctrl+S` | Writes highlights, drawings and bookmarks into the PDF file itself. |
+| Page tools | `T` | Insert, delete, replace, turn and move pages; extract, split and merge; get text and OCR; save pages as pictures. |
+
+The PDFs in the screenshots are small samples made for this page.
+
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Development: the server on port 4317 (restarts on code changes) and the web page on **http://localhost:5173** (hot reload). |
+| `npm run dev` | Development: the server on port 4317 (restarts on code changes) and the web page (hot reload) on the address it prints: port 5173, or the next free one. |
 | `npm start` | Builds the web page, then serves everything from one process on **http://localhost:4317**. Use this for daily use or for a phone. |
 | `npm run check` | Checks Node, the npm packages, the optional tools and the ports. |
 | `npm test` | Server tests (Vitest). |
@@ -111,6 +126,7 @@ Everything is optional. Settings come from `.env` in the project folder (copy [.
 | `STUDYSPACE_EXCLUDES` | – | Folders or files to hide, comma-separated, such as `Old, *.md` (the same rules as in Settings). |
 | `STUDYSPACE_DATA_DIR` | see below | Where the database, pictures and backups live. |
 | `STUDYSPACE_HOST` / `STUDYSPACE_PORT` | `127.0.0.1` / `4317` | `0.0.0.0` also lets devices on your Wi-Fi in (they must log in). |
+| `STUDYSPACE_WEB_PORT` | `5173` | The web page's port with `npm run dev`. |
 | `STUDYSPACE_PASSWORD` | – | Lets a phone or other device log in. This computer never needs it. |
 | `STUDYSPACE_ALLOWED_HOSTS` | – | Extra host names other devices may use. |
 | `STUDYSPACE_HISTORY_LIMIT` | `10` | Undoable file edits kept per PDF. |

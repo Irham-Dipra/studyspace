@@ -399,6 +399,8 @@ Everything below is done and verified in the browser on scratch copies.
 
 - **2026-11-16: README in the user's own voice, with screenshots; pushed to GitHub.** `README.md` rewritten in the first person (the user asked: "write the readme file as my point of view, not yours"), with a short three-step setup and six screenshots in `docs/screenshots/` (desktop light and dark, Page tools, phone, phone menu, phone sideways). The screenshots use small sample PDFs made with LaTeX for the purpose, on a scratch server (4399), so no study material is shown. Remote `origin` = `github.com/Irham-Dipra/studyspace`.
 
+- **2026-11-16: README reordered; web port configurable.** README: a general first line, then *Why I built it* (no name or university), *Features*, *Set it up on your PC*, then *What it looks like* with two screenshots (computer, phone) and a table of the tools; the other four screenshots were removed. The dev page's port is no longer fixed: `STUDYSPACE_WEB_PORT` (default 5173) in `web/vite.config.ts`, `.env.example`, `scripts/check-requirements.mjs`; the README, user guide §1 and `docs/DEVELOPER.md` say "the address it prints". Verified: Vite started on 5199 through the variable from a worktree; `npm run check`.
+
 ## Open questions for the user
 
 - Detect a PDF that was moved while open, and show a clearer error (offered on 2026-10-13, no answer yet).

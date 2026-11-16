@@ -11,7 +11,7 @@ This guide walks through every feature of StudySpace, step by step. Press **`?`*
    cd "/home/dipra/Study Helper"
    npm run dev
    ```
-2. Open **http://127.0.0.1:5173** in your browser.
+2. Open the address it prints after **Local:** in your browser (`http://127.0.0.1:5173` unless that port is taken or `STUDYSPACE_WEB_PORT` sets another).
 3. Leave the terminal open while you study. Press `Ctrl+C` in it to stop the app.
 
 > Prefer a single server without hot-reload? Run `npm start` and open **http://127.0.0.1:4317** instead.

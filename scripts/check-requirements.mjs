@@ -103,9 +103,10 @@ if (win && tesseract && !find(["tesseract"])) {
 
 console.log("\nPorts");
 const apiPort = Number(process.env.STUDYSPACE_PORT || 4317);
+const webPort = Number(process.env.STUDYSPACE_WEB_PORT || 5173);
 for (const [port, what, busy] of [
   [apiPort, "the server", "is StudySpace already running? Or set STUDYSPACE_PORT in .env"],
-  [5173, "the web page", "npm run dev then takes the next free port; it prints which"],
+  [webPort, "the web page", "npm run dev then takes the next free port; it prints which"],
 ]) {
   if (await portFree(port)) ok(`${port} is free`, what);
   else info(`${port} is in use`, busy);
@@ -114,6 +115,6 @@ for (const [port, what, busy] of [
 console.log(
   missingRequired
     ? `\n${missingRequired} required part(s) missing. Fix the [!!] lines above, then run this again.\n`
-    : "\nEverything StudySpace needs is here. Start it with: npm run dev  (then open http://localhost:5173)\n",
+    : "\nEverything StudySpace needs is here. Start it with: npm run dev  (then open the address it prints)\n",
 );
 process.exitCode = missingRequired ? 1 : 0;

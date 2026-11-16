@@ -6,7 +6,7 @@ How StudySpace works inside, its HTTP API and its database. To install and run i
 
 ```bash
 npm install
-npm run dev        # API on 4317 with auto-reload (tsx watch) + Vite on 5173 with hot reload
+npm run dev        # API on 4317 with auto-reload (tsx watch) + Vite with hot reload (port 5173, or STUDYSPACE_WEB_PORT)
 npm run typecheck  # server + web
 npm test           # server tests (Vitest + Supertest), with temp folders and generated PDFs
 npm run build      # web/dist + server/dist; npm start then serves both on 4317
