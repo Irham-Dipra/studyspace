@@ -84,7 +84,7 @@ StudySpace recognises a file by its content, not its path, so notes, highlights 
 
 **On a phone:** the page gets the whole screen. The ☰ button opens everything else, and the small buttons under it switch tools without opening the menu.
 
-<img src="docs/screenshots/phone.png" width="300" alt="StudySpace on a phone">
+<p align="center"><img src="docs/screenshots/phone.png" width="300" alt="StudySpace on a phone"></p>
 
 ### The tools
 
