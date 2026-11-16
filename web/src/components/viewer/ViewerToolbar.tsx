@@ -38,6 +38,8 @@ import { canEditFile, isPaged, type DocumentKind } from "../../lib/types";
 interface Props {
   /** Collapsed to nothing, but still mounted: it owns the tool, colour and Page tools keys. */
   hidden?: boolean;
+  /** Phones: the bar wraps onto more lines instead of scrolling sideways. */
+  wrap?: boolean;
   tool: Tool;
   onTool: (t: Tool) => void;
   color: string;
@@ -207,7 +209,7 @@ export function ViewerToolbar(p: Props) {
   const ic = "size-4 shrink-0 text-ink-3";
 
   return (
-    <div className={cx("flex shrink-0 items-center gap-1 overflow-x-auto bg-panel px-2", p.hidden ? "h-0 overflow-y-hidden" : "h-11 border-b border-line")} aria-hidden={p.hidden || undefined}>
+    <div className={cx("flex shrink-0 items-center gap-1 bg-panel px-2", p.wrap ? "flex-wrap gap-y-1.5 border-t border-line py-2" : "overflow-x-auto", p.hidden ? "h-0 overflow-y-hidden" : !p.wrap && "h-11 border-b border-line")} aria-hidden={p.hidden || undefined}>
       <IconButton label={withKey(p.undoLabel ? `Undo: ${p.undoLabel}` : "Nothing to undo", "undo")} disabled={!p.canUndo} onClick={p.onUndo}>
         {p.undoing ? <Loader2 className="size-4 animate-spin" /> : <Undo2 className="size-4" />}
       </IconButton>

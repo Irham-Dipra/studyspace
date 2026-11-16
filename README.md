@@ -18,7 +18,7 @@ StudySpace reads your PDFs where they already are, keeps everything on your own 
 - **Export:** a file's notes as Markdown files in a `.zip`, its pages as pictures or its text, also for several files at once.
 - **Undo everything:** `Ctrl+Z` covers notes, highlights, bookmarks and even page edits. Edited PDFs keep their previous versions as a backup.
 - **Keyboard first:** every feature has a key, shown beside it. Press `?` in the app for the full list.
-- **On your phone:** open it over your Wi-Fi or Tailscale with a password ([phone setup](docs/PHONE_SETUP.md)).
+- **On your phone:** open it over your Wi-Fi or Tailscale with a password, or install it as a full-screen app; the page gets the whole screen, with pinch zoom and a sideways mode for slides ([phone setup](docs/PHONE_SETUP.md)).
 
 Every feature, step by step: **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**.
 

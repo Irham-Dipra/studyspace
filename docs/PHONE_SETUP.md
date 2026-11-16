@@ -128,12 +128,16 @@ Tailscale is a free app that links your own devices privately and encrypted, ove
 
 ---
 
-## Add it to the home screen (optional)
+## Install it as an app (recommended)
 
-- **Android (Chrome):** menu ⋮ → **Add to Home screen** (or **Install app**).
+- **Android (Chrome):** open your Tailscale `https://…ts.net` address → menu ⋮ → **Add to Home screen** → **Install** (or **Install app**).
 - **iPhone (Safari):** Share → **Add to Home Screen**.
 
-You then get a StudySpace icon that opens it like an app.
+You get a StudySpace icon that opens it as its own app: full screen, with no address bar and no browser tabs. It still talks to StudySpace on your computer, so the computer must be on.
+
+- Use the Tailscale address for this. Over the plain Wi-Fi `http://` address Chrome only makes a shortcut that opens in the browser.
+- If you had an older StudySpace icon, remove it and install again, so it picks up the full-screen setting.
+- There is no `.apk` to download. A real Android package would be a shell around this same page and would need the Android SDK to build.
 
 ## Keep the computer ready
 
@@ -149,15 +153,33 @@ You then get a StudySpace icon that opens it like an app.
 
 ## Using it on the phone
 
-- **Files:** the first button at the top left. Tap a file to open it. Its ✏ and 🗑 buttons rename or delete it.
-- **Notes:** the last button at the top right.
+On a phone the page gets the whole screen. There are no bars: everything is behind the **☰** button in the top right corner.
+
+- **☰ menu:** *Files*, *Notes*, *Sideways*, dark / light, *Help*, *Settings*, search (🔍), the page number and zoom, and every tool (undo, highlight, pen, eraser, text box, marker, *Page tools* 🔧). Tap outside the menu, or ✕, to close it.
+- **Files:** ☰ → *Files*. Tap a file to open it. Its ✏ and 🗑 buttons rename or delete it.
+- **Notes:** ☰ → *Notes*.
+- **Page size:** the page always fits the screen's width. Turn the phone and it fits again by itself.
+- **Wide pages (slides, 16:9 notes):** turn the phone sideways and one whole page fills the screen. If the phone's auto-rotate is off, use ☰ → **Sideways**: it goes full screen and turns the page for you. ☰ → **Upright** goes back.
+- **Zoom:** pinch with two fingers. **Double tap** the page to fit it to the screen again. The − / + buttons are in the ☰ menu.
+- **Tools:** pick one in the ☰ menu. A small chip beside ☰ shows the tool that is on; tap the chip to go back to Select.
 - **Highlight:** long-press a word, drag the handles over the text, then tap a colour in the bar that appears below it. The bar also has *Note* (the text into a new note) and *Copy*.
-- **Undo:** ↶ at the top left of the toolbar.
-- **Search:** the 🔍 button at the top.
-- **Zoom:** the **+** and **−** buttons at the bottom. Pinching doesn't zoom the PDF.
+- The phone's zoom isn't saved for the computer, so the computer keeps its own zoom for each file. The page you were on is saved.
 - **Log out:** ⚙ → **Log out of this device**.
 - Adding or changing study folders works only on the computer, for safety.
 - The phone and the computer don't update each other live. After changing something on one, reload the page on the other.
+
+## Working on the StudySpace code from the phone
+
+You can keep developing with Claude Code from the phone, without the editor on the computer. The computer must stay on.
+
+1. **Remote Control (easiest).** On the computer, in a terminal:
+   ```bash
+   cd "/home/dipra/Study Helper"
+   claude remote-control --name studyspace
+   ```
+   Then open the **Claude** app on the phone (or claude.ai/code) → **Code**: the session is in the list. It runs on the computer, with the real files and test servers; the phone is only the screen. Start it inside `tmux` so it survives closing the terminal.
+2. **A terminal on the phone.** Install an SSH server on the computer (`sudo apt install openssh-server`), install **Termux** on the phone, then over Tailscale: `ssh <you>@<the computer's Tailscale name>`, `cd "/home/dipra/Study Helper"`, `claude`.
+3. **Cloud sessions** (claude.ai/code without the computer) need the project on GitHub and can't see your PDFs, so they only suit small code changes.
 
 ## Turning it off
 

@@ -235,6 +235,7 @@ export function TextDocViewer(props: Props) {
       goForward: () => undefined,
       fitWidthZoom: () => 1,
       fitPageZoom: () => 1,
+      fitScreenZoom: () => 1,
       getPdf: () => null,
     }),
     [isHtml, toFrame],

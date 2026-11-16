@@ -128,9 +128,12 @@ export function StatusBar({ paged = true, page, pageCount, zoom, onPage, back, f
             <IconButton label={withKey("Fit width", "fitWidth")} onClick={onFitWidth}>
               <MoveHorizontal className="size-4" />
             </IconButton>
-            <IconButton label={withKey("Fit page", "fitPage")} onClick={onFitPage} className="hidden sm:inline-flex">
-              <Maximize className="size-4" />
-            </IconButton>
+            {/* A wrapper hides it on phones: the button's own display class would win over "hidden". */}
+            <span className="hidden sm:contents">
+              <IconButton label={withKey("Fit page", "fitPage")} onClick={onFitPage}>
+                <Maximize className="size-4" />
+              </IconButton>
+            </span>
           </>
         )}
       </div>

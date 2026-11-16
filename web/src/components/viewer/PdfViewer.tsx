@@ -22,6 +22,8 @@ export interface PdfViewerHandle {
   goForward: () => void;
   fitWidthZoom: () => number | null;
   fitPageZoom: () => number | null;
+  /** Phones: the width, or the whole page when both the screen and the page lie on their side. */
+  fitScreenZoom: () => number | null;
   getPdf: () => PDFDocumentProxy | null;
 }
 
@@ -56,10 +58,14 @@ interface Props {
   onQuoteToNote: (page: number, text: string) => void;
   /** The second pane of side by side: no tools, and selected text can only be copied. */
   readOnly?: boolean;
+  /** Phones: thin margins, so the page gets nearly the whole screen. */
+  compact?: boolean;
+  /** The view changed size (a phone was turned) or the current page's size became known. */
+  onFitNeeded?: () => void;
+  /** A double tap on the page (touch screens). */
+  onDoubleTap?: () => void;
 }
 
-const GAP = 14;
-const PAD = 16;
 const OVERSCAN = 2;
 export const MIN_ZOOM = 0.25;
 export const MAX_ZOOM = 5;
@@ -80,6 +86,11 @@ export function PdfViewer(props: Props) {
   const [selMenu, setSelMenu] = useState<SelMenu | null>(null);
   const [annMenu, setAnnMenu] = useState<AnnMenu | null>(null);
 
+  const GAP = props.compact ? 6 : 14;
+  const PAD = props.compact ? 4 : 16;
+  /** Room kept for the scrollbar; a phone's lies over the page. */
+  const BAR = props.compact ? 0 : 8;
+  const contentRef = useRef<HTMLDivElement>(null);
   const scale = zoom * CSS_UNITS;
   const currentRef = useRef(props.initialPage);
   /** Page to show when the file (re)loads; the parent updates it when reopening after an edit. */
@@ -195,7 +206,7 @@ export function PdfViewer(props: Props) {
       maxW = Math.max(maxW, Math.floor(s.w * scale));
     }
     return { tops, total: y - GAP + PAD, maxW };
-  }, [sizes, scale]);
+  }, [sizes, scale, GAP, PAD]);
 
   const pageAt = useCallback(
     (y: number) => {
@@ -248,6 +259,17 @@ export function PdfViewer(props: Props) {
     const el = scrollRef.current;
     const a = anchorRef.current;
     if (!el || !a || !layout.tops.length) return;
+    const pinched = pinchEnd.current;
+    if (pinched) {
+      // After a pinch the spot that was between the fingers stays between them.
+      pinchEnd.current = null;
+      if (contentRef.current) contentRef.current.style.transform = "";
+      const pp = Math.min(pinched.page, layout.tops.length);
+      el.scrollTop = layout.tops[pp - 1] + pinched.frac * Math.floor(sizes[pp - 1].h * scale) - pinched.y;
+      el.scrollLeft = el.scrollWidth / 2 + pinched.dx * (zoom / pinched.zoom) - pinched.x;
+      updateFromScroll();
+      return;
+    }
     const p = Math.min(a.page, layout.tops.length);
     const target = layout.tops[p - 1] + a.frac * Math.floor(sizes[p - 1].h * scale);
     if (Math.abs(el.scrollTop - target) > 1) el.scrollTop = target;
@@ -274,13 +296,26 @@ export function PdfViewer(props: Props) {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    let w = el.clientWidth;
+    let h = el.clientHeight;
     const ro = new ResizeObserver(() => {
       setViewportWidth(el.clientWidth);
       updateFromScroll();
+      if (el.clientWidth !== w || el.clientHeight !== h) fitNeededRef.current?.();
+      w = el.clientWidth;
+      h = el.clientHeight;
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, [updateFromScroll]);
+
+  const fitNeededRef = useRef(props.onFitNeeded);
+  fitNeededRef.current = props.onFitNeeded;
+  // Pages first take page 1's size; when the current page's real size arrives, a fit must be redone.
+  const cur = sizes[currentRef.current - 1];
+  useEffect(() => {
+    if (cur) fitNeededRef.current?.();
+  }, [cur?.w, cur?.h]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ctrl/⌘ + wheel zoom.
   const zoomRef = useRef(zoom);
@@ -296,6 +331,93 @@ export function PdfViewer(props: Props) {
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
+  }, [props.onZoomChange]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Two fingers zoom (touch screens). The page is stretched while the fingers move and drawn again
+  // sharp once they lift; a double tap is passed on (the phone layout fits the page again).
+  const pinchEnd = useRef<{ page: number; frac: number; x: number; y: number; dx: number; zoom: number } | null>(null);
+  const layoutRef = useRef({ layout, sizes, scale, pageAt });
+  layoutRef.current = { layout, sizes, scale, pageAt };
+  const toolRef = useRef(props.tool);
+  toolRef.current = props.tool;
+  const doubleTapRef = useRef(props.onDoubleTap);
+  doubleTapRef.current = props.onDoubleTap;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let pinch: { dist: number; x: number; y: number; k: number } | null = null;
+    let tap: { t: number; x: number; y: number; moved: boolean } | null = null;
+    let lastTap: { t: number; x: number; y: number } | null = null;
+    const spread = (e: TouchEvent) => Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    const limit = (k: number) => Math.min(MAX_ZOOM / zoomRef.current, Math.max(MIN_ZOOM / zoomRef.current, k));
+    const onStart = (e: TouchEvent) => {
+      const content = contentRef.current;
+      if (e.touches.length === 2 && content && !pinchEnd.current) {
+        const box = el.getBoundingClientRect();
+        const x = (e.touches[0].clientX + e.touches[1].clientX) / 2 - box.left;
+        const y = (e.touches[0].clientY + e.touches[1].clientY) / 2 - box.top;
+        pinch = { dist: spread(e) || 1, x, y, k: 1 };
+        content.style.transformOrigin = `${el.scrollLeft + x - content.offsetLeft}px ${el.scrollTop + y}px`;
+        tap = null;
+        setSelMenu(null);
+        setAnnMenu(null);
+      } else if (e.touches.length === 1) {
+        tap = { t: performance.now(), x: e.touches[0].clientX, y: e.touches[0].clientY, moved: false };
+      } else tap = null;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (pinch && e.touches.length === 2 && contentRef.current) {
+        e.preventDefault();
+        pinch.k = limit(spread(e) / pinch.dist);
+        contentRef.current.style.transform = `scale(${pinch.k})`;
+      } else if (tap && Math.hypot(e.touches[0].clientX - tap.x, e.touches[0].clientY - tap.y) > 10) tap.moved = true;
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (pinch) {
+        const p = pinch;
+        pinch = null;
+        const content = contentRef.current;
+        const { layout: l, sizes: sz, scale: sc, pageAt: at } = layoutRef.current;
+        const z = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(zoomRef.current * p.k * 100) / 100));
+        if (!content || !l.tops.length || z === zoomRef.current) {
+          if (content) content.style.transform = "";
+          return;
+        }
+        const top = el.scrollTop + p.y;
+        const page = at(top);
+        pinchEnd.current = {
+          page,
+          frac: (top - l.tops[page - 1]) / (Math.floor(sz[page - 1].h * sc) || 1),
+          x: p.x,
+          y: p.y,
+          dx: el.scrollLeft + p.x - el.scrollWidth / 2,
+          zoom: zoomRef.current,
+        };
+        jumpedAt.current = performance.now();
+        props.onZoomChange(z);
+        return;
+      }
+      if (!tap || e.touches.length) return;
+      const now = performance.now();
+      const t = tap;
+      tap = null;
+      const target = e.target as HTMLElement;
+      if (t.moved || now - t.t > 300 || toolRef.current !== "select" || target.closest("a,button,input,textarea,[contenteditable],[data-floating-menu]")) return void (lastTap = null);
+      if (lastTap && now - lastTap.t < 350 && Math.hypot(t.x - lastTap.x, t.y - lastTap.y) < 40) {
+        lastTap = null;
+        doubleTapRef.current?.();
+      } else lastTap = { t: now, x: t.x, y: t.y };
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    el.addEventListener("touchend", onEnd);
+    el.addEventListener("touchcancel", onEnd);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+      el.removeEventListener("touchcancel", onEnd);
+    };
   }, [props.onZoomChange]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Keys for the open floating bar; returns true when it used the key. */
@@ -489,20 +611,31 @@ export function PdfViewer(props: Props) {
       getPosition: hereSpot,
       goBack,
       goForward,
+      // The width is read from the element: right after a phone is turned the state is still the old one.
       fitWidthZoom: () => {
         const s = sizes[currentRef.current - 1] ?? sizes[0];
-        if (!s) return null;
-        return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, (viewportWidth - PAD * 2 - 8) / (s.w * CSS_UNITS)));
+        const el = scrollRef.current;
+        if (!s || !el) return null;
+        return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, (el.clientWidth - PAD * 2 - BAR) / (s.w * CSS_UNITS)));
       },
       fitPageZoom: () => {
         const s = sizes[currentRef.current - 1] ?? sizes[0];
         const el = scrollRef.current;
         if (!s || !el) return null;
-        const z = Math.min((viewportWidth - PAD * 2 - 8) / (s.w * CSS_UNITS), (el.clientHeight - PAD * 2) / (s.h * CSS_UNITS));
+        const z = Math.min((el.clientWidth - PAD * 2 - BAR) / (s.w * CSS_UNITS), (el.clientHeight - PAD * 2) / (s.h * CSS_UNITS));
+        return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+      },
+      fitScreenZoom: () => {
+        const s = sizes[currentRef.current - 1] ?? sizes[0];
+        const el = scrollRef.current;
+        if (!s || !el) return null;
+        const byWidth = (el.clientWidth - PAD * 2 - BAR) / (s.w * CSS_UNITS);
+        const sideways = el.clientWidth > el.clientHeight && s.w > s.h;
+        const z = sideways ? Math.min(byWidth, (el.clientHeight - PAD * 2) / (s.h * CSS_UNITS)) : byWidth;
         return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
       },
     }),
-    [goToPage, goBack, goForward, hereSpot, pdf, sizes, scale, viewportWidth],
+    [goToPage, goBack, goForward, hereSpot, pdf, sizes, scale, viewportWidth, PAD, BAR],
   );
 
   const navigateDest = useCallback(
@@ -669,7 +802,7 @@ export function PdfViewer(props: Props) {
 
   return (
     <div className={`relative h-full min-h-0 ${props.tool === "pen" || props.tool === "area" || props.tool === "eraser" ? "ss-tool-draw" : ""}`}>
-      <div ref={scrollRef} className="ss-scroll h-full overflow-auto bg-viewer" onMouseUp={onMouseUp}>
+      <div ref={scrollRef} className="ss-scroll h-full touch-pan-x touch-pan-y overflow-auto bg-viewer" onMouseUp={onMouseUp}>
         {loadError ? (
           <div className="grid h-full place-items-center p-6 text-center text-sm text-danger">
             <div>
@@ -693,7 +826,7 @@ export function PdfViewer(props: Props) {
             </div>
           </div>
         ) : (
-          <div className="relative mx-auto" style={{ height: layout.total, width: Math.max(layout.maxW + PAD * 2, 1), minWidth: "100%" }}>
+          <div ref={contentRef} className="relative mx-auto" style={{ height: layout.total, width: Math.max(layout.maxW + PAD * 2, 1), minWidth: "100%" }}>
             {pages}
           </div>
         )}

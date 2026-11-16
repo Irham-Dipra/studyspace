@@ -590,6 +590,17 @@ Last verification (2026-10-13): 74 server tests pass, typecheck and build pass, 
 
 ---
 
+52. **Phone reading mode; installable app** (2026-11-16; user: "the pages views are not fitted for mobile views. the tools bar block much space … pptx like pdfs … best read if horizontally shown … tools … accessed via a three bar menu at a corner … something dedicated for android"). The user chose: the app keeps talking to the PC, over Tailscale.
+    - **Phone detection:** `PHONE` in `App.tsx` = `(pointer: coarse) and (max-width: 639px), (pointer: coarse) and (max-height: 500px)` (the second half is a phone on its side). Tablets and desktops are unchanged.
+    - **No bars:** on a phone the header and `StatusBar` leave the layout. `components/PhoneMenu.tsx` shows a ☰ button (top right) and a sheet with Files, Notes, Sideways, theme, Help, Settings, the search box, and the same `StatusBar` and `ViewerToolbar` elements as children (`wrap` prop: the tools bar wraps instead of scrolling). The sheet is `display: none` when closed, so the toolbar stays mounted (its keys). No transform or blur on the sheet: the Page tools menu and search box inside are `position: fixed`. A chip beside ☰ shows the active tool; tapping it returns to Select. An effect closes the menu when a file, drawer or dialog opens.
+    - **Fit:** `PdfViewer` got `compact` (margins 4/6 px instead of 16/14), `fitScreenZoom` (width; the whole page when both screen and page are landscape), `onFitNeeded` (size of the view changed, or the current page's real size arrived) and `onDoubleTap`. The fit functions now read the element's width, not the `viewportWidth` state (stale right after a rotation). App keeps `autoFitRef`: on while fitted, off after `changeZoom` (any zoom by hand); `fitScreen` floors to 0.001 (0.01 is several pixels at phone zooms).
+    - **Saved zoom:** on a phone, `saveProgress` sends `storedZoomRef` (the zoom the file had) for paged files, so the PC doesn't open at 0.27.
+    - **Pinch:** touch events on the scroll container (`touch-action: pan-x pan-y`); a CSS `scale()` on the content while the fingers move, one `onZoomChange` at the end; `pinchEnd` lets the layout effect put the spot between the fingers back there and clear the transform.
+    - **Sideways:** `lib/fullscreen.ts` `toggleLandscape` = `requestFullscreen()` + `screen.orientation.lock("landscape")` (touch devices only), with a message when the browser refuses. Key `Shift+J`.
+    - **App install:** manifest has `id`, `display_override: ["fullscreen", "standalone"]`, `orientation: "any"`, split `any` / `maskable` icons; viewport `viewport-fit=cover` and safe-area padding on `#root`. No service worker (Chrome installs without one). A real APK (TWA) was left out: needs the Android SDK and a `/.well-known/assetlinks.json` route before the SPA fallback (`express.static` ignores dot folders).
+    - `StatusBar`: *Fit page* was meant to be hidden on phones but showed (the button's own `inline-flex` beat `hidden`); now wrapped in a `hidden sm:contents` span.
+    - Verified in Chromium with a phone profile (360×780 and 780×360, touch) on scratch 4399/5199: 25 checks (no bars, menu, Page tools on screen, chip, drawers, portrait fit, 16:9 page filling the sideways screen, refit after turning back, pinch by CDP touch events, double tap, saved zoom unchanged, desktop unchanged). **Not tested on the real phone:** Chrome's install, the orientation lock, how pinch feels.
+
 ## 5. Problems already solved (don't repeat them)
 
 **Environment**

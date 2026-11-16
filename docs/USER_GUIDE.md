@@ -47,6 +47,10 @@ The two `☰` buttons in the top bar (or the **`[`** and **`]`** keys) hide and 
 
 Press **`Shift+V`** (or the double-arrow button in the title bar) to hide **both** the title bar and the tools bar, so the page gets the full height. Press it again, or click the small round button at the top right of the page, to bring them back. It is remembered in this browser. The keys for tools (`A`, `Y`, `K`…) and everything else still work while the bars are hidden.
 
+### On a phone: only the page
+
+On a phone there are no bars at all. A **☰** button in the top right corner opens a menu with everything the bars held: files, notes, search, the page number and zoom, every tool and *Page tools*. The page fits the screen's width and fits again when you turn the phone; pinch to zoom, double tap to fit again. For wide pages (slides, 16:9 notes) turn the phone sideways, or use ☰ → **Sideways** (**`Shift+J`** on a computer: full screen). See §15.
+
 ### Resizing the three columns
 
 - **Drag the divider line** between the library and the PDF, or between the PDF and the notes panel. The line turns blue and shows a small grip while you hover or drag. The PDF viewer takes whatever space is left.
@@ -753,6 +757,7 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `Ctrl+S` | Save highlights, drawings & bookmarks into the PDF |
 | `Shift+D` | Dark / light mode |
 | `Shift+V` | Hide / show the title bar and the tools bar (more room to read) |
+| `Shift+J` | Full screen; on a phone also turned sideways, for wide pages (again: back) |
 | `,` | Settings (study folders, note colours) |
 | `Shift+L` | Rescan the library folders |
 | `Shift+F` | Pictures, text & notes of the files selected in the files list… |
@@ -1070,9 +1075,11 @@ Your files stay on the computer. The phone opens StudySpace in its browser, like
 3. On the computer, run `sudo tailscale serve --bg 4317`. The first time, it gives a link to turn on HTTPS: open it and enable it. It then shows your address, like `https://your-pc.tail1234.ts.net`. This stays set after a restart.
 4. On the phone, open that address and log in. Copying works here.
 
-**Tip:** in the phone's browser menu, choose *Add to Home screen* for a StudySpace icon.
+**Tip:** in Chrome's menu on the phone, choose *Add to Home screen* → *Install*. StudySpace then opens as its own full-screen app, without the browser's bars. Do this from the Tailscale address.
+
+**The phone layout:** the page gets the whole screen; the **☰** button in the top right corner opens files, notes, search, page and zoom controls and all the tools. The page fits the screen's width, also after turning the phone. Sideways, a wide page (slides) fills the screen; ☰ → **Sideways** does the same when auto-rotate is off.
 
 **On the phone you can** open files, read, write notes, highlight (long-press the text, drag the handles, then pick a colour in the bar below it), rename or delete files, and undo. Search is the 🔍 button. ⚙ Settings has *Log out of this device*.
 
-**Only on the computer:** adding or changing study folders (for safety). Zoom with the **+** / **−** buttons; pinching the page doesn't zoom the PDF.
+**Only on the computer:** adding or changing study folders (for safety). Zoom by pinching; double tap fits the page again.
 

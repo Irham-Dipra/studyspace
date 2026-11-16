@@ -57,6 +57,8 @@ import { COPY_QUALITY, canvasToPng, copyToClipboard, downloadBlob, renderRegion 
 import { fetchNoteImages, notesZip } from "./lib/notesZip";
 import { isTyping, keyOf, matches, withKey, type ShortcutId } from "./lib/shortcuts";
 import { ResizeHandle } from "./components/ResizeHandle";
+import { PhoneMenu } from "./components/PhoneMenu";
+import { isFullscreen, toggleLandscape } from "./lib/fullscreen";
 import { IconButton, Kbd, KeyHint, Toasts, cx, type ToastMsg } from "./components/ui";
 
 function useMediaQuery(q: string) {
@@ -79,6 +81,11 @@ function useWindowWidth() {
   }, []);
   return w;
 }
+
+/** A phone, upright or on its side (a touch screen that is narrow one way). */
+const PHONE = "(pointer: coarse) and (max-width: 639px), (pointer: coarse) and (max-height: 500px)";
+/** Short names for the chip that shows which tool is on (phones). */
+const TOOL_CHIP: Record<string, string> = { highlight: "Highlight", area: "Area", pen: "Pen", eraser: "Eraser", ocr: "Get text", text: "Text box", marker: "Marker" };
 
 /** Resizable side-panel widths in px (desktop layout). */
 const PANEL = {
@@ -160,6 +167,15 @@ export default function App() {
   const [rightOpen, setRightOpen] = usePersistentState("ss-right-open", true);
   const [barsHidden, setBarsHidden] = usePersistentState("ss-bars-hidden", false);
   const [mobilePanel, setMobilePanel] = useState<"left" | "right" | null>(null);
+  /** Phones: no bars at all, only the page; a menu button in the corner opens what the bars held. */
+  const isPhone = useMediaQuery(PHONE);
+  const [phoneMenu, setPhoneMenu] = useState(false);
+  const [fullscreen, setFullscreen] = useState(isFullscreen);
+  useEffect(() => {
+    const on = () => setFullscreen(isFullscreen());
+    document.addEventListener("fullscreenchange", on);
+    return () => document.removeEventListener("fullscreenchange", on);
+  }, []);
 
   const [directories, setDirectories] = useState<Directory[]>([]);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
@@ -249,6 +265,12 @@ export default function App() {
   const fitOnLoadRef = useRef(false);
   const isDesktopRef = useRef(isDesktop);
   isDesktopRef.current = isDesktop;
+  const isPhoneRef = useRef(isPhone);
+  isPhoneRef.current = isPhone;
+  /** Phones: the page is kept fitted to the screen (also when the phone is turned) until zoomed by hand. */
+  const autoFitRef = useRef(false);
+  /** The zoom saved for the open file. A phone's fitted zoom isn't saved over it: the computer would open at it. */
+  const storedZoomRef = useRef(1);
   const docRef = useRef(doc);
   docRef.current = doc;
   const pageRef = useRef(page);
@@ -336,6 +358,8 @@ export default function App() {
         setPage(p);
         setPageCount(full.pageCount ?? 0);
         setZoom(full.progress?.zoom ?? 1);
+        storedZoomRef.current = full.progress?.zoom ?? 1;
+        autoFitRef.current = false;
         fitOnLoadRef.current = !full.progress;
         setResources(res);
         setAnnotations(anns);
@@ -438,6 +462,17 @@ export default function App() {
     }
   }, []);
 
+  /** Phones: fit the page to the screen, and keep it fitted. */
+  const fitScreen = useCallback(() => {
+    autoFitRef.current = true;
+    const z = viewerRef.current?.fitScreenZoom();
+    // Rounded down finely: at a phone's small zooms a hundredth is several pixels too wide.
+    if (z) setZoom(Math.max(MIN_ZOOM, Math.floor(z * 1000) / 1000));
+  }, []);
+  const onFitNeeded = useCallback(() => {
+    if (isPhoneRef.current && autoFitRef.current) requestAnimationFrame(() => autoFitRef.current && fitScreen());
+  }, [fitScreen]);
+
   const onLoaded = useCallback(
     (count: number, pdf: PDFDocumentProxy) => {
       setPageCount(count);
@@ -447,6 +482,7 @@ export default function App() {
       fitOnLoadRef.current = false;
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
+          if (isPhoneRef.current) return fitScreen();
           const z = viewerRef.current?.fitWidthZoom();
           if (!z) return;
           const fitted = Math.min(2, Math.round(z * 100) / 100);
@@ -460,14 +496,15 @@ export default function App() {
         setDocuments((ds) => ds.map((x) => (x.id === d.id ? { ...x, pageCount: count } : x)));
       }
     },
-    [importOutline],
+    [importOutline, fitScreen],
   );
 
   // Persist reading progress (debounced). HTML / Markdown also keep how far down the reader is.
   useEffect(() => {
     if (!doc) return;
     const t = setTimeout(() => {
-      api.saveProgress(doc.id, page, zoom, isPaged(doc.kind) ? undefined : textTopRef.current).then(
+      const paged = isPaged(doc.kind);
+      api.saveProgress(doc.id, page, paged && isPhoneRef.current ? storedZoomRef.current : zoom, paged ? undefined : textTopRef.current).then(
         () => setRecent((r) => [{ documentId: doc.id, page, zoom, updatedAt: new Date().toISOString(), title: doc.title }, ...r.filter((x) => x.documentId !== doc.id)]),
         () => undefined,
       );
@@ -495,7 +532,11 @@ export default function App() {
   const [navHistory, setNavHistory] = useState<{ back: number | null; forward: number | null }>({ back: null, forward: null });
   useEffect(() => setNavHistory({ back: null, forward: null }), [doc?.id]);
   const goToPage = useCallback((p: number, top?: number | null) => viewerRef.current?.goToPage(p, top), []);
-  const changeZoom = useCallback((z: number) => setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100))), []);
+  /** A zoom picked by hand (buttons, keys, pinch, a fit on the computer): the phone stops refitting. */
+  const changeZoom = useCallback((z: number) => {
+    autoFitRef.current = false;
+    setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100)));
+  }, []);
 
   // ---- Undo / redo ----------------------------------------------------------------
   const history = useUndoHistory(
@@ -1542,6 +1583,7 @@ export default function App() {
     if (is("settings")) return run(() => setShowSettings(true));
     if (is("theme")) return run(toggleTheme);
     if (is("hideBars")) return run(() => setBarsHidden((h) => !h));
+    if (is("landscape")) return run(() => void toggleLandscape());
     if (is("rescan")) return run(() => void rescan());
     if (is("selectedFiles")) return run(openSelected);
     if (is("hiddenFiles")) return run(() => setHiddenOpen(true));
@@ -1567,15 +1609,15 @@ export default function App() {
     // bookmarks are for PDFs. Their keys (arrows, Home, End…) then scroll the text as usual.
     if (!isPaged(docRef.current.kind) && PAGED_ONLY.some(is)) return;
 
-    const zoomIn = () => setZoom((z) => ZOOM_STEPS.find((s) => s > z + 0.001) ?? z);
-    const zoomOut = () => setZoom((z) => [...ZOOM_STEPS].reverse().find((s) => s < z - 0.001) ?? z);
-    const fit = (z: number | null | undefined) => z && changeZoom(z);
+    const zoomIn = () => changeZoom(ZOOM_STEPS.find((s) => s > zoomRef.current + 0.001) ?? zoomRef.current);
+    const zoomOut = () => changeZoom([...ZOOM_STEPS].reverse().find((s) => s < zoomRef.current - 0.001) ?? zoomRef.current);
+    const fit = (z: number | null | undefined) => (isPhoneRef.current ? fitScreen() : z && changeZoom(z));
     const go = (p: number) => viewerRef.current?.goToPage(p);
 
     if (is("save")) run(() => hasUnsavedChanges(docRef.current!) && !busy && void saveToFile());
     else if (is("zoomIn")) run(zoomIn);
     else if (is("zoomOut")) run(zoomOut);
-    else if (is("zoomReset")) run(() => setZoom(1));
+    else if (is("zoomReset")) run(() => changeZoom(1));
     else if (is("nextPage")) run(() => go(pageRef.current + 1));
     else if (is("prevPage")) run(() => go(pageRef.current - 1));
     else if (is("firstPage")) run(() => go(1));
@@ -1827,6 +1869,9 @@ export default function App() {
   const toolColor = tool === "pen" ? penColor : tool === "text" ? textColor : highlightColor;
   const setToolColor = (c: string) => (tool === "pen" ? setPenColor(c) : tool === "text" ? setTextColor(c) : setHighlightColor(c));
 
+  // Phones: the menu closes when it has opened something (a file, a panel, a window).
+  useEffect(() => setPhoneMenu(false), [doc?.id, mobilePanel, showSettings, showHelp, pageOp, textRequest, pdfTool, halvesOpen, picturesOpen, snipping, isPhone]);
+
   const showLeft = isDesktop ? leftOpen : mobilePanel === "left";
   const showRight = isDesktop ? rightOpen : mobilePanel === "right";
 
@@ -1976,118 +2021,11 @@ export default function App() {
     </div>
   );
 
-  return (
-    <div className="flex h-full flex-col bg-canvas text-ink">
-      <input
-        ref={pictureInput}
-        type="file"
-        hidden
-        multiple
-        accept="image/png,image/jpeg,image/gif,image/webp"
-        onChange={(e) => {
-          for (const f of e.target.files ?? []) void addPicture(f);
-          e.target.value = ""; // the same file can be chosen again
-        }}
-      />
-      {/* Top bar */}
-      {!barsHidden && (
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-panel px-2 sm:px-3">
-        <IconButton
-          label={withKey("Show / hide the library", "toggleLeft")}
-          active={showLeft}
-          onClick={() => (isDesktop ? setLeftOpen((o) => !o) : setMobilePanel((m) => (m === "left" ? null : "left")))}
-        >
-          <PanelLeft className="size-4" />
-        </IconButton>
-        <div className="flex items-center gap-2 pr-1">
-          <img src="/favicon.svg" alt="" className="size-6" />
-          <span className="hidden text-[15px] font-semibold tracking-tight sm:inline">StudySpace</span>
-        </div>
-        {doc && (
-          <div className="hidden min-w-0 items-center gap-1 text-sm text-ink-2 md:flex">
-            {course && (
-              <>
-                <span className="truncate font-medium">{course}</span>
-                <ChevronRight className="size-3.5 shrink-0 text-ink-3" />
-              </>
-            )}
-            <span className="max-w-64 truncate text-ink-3" title={doc.relPath}>{doc.title}</span>
-          </div>
-        )}
-        <div className="mx-auto flex min-w-0 flex-1 justify-end px-2 sm:justify-center">
-          <SearchBox documents={documents} onOpenDocument={(d, p) => requestOpen(d, p)} />
-        </div>
-        <IconButton label={withKey("Screenshot part of the window", "snip")} onClick={() => setSnipping(true)}>
-          <Crop className="size-4" />
-        </IconButton>
-        <IconButton label={withKey("Hide the title bar and tools bar", "hideBars")} onClick={() => setBarsHidden(true)}>
-          <ChevronsUp className="size-4" />
-        </IconButton>
-        <IconButton label={withKey(dark ? "Light mode" : "Dark mode", "theme")} onClick={toggleTheme}>
-          {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-        </IconButton>
-        <IconButton label={withKey("Help & keyboard shortcuts", "help")} onClick={() => setShowHelp(true)}>
-          <CircleHelp className="size-4" />
-        </IconButton>
-        <IconButton label={withKey("Settings", "settings")} onClick={() => setShowSettings(true)}>
-          <Settings className="size-4" />
-        </IconButton>
-        <IconButton
-          label={withKey("Show / hide notes & resources", "toggleRight")}
-          active={showRight}
-          onClick={() => (isDesktop ? setRightOpen((o) => !o) : setMobilePanel((m) => (m === "right" ? null : "right")))}
-        >
-          <PanelRight className="size-4" />
-        </IconButton>
-      </header>
-      )}
-
-      <div className="relative flex min-h-0 flex-1">
-        {/* Left: library */}
-        {isDesktop ? (
-          showLeft && (
-            <>
-              <aside className="shrink-0 overflow-hidden bg-panel" style={{ width: leftW }}>
-                {library}
-              </aside>
-              <ResizeHandle
-                panel="left"
-                label="Resize library"
-                value={leftW}
-                min={PANEL.left.min}
-                max={leftMax}
-                defaultValue={PANEL.left.default}
-                onChange={setLeftWidth}
-              />
-            </>
-          )
-        ) : (
-          showLeft && (
-            <>
-              <div className="absolute inset-0 z-30 bg-black/30" onClick={() => setMobilePanel(null)} />
-              <aside className="absolute inset-y-0 left-0 z-40 w-[85vw] max-w-80 border-r border-line bg-panel shadow-2xl">{library}</aside>
-            </>
-          )
-        )}
-
-        {/* Center: viewer */}
-        <main className={cx("relative flex min-w-0 flex-1", isDesktop ? "flex-row" : "flex-col")}>
-          {barsHidden && (
-            <button
-              type="button"
-              title={withKey("Show the title bar and tools bar", "hideBars")}
-              aria-label="Show the title bar and tools bar"
-              onClick={() => setBarsHidden(false)}
-              className="absolute right-4 top-1 z-30 flex size-6 items-center justify-center rounded-full border border-line bg-panel text-ink-2 opacity-50 shadow-sm hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-80"
-            >
-              <ChevronsDown className="size-3.5" />
-            </button>
-          )}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {doc ? (
-            <>
+  // The tools bar and the page bar: in the layout, or (phones) inside the corner menu.
+  const toolbar = doc && (
               <ViewerToolbar
-                hidden={barsHidden}
+                hidden={barsHidden && !isPhone}
+                wrap={isPhone}
                 tool={tool}
                 onTool={setTool}
                 color={toolColor}
@@ -2124,6 +2062,168 @@ export default function App() {
                 onRedo={() => void history.redo()}
                 undoing={history.running}
               />
+  );
+  const statusBar = doc && (
+        <StatusBar
+          paged={isPaged(doc.kind)}
+          page={page}
+          pageCount={pageCount}
+          zoom={zoom}
+          onPage={goToPage}
+          back={navHistory.back}
+          forward={navHistory.forward}
+          onBack={() => viewerRef.current?.goBack()}
+          onForward={() => viewerRef.current?.goForward()}
+          onZoom={changeZoom}
+          onFitWidth={() => {
+            if (isPhone) return fitScreen();
+            const z = viewerRef.current?.fitWidthZoom();
+            if (z) changeZoom(z);
+          }}
+          onFitPage={() => {
+            const z = viewerRef.current?.fitPageZoom();
+            if (z) changeZoom(z);
+          }}
+        />
+  );
+  const searchBox = <SearchBox documents={documents} onOpenDocument={(d, p) => requestOpen(d, p)} />;
+
+  return (
+    <div className="flex h-full flex-col bg-canvas text-ink">
+      <input
+        ref={pictureInput}
+        type="file"
+        hidden
+        multiple
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        onChange={(e) => {
+          for (const f of e.target.files ?? []) void addPicture(f);
+          e.target.value = ""; // the same file can be chosen again
+        }}
+      />
+      {/* Top bar */}
+      {!barsHidden && !isPhone && (
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-panel px-2 sm:px-3">
+        <IconButton
+          label={withKey("Show / hide the library", "toggleLeft")}
+          active={showLeft}
+          onClick={() => (isDesktop ? setLeftOpen((o) => !o) : setMobilePanel((m) => (m === "left" ? null : "left")))}
+        >
+          <PanelLeft className="size-4" />
+        </IconButton>
+        <div className="flex items-center gap-2 pr-1">
+          <img src="/favicon.svg" alt="" className="size-6" />
+          <span className="hidden text-[15px] font-semibold tracking-tight sm:inline">StudySpace</span>
+        </div>
+        {doc && (
+          <div className="hidden min-w-0 items-center gap-1 text-sm text-ink-2 md:flex">
+            {course && (
+              <>
+                <span className="truncate font-medium">{course}</span>
+                <ChevronRight className="size-3.5 shrink-0 text-ink-3" />
+              </>
+            )}
+            <span className="max-w-64 truncate text-ink-3" title={doc.relPath}>{doc.title}</span>
+          </div>
+        )}
+        <div className="mx-auto flex min-w-0 flex-1 justify-end px-2 sm:justify-center">
+          {searchBox}
+        </div>
+        <IconButton label={withKey("Screenshot part of the window", "snip")} onClick={() => setSnipping(true)}>
+          <Crop className="size-4" />
+        </IconButton>
+        <IconButton label={withKey("Hide the title bar and tools bar", "hideBars")} onClick={() => setBarsHidden(true)}>
+          <ChevronsUp className="size-4" />
+        </IconButton>
+        <IconButton label={withKey(dark ? "Light mode" : "Dark mode", "theme")} onClick={toggleTheme}>
+          {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+        </IconButton>
+        <IconButton label={withKey("Help & keyboard shortcuts", "help")} onClick={() => setShowHelp(true)}>
+          <CircleHelp className="size-4" />
+        </IconButton>
+        <IconButton label={withKey("Settings", "settings")} onClick={() => setShowSettings(true)}>
+          <Settings className="size-4" />
+        </IconButton>
+        <IconButton
+          label={withKey("Show / hide notes & resources", "toggleRight")}
+          active={showRight}
+          onClick={() => (isDesktop ? setRightOpen((o) => !o) : setMobilePanel((m) => (m === "right" ? null : "right")))}
+        >
+          <PanelRight className="size-4" />
+        </IconButton>
+      </header>
+      )}
+
+      <div className="relative flex min-h-0 flex-1">
+        {isPhone && (
+          <PhoneMenu
+            open={phoneMenu}
+            onOpen={() => setPhoneMenu(true)}
+            onClose={() => setPhoneMenu(false)}
+            title={doc?.title ?? null}
+            dark={dark}
+            fullscreen={fullscreen}
+            toolChip={doc && tool !== "select" ? { label: TOOL_CHIP[tool] ?? tool, color: tool === "eraser" || tool === "ocr" || tool === "marker" ? null : toolColor } : null}
+            onToolOff={() => setTool("select")}
+            onFiles={() => setMobilePanel("left")}
+            onNotes={doc ? () => setMobilePanel("right") : null}
+            onLandscape={() => {
+              setPhoneMenu(false);
+              void toggleLandscape();
+            }}
+            onTheme={toggleTheme}
+            onHelp={() => setShowHelp(true)}
+            onSettings={() => setShowSettings(true)}
+            search={searchBox}
+          >
+            {statusBar}
+            {toolbar}
+          </PhoneMenu>
+        )}
+        {/* Left: library */}
+        {isDesktop ? (
+          showLeft && (
+            <>
+              <aside className="shrink-0 overflow-hidden bg-panel" style={{ width: leftW }}>
+                {library}
+              </aside>
+              <ResizeHandle
+                panel="left"
+                label="Resize library"
+                value={leftW}
+                min={PANEL.left.min}
+                max={leftMax}
+                defaultValue={PANEL.left.default}
+                onChange={setLeftWidth}
+              />
+            </>
+          )
+        ) : (
+          showLeft && (
+            <>
+              <div className="absolute inset-0 z-30 bg-black/30" onClick={() => setMobilePanel(null)} />
+              <aside className="absolute inset-y-0 left-0 z-40 w-[85vw] max-w-80 border-r border-line bg-panel shadow-2xl">{library}</aside>
+            </>
+          )
+        )}
+
+        {/* Center: viewer */}
+        <main className={cx("relative flex min-w-0 flex-1", isDesktop ? "flex-row" : "flex-col")}>
+          {barsHidden && !isPhone && (
+            <button
+              type="button"
+              title={withKey("Show the title bar and tools bar", "hideBars")}
+              aria-label="Show the title bar and tools bar"
+              onClick={() => setBarsHidden(false)}
+              className="absolute right-4 top-1 z-30 flex size-6 items-center justify-center rounded-full border border-line bg-panel text-ink-2 opacity-50 shadow-sm hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-80"
+            >
+              <ChevronsDown className="size-3.5" />
+            </button>
+          )}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {doc ? (
+            <>
+              {!isPhone && toolbar}
               <div className="relative min-h-0 flex-1">
                 {reminderCount > 0 && !slidesOpen && reminderOff !== reminderKey && (
                   <div className="absolute bottom-3 left-3 z-20 flex items-center gap-1 rounded-full border border-line bg-panel/95 py-1 pl-1 pr-1 text-xs shadow-lg backdrop-blur">
@@ -2145,6 +2245,9 @@ export default function App() {
                   initialPage={startPage}
                   zoom={zoom}
                   onZoomChange={changeZoom}
+                  compact={isPhone}
+                  onFitNeeded={onFitNeeded}
+                  onDoubleTap={isPhone ? fitScreen : undefined}
                   onPageChange={setPage}
                   onHistoryChange={setNavHistory}
                   onLoaded={onLoaded}
@@ -2249,28 +2352,7 @@ export default function App() {
           ))}
       </div>
 
-      {doc && (
-        <StatusBar
-          paged={isPaged(doc.kind)}
-          page={page}
-          pageCount={pageCount}
-          zoom={zoom}
-          onPage={goToPage}
-          back={navHistory.back}
-          forward={navHistory.forward}
-          onBack={() => viewerRef.current?.goBack()}
-          onForward={() => viewerRef.current?.goForward()}
-          onZoom={changeZoom}
-          onFitWidth={() => {
-            const z = viewerRef.current?.fitWidthZoom();
-            if (z) changeZoom(z);
-          }}
-          onFitPage={() => {
-            const z = viewerRef.current?.fitPageZoom();
-            if (z) changeZoom(z);
-          }}
-        />
-      )}
+      {!isPhone && statusBar}
 
       {showSettings && (
         <SettingsDialog

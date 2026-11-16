@@ -47,6 +47,7 @@ export const SHORTCUTS = {
   save: s("General", "Save highlights, drawings & bookmarks into the PDF", "Ctrl+S"),
   theme: s("General", "Dark / light mode", "Shift+D"),
   hideBars: s("General", "Hide / show the title bar and the tools bar (more room to read)", "Shift+V"),
+  landscape: s("General", "Full screen; on a phone also turned sideways, for wide pages (again: back)", "Shift+J"),
   settings: s("General", "Settings (study folders, note colours)", ","),
   rescan: s("General", "Rescan the library folders", "Shift+L"),
   selectedFiles: s("General", "Pictures, text & notes of the files selected in the files list…", "Shift+F"),

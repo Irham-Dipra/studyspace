@@ -3,7 +3,7 @@
 StudySpace is a local-first PDF study app: library on the left, PDF viewer in the middle, notes on the right.
 It reads the user's course PDFs in place from `/home/dipra/Buet/3-1` and works fully offline.
 
-Status as of **2026-11-08**. Items up to 43 are committed (43: runs on Windows and macOS, GitHub-ready docs). The repo is meant for GitHub under the user's own name: commits carry no `Co-Authored-By: Claude` trailer (the user asked for that). Other docs:
+Status as of **2026-11-16**. Items up to 44 are committed (44: phone reading mode, installable app). The repo is meant for GitHub under the user's own name: commits carry no `Co-Authored-By: Claude` trailer (the user asked for that). Other docs:
 - [HANDOFF.md](HANDOFF.md): the long version, with the detailed history of every feature and the problems already solved.
 - [README.md](README.md): the GitHub landing page: features, setup on any PC, commands, configuration, data folders, troubleshooting.
 - [REQUIREMENTS.md](REQUIREMENTS.md): what to install per system (winget, brew, apt, dnf, pacman) and the npm packages.
@@ -137,6 +137,7 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers (`
 | `components/*Dialog.tsx` | `GetTextDialog` (get text / OCR / bookmark sections / notes), `PageOpsDialog` (page edits), `PdfToolsDialog` (extract/split/merge), `PageImagesDialog`, `PageHalvesDialog`, `SelectedFilesDialog` (pictures / text / notes of each selected file, queued; `Shift+F`), `HelpDialog` (generated from the shortcuts), `SettingsDialog` (folders, note colours), `UnsavedDialog`. |
 | `components/PicturePanel.tsx`, `PicturePagesDialog.tsx` | The Pictures section: slides over the whole notes column (`D`; the notes stay mounted underneath), and the *Pages of this picture* window (`J`). |
 | `components/SidePane.tsx` | Side by side: `SidePane` (a read-only `PdfViewer` with its own page, zoom and bar), `OpenBesideDialog` (the picker), `loadSide` / `saveSide` (`localStorage` `ss-side`). App keeps the state (`side`, `swapSides`). |
+| `components/PhoneMenu.tsx`, `lib/fullscreen.ts` | Phones (`PHONE` query in App): no bars; the ☰ button and its sheet, which holds the same `StatusBar` and `ViewerToolbar` elements (kept mounted while closed). `toggleLandscape`: full screen + orientation lock (`Shift+J`). |
 | `components/SnipOverlay.tsx`, `ui.tsx`, `index.css` | The window-screenshot overlay; shared UI (`Modal`, `Button`, `NumberInput`, `Kbd`, `KeyHint`, toasts); theme tokens and dark mode. |
 
 ### Conventions
@@ -148,6 +149,7 @@ npm workspaces: `server/` (API) and `web/` (UI); `scripts/` holds dev helpers (`
   - Regenerate the user guide's §12 tables with `npx tsx scripts/shortcut-tables.mts`.
 - **Undo.** Every change must be undoable.
 - **Phones.** The app also runs on plain http (Wi-Fi): never call `crypto.randomUUID` (use `uuid()`), and say why copying fails (`copyText`). Anything that opens on mouseup also needs `useTouchSelection`, and hover-only buttons need `[@media(hover:none)]:flex`.
+- **Phone layout.** `isPhone` (touch and narrow one way) is separate from `isDesktop` (≥ 1024px). On a phone the bars exist only inside `PhoneMenu`, so a new bar button is reachable there automatically, but anything put in the header must also be added to the menu. Nothing with `transform` or `backdrop-blur` around the toolbar (its menu is `position: fixed`).
 - **Kinds.** Check `isPaged` / `canEditFile`, not `kind === "slides"`: HTML and Markdown have no pages.
 - **Other systems.** It must also run on Windows and macOS. Use `os.homedir()` (Windows has no `HOME`) and `path.delimiter`; `relPath` always uses `/`, but absolute `doc.path` may use `\`. Programs are found as `name.exe` on Windows (`execFile` can't run `.cmd`). Tests with `#!` stub programs use `describe.skipIf(process.platform === "win32")`. Only Linux is tested here; a fresh clone on Node 24 and 26 is the check (see the 2026-11-08 change log).
 - **Coordinates.** Annotations and bookmark `top`s are normalized display coordinates: 0..1 from the top-left of the page as shown.
@@ -204,6 +206,7 @@ Everything below is done and verified in the browser on scratch copies.
 41. Hide chosen files: `H` on a file, or select files and press *Hide*; the crossed-eye count at the top of the list (or `Shift+K`) opens the hidden files to unhide them. Migration v12 (`documents.hidden`). Made in the main tree (2026-11-01). Tested in Chromium only.
 42. Hide folders from the sidebar: hover button or `H` on a folder; listed in *Hidden files and folders* (`Shift+K`) to unhide. A rule `/<path>` in the library folder's excludes; no schema change. Chromium only.
 43. Runs on any PC, ready for GitHub: Windows and macOS fixes (data and Trash folders per system, home folder, LibreOffice found in its install folder, install hints per system, Windows-safe file names and writes), `npm run check` (setup checker), a new README (GitHub landing page, step-by-step setup on another PC, moving notes), `REQUIREMENTS.md` (install commands per system, the npm packages), `docs/DEVELOPER.md` (API and schema moved there), `.gitattributes`, `.nvmrc`. Tested on Linux only: fresh clone with `npm ci` on Node 24 and 26 (tests, build, dev and built servers, moving notes to a new folder). **Not tested on Windows or macOS.**
+44. Phone reading mode: on a phone the title bar, tools bar and status bar are gone and a ☰ button in the corner opens everything; pages fit the screen width and refit when the phone is turned (a 16:9 page fills the sideways screen); pinch zoom, double tap to fit; ☰ → *Sideways* (`Shift+J`) goes full screen and locks landscape; the phone's zoom isn't saved over the computer's. Installable as a full-screen app from Chrome (manifest). Tested in Chromium's phone profile only. **Not tested on the real phone** (install, orientation lock, pinch feel).
 28. Change the notes' default highlighter colours (title, heading levels, bullet header and label, `==marks==`) in Settings → Note colours; per browser, reset per colour or all. Tested in Chromium only.
 
 ## Change log
@@ -383,6 +386,12 @@ Everything below is done and verified in the browser on scratch copies.
   - New: `scripts/check-requirements.mjs` (`npm run check`), `REQUIREMENTS.md`, `docs/DEVELOPER.md`, `.gitattributes`, `.nvmrc`. Changed: `README.md` (rewritten), `.env.example`, `.gitignore`, `package.json` / `package-lock.json` (`check`, engines `>=24`), user guide §1, §3, §9, §13.
   - Verified: typecheck, 115 tests; fresh clone + `npm ci` on Node 26.13.0 (check, tests, typecheck, build); a smoke script on 4399 against the clone's built server on Node 24 and 26 (seeding, UI served, range requests, home folder, OCR status, PDFs moved to a new folder keep id and notes, old folder removed); `npm run dev -w server` + Vite on 4399/5199. `npm run check` also run without tools on the PATH and without `node_modules`. Not run on Windows or macOS.
   - Open: `npm audit` reports advisories in body-parser, qs, zod (fixable in range) and KaTeX (needs 0.19, kept at 0.16 on purpose).
+
+- **2026-11-16: phone reading mode, installable app (item 44, HANDOFF 52).** Made in a worktree (the user reads on 5173); copied into the main tree and committed the same day.
+  - New: `web/src/components/PhoneMenu.tsx`, `web/src/lib/fullscreen.ts`.
+  - Changed: `App.tsx` (`PHONE`, `isPhone`, `phoneMenu`, `fitScreen`, `onFitNeeded`, `autoFitRef`, `storedZoomRef`, `toolbar` / `statusBar` / `searchBox` elements, `changeZoom` turns auto-fit off), `components/viewer/PdfViewer.tsx` (`compact`, `fitScreenZoom`, `onFitNeeded`, `onDoubleTap`, pinch, fit reads the element width), `ViewerToolbar.tsx` (`wrap`), `StatusBar.tsx` (Fit page hidden on phones), `TextDocViewer.tsx`, `lib/shortcuts.ts` (`landscape` `Shift+J`), `index.html` (`viewport-fit=cover`), `index.css` (safe-area padding), `public/manifest.webmanifest`.
+  - Docs: `docs/PHONE_SETUP.md` (install as an app, the phone layout, developing from the phone), user guide §2, §12 (regenerated), §15; README; HANDOFF 52.
+  - Verified: typecheck, tests, build; Chromium phone profile on scratch 4399/5199 (25 checks, see HANDOFF 52). Real PDFs only copied. Not tested on the real phone or in Firefox.
 
 ## Open questions for the user
 
