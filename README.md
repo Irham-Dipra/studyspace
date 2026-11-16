@@ -1,42 +1,45 @@
 # StudySpace
 
-**A local-first study workspace for your course PDFs.** Your library on the left, the PDF in the middle, and the notes for the page you're reading on the right.
+**A study workspace for my course PDFs, running on my own computer.** The library is on the left, the PDF in the middle, and my notes for the page I'm reading on the right.
 
-StudySpace reads your PDFs where they already are, keeps everything on your own computer and works fully offline: no account, no upload, no API key. It runs on **Windows, macOS and Linux**, and in any modern browser, including your phone's.
+![StudySpace on a computer: library, PDF and notes](docs/screenshots/desktop.png)
 
-<!-- To add a screenshot: save it as docs/screenshot.png, then put this line here: ![StudySpace](docs/screenshot.png) -->
+I'm Irham Dipra, a CSE student at BUET. I built StudySpace while preparing for my term finals, because I kept switching between a PDF reader, a notes app and a folder of slides, and my notes never stayed with the page they were about. In StudySpace every note belongs to a page, so when I come back to a page, everything I wrote about it is already beside it.
 
-## Features
+It reads the PDFs where they already are on my disk. Nothing is uploaded, there is no account and no API key, and it works offline. It runs on **Windows, macOS and Linux**, and I also use it from my phone.
 
-- **Library:** finds the PDFs, slides (`.pptx`, `.ppt`), HTML pages and Markdown files in your folders, groups them by folder, and remembers where you stopped reading. You can rename, delete and hide files, and filter and search everything (`Ctrl+K`).
-- **Notes that follow the page:** each note belongs to a page, a page range or the whole file, and the notes panel always shows the ones for the page in view. Notes are Markdown with LaTeX math (KaTeX), tables and pictures, and you can highlight or comment inside them. Notes are kept in five kinds: personal notes, summaries, previous-year questions, AI explanations and links.
-- **Mark up the PDF:** text and area highlights, a pen, an eraser, text boxes and note markers. *Save to PDF* writes them into the file as standard annotations, so other PDF readers show them too.
-- **Page tools:** insert, delete, replace, rotate and move pages, or extract, split and merge into new PDFs. Your notes stay on the right pages through every edit.
-- **Bookmarks:** the PDF's own outline is read in. You can edit it and save it back into the file.
-- **Get text and OCR:** turn pages, a bookmark's section or a drawn region into Markdown or plain text, optionally with your highlights and notes included. Scanned pages can be OCRed and their text added to the PDF.
-- **Reading tools:** two PDFs side by side, back and forward through jumps, pages saved as pictures, any part of the window copied to the clipboard as a screenshot.
-- **Export:** a file's notes as Markdown files in a `.zip`, its pages as pictures or its text, also for several files at once.
-- **Undo everything:** `Ctrl+Z` covers notes, highlights, bookmarks and even page edits. Edited PDFs keep their previous versions as a backup.
-- **Keyboard first:** every feature has a key, shown beside it. Press `?` in the app for the full list.
-- **On your phone:** open it over your Wi-Fi or Tailscale with a password, or install it as a full-screen app; the page gets the whole screen, with pinch zoom and a sideways mode for slides ([phone setup](docs/PHONE_SETUP.md)).
+## What it looks like
+
+| Dark mode | Page tools |
+| --- | --- |
+| ![Dark mode](docs/screenshots/desktop-dark.png) | ![The Page tools menu](docs/screenshots/page-tools.png) |
+
+On a phone the page gets the whole screen. One menu button in the corner opens everything, and a few small quick buttons stay on the page for the tools I switch between most.
+
+| Reading | The menu | Slides, phone turned sideways |
+| --- | --- | --- |
+| <img src="docs/screenshots/phone.png" width="230" alt="Reading on a phone"> | <img src="docs/screenshots/phone-menu.png" width="230" alt="The phone menu"> | <img src="docs/screenshots/phone-sideways.png" width="420" alt="A slide on a phone turned sideways"> |
+
+The PDFs in these screenshots are small samples I made for this page.
+
+## What it does
+
+- **Library:** it finds the PDFs, slides (`.pptx`, `.ppt`), HTML pages and Markdown files in my folders, groups them by folder, and remembers where I stopped reading. I can rename, delete and hide files, and search everything with `Ctrl+K`.
+- **Notes that follow the page:** each note belongs to a page, a page range or the whole file, and the notes panel always shows the ones for the page in view. Notes are Markdown with LaTeX math, tables and pictures. I keep five kinds: my own notes, summaries, previous-year questions, AI explanations and links.
+- **Marking up the PDF:** text and area highlights, a pen, an eraser, text boxes and note markers. *Save to PDF* writes them into the file as standard annotations, so other PDF readers show them too.
+- **Page tools:** insert, delete, replace, rotate and move pages, or extract, split and merge into new PDFs. The notes stay on the right pages through every edit.
+- **Bookmarks:** the PDF's own outline is read in; I can edit it and save it back into the file.
+- **Get text and OCR:** pages, a bookmark's section or a drawn region become Markdown or plain text, with my highlights and notes included if I want. Scanned pages can be OCRed.
+- **Reading tools:** two PDFs side by side, back and forward through jumps, pages saved as pictures, a screenshot of any part of the window.
+- **Undo everything:** `Ctrl+Z` covers notes, highlights, bookmarks and even page edits. An edited PDF keeps its previous versions as a backup.
+- **Keyboard first:** every feature has a key, shown beside it. `?` in the app lists them all.
+- **Phone:** it opens over Wi-Fi or Tailscale with a password, and installs as a full-screen app. Pages fit the screen, two fingers zoom, and turning the phone sideways fills the screen with one slide ([phone setup](docs/PHONE_SETUP.md)).
 
 Every feature, step by step: **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**.
 
-## Quick start
+## Set it up on your PC
 
-You need **Node.js 24 or newer** and **Git**. [REQUIREMENTS.md](REQUIREMENTS.md) lists everything, with install commands for each system.
-
-```bash
-git clone https://github.com/YOUR-USERNAME/studyspace.git
-cd studyspace
-npm install
-npm run check
-npm run dev
-```
-
-`npm run check` reports anything this computer is missing. Once `npm run dev` is running, open **http://localhost:5173** and add the folder holding your PDFs under **⚙ Settings → Library folders**.
-
-## Run it on another PC, step by step
+It takes about five minutes. You need **Node.js 24 or newer** and **Git**; nothing else is required.
 
 ### 1. Install Node.js and Git
 
@@ -45,71 +48,45 @@ npm run dev
 | **Windows 10/11** (PowerShell) | `winget install -e --id OpenJS.NodeJS.LTS`<br>`winget install -e --id Git.Git`<br>Then **close and reopen** the terminal. |
 | **macOS** | Install [Homebrew](https://brew.sh), then `brew install node git` |
 | **Ubuntu / Debian** | `sudo apt install git curl`<br>`curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh \| bash`<br>Reopen the terminal, then `nvm install 24` |
-| **Fedora / Arch** | `sudo dnf install git nodejs` or `sudo pacman -S git nodejs npm` (check that `node -v` says 24 or newer; if not, use nvm as on Ubuntu) |
+| **Fedora / Arch** | `sudo dnf install git nodejs` or `sudo pacman -S git nodejs npm` (if `node -v` says less than 24, use nvm as on Ubuntu) |
 
-You can also download Node.js from [nodejs.org](https://nodejs.org) and Git from [git-scm.com](https://git-scm.com). Check both with `node -v` (it should say v24 or newer) and `git --version`.
+Or download them from [nodejs.org](https://nodejs.org) and [git-scm.com](https://git-scm.com). Check with `node -v` (v24 or newer) and `git --version`.
 
-LibreOffice (for slides) and OCRmyPDF/Tesseract (for OCR) are optional. You can add them later: see [REQUIREMENTS.md](REQUIREMENTS.md).
-
-### 2. Get the code
+### 2. Get the code and start it
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/studyspace.git
+git clone https://github.com/Irham-Dipra/studyspace.git
 cd studyspace
-```
-
-Without Git, use **Code → Download ZIP** on GitHub, unzip it, and open a terminal in that folder.
-
-### 3. Install the npm packages
-
-```bash
 npm install
-```
-
-This downloads the packages listed in `package.json` (the exact versions are pinned in `package-lock.json`) into `node_modules/`. It takes a minute or two and needs no compiler: the few native parts come prebuilt for Windows, macOS and Linux.
-
-### 4. Check the computer
-
-```bash
 npm run check
-```
-
-Each line is `[ok]`, `[--]` (optional and missing, which is fine) or `[!!]` (required and missing). Fix the `[!!]` lines and run it again.
-
-### 5. Start it
-
-```bash
 npm run dev
 ```
 
-Open **http://localhost:5173** and add your PDF folder under **⚙ Settings → Library folders**: browse to it, or type its path, such as `D:\Courses` or `/home/you/Courses`. Leave the terminal open while you study, and press `Ctrl+C` in it to stop.
+- `npm install` downloads the packages (a minute or two; no compiler needed).
+- `npm run check` looks at your computer. Each line is `[ok]`, `[--]` (optional and missing, which is fine) or `[!!]` (required and missing: fix it and run the check again).
+- `npm run dev` starts StudySpace. Leave that terminal open while you study; `Ctrl+C` stops it.
 
-Next time, you only need to open a terminal in the `studyspace` folder and run `npm run dev`.
+Without Git, use **Code → Download ZIP** on GitHub, unzip it, and open a terminal in that folder.
 
-### Optional: a settings file
+### 3. Add your PDFs
 
-Copy the example and edit it. It can set your PDF folder, the port, a phone password and the OCR language.
+Open **http://localhost:5173**, click **⚙ Settings → Library folders**, and add the folder that holds your PDFs (browse to it, or type its path, such as `D:\Courses` or `/home/you/Courses`). Your files show up on the left. Click one and start reading.
 
-```bash
-cp .env.example .env        # Windows: copy .env.example .env
-```
+Next time, open a terminal in the `studyspace` folder and run `npm run dev`.
 
-### Updating
+### Optional extras
 
-```bash
-git pull
-npm install
-```
+- **Slides and OCR:** LibreOffice opens `.pptx` files, and OCRmyPDF with Tesseract reads scanned pages. Install commands for each system are in [REQUIREMENTS.md](REQUIREMENTS.md). You can add them at any time.
+- **A settings file:** copy `.env.example` to `.env` to set your PDF folder, the port, a phone password or the OCR language.
+- **Updating:** `git pull`, then `npm install`.
 
-If you use `npm start` (below), it rebuilds the app on every start, so there's nothing else to do.
+### Moving your notes to another PC
 
-### Bringing your notes from the old PC
-
-Your notes are not in the repository. They live in StudySpace's data folder (see [Where your data lives](#where-your-data-lives)). To move them:
+The notes are not in this repository. They live in StudySpace's data folder (see [Where your data lives](#where-your-data-lives)). To move them:
 
 1. Stop StudySpace on both computers.
-2. Copy the old computer's whole data folder to the new computer's data folder. The place depends on the system (see the table), so a folder from Linux goes to `%LOCALAPPDATA%\StudySpace` on Windows. Create the folders if they don't exist yet.
-3. Copy your PDFs to the new computer, start StudySpace and add their folder in Settings. The old computer's folder is still listed there, and you can remove it.
+2. Copy the old computer's whole data folder to the new computer's data folder. The place depends on the system (see the table), so a folder from Linux goes to `%LOCALAPPDATA%\StudySpace` on Windows.
+3. Copy your PDFs to the new computer, start StudySpace and add their folder in Settings.
 
 StudySpace recognises a file by its content, not its path, so notes, highlights and bookmarks find their PDFs again even in a different folder. Keep the PDFs unchanged on the way.
 
@@ -194,4 +171,4 @@ studyspace/
 - [REQUIREMENTS.md](REQUIREMENTS.md): what to install, per system.
 - [docs/PHONE_SETUP.md](docs/PHONE_SETUP.md): using StudySpace on a phone.
 - [docs/DEVELOPER.md](docs/DEVELOPER.md): how it works, the HTTP API and the database.
-- [CLAUDE.md](CLAUDE.md) and [HANDOFF.md](HANDOFF.md): the full development notes and feature history.
+- [CLAUDE.md](CLAUDE.md) and [HANDOFF.md](HANDOFF.md): my development notes and the feature history.

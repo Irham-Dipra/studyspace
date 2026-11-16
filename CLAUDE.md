@@ -397,6 +397,8 @@ Everything below is done and verified in the browser on scratch copies.
 
 - **2026-11-16: Colour and Undo quick buttons, on/off switch (item 44 follow-up).** Worktree, then merged. `components/PhoneMenu.tsx` (`EXTRA`, the colour row, Undo, the switch), `App.tsx` (`phonePins` as strings under `ss-phone-buttons`, `phoneQuick`). Docs: `docs/PHONE_SETUP.md`, user guide §15, HANDOFF 52. Verified: typecheck; Chromium phone profile on scratch 4399/5199 (9 checks). Not tested on the real phone.
 
+- **2026-11-16: README in the user's own voice, with screenshots; pushed to GitHub.** `README.md` rewritten in the first person (the user asked: "write the readme file as my point of view, not yours"), with a short three-step setup and six screenshots in `docs/screenshots/` (desktop light and dark, Page tools, phone, phone menu, phone sideways). The screenshots use small sample PDFs made with LaTeX for the purpose, on a scratch server (4399), so no study material is shown. Remote `origin` = `github.com/Irham-Dipra/studyspace`.
+
 ## Open questions for the user
 
 - Detect a PDF that was moved while open, and show a clearer error (offered on 2026-10-13, no answer yet).
