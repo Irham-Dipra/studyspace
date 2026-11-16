@@ -187,4 +187,4 @@ studyspace/
 - [REQUIREMENTS.md](REQUIREMENTS.md): what to install, per system.
 - [docs/PHONE_SETUP.md](docs/PHONE_SETUP.md): using StudySpace on a phone.
 - [docs/DEVELOPER.md](docs/DEVELOPER.md): how it works, the HTTP API and the database.
-- [CLAUDE.md](CLAUDE.md) and [HANDOFF.md](HANDOFF.md): my development notes and the feature history.
+- [HANDOFF.md](HANDOFF.md): my development notes and the feature history.

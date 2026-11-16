@@ -1,6 +1,6 @@
 # StudySpace — Project Handoff
 
-Read this file first when resuming work. It gives the state of the project as of **2026-10-14**. [CLAUDE.md](CLAUDE.md) is the short version, with the progress list: what was built, how it is organised, the rules for testing, and the problems already solved.
+Read this file first when resuming work. It gives the state of the project as of **2026-10-14**.
 
 The user-facing docs are separate: [README.md](README.md) covers setup, the API and the schema, and [docs/USER_GUIDE.md](docs/USER_GUIDE.md) explains every feature.
 

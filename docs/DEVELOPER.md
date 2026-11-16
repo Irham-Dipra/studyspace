@@ -1,6 +1,6 @@
 # StudySpace for developers
 
-How StudySpace works inside, its HTTP API and its database. To install and run it, see the [README](../README.md); for using it, the [user guide](USER_GUIDE.md). [CLAUDE.md](../CLAUDE.md) and [HANDOFF.md](../HANDOFF.md) hold the full development notes: the codebase map, conventions, test-safety rules and the history of every feature.
+How StudySpace works inside, its HTTP API and its database. To install and run it, see the [README](../README.md); for using it, the [user guide](USER_GUIDE.md). [HANDOFF.md](../HANDOFF.md) holds the full development notes: the codebase map, conventions, test-safety rules and the history of every feature.
 
 ## Working on it
 
