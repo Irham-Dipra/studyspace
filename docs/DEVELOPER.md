@@ -58,7 +58,7 @@ In the browser, a per-document undo stack also covers notes and annotations. Del
 
 ### Database schema
 
-`schema_migrations`, `directories`, `documents`, `resources` (with `styles`, colours picked for single headings or labels), `note_markers` (markers on pages that open a note at a passage: page, spot, quote + context), `resource_pages`, `annotations` (kinds `highlight`, `area`, `ink`, `text`), `reading_progress` (with `top` for documents without pages), `document_history`, `note_highlights`, `bookmarks`, `document_highlights` (text highlights on HTML / Markdown), `sessions` (other devices' logins). Migrations live in `server/src/db/migrations.ts`:
+`schema_migrations`, `directories`, `documents` (with `hidden`, and `favorite`: a REAL place in the Favourites list, NULL when not a favourite), `resources` (with `styles`, colours picked for single headings or labels), `note_markers` (markers on pages that open a note at a passage: page, spot, quote + context), `resource_pages`, `annotations` (kinds `highlight`, `area`, `ink`, `text`), `reading_progress` (with `top` for documents without pages), `document_history`, `note_highlights`, `bookmarks`, `document_highlights` (text highlights on HTML / Markdown), `sessions` (other devices' logins). Migrations live in `server/src/db/migrations.ts`:
 - They are append-only and applied in order.
 - Each runs in its own transaction and is rolled back completely on failure.
 - The server refuses to open a database created by a newer version.
@@ -88,6 +88,8 @@ All endpoints live under `/api`.
 
 **Library and folders**
 - `GET /library`, `POST /library/scan`, `GET /search?q=`, `GET /recent`
+- `POST /library/hidden` `{ ids, hidden }`: hide files from the lists (`/library` still lists them, flagged), or show them again
+- `POST /library/favorites` `{ items: [{ id, favorite }] }`: each file's place in the favourites (a number, smaller first), or `null` to take it out. The app works out the places (new ones after the last; a moved one halfway between its neighbours), so undo can put back the exact old ones
 - `GET|POST /directories`, `PATCH|DELETE /directories/:id`, `GET /fs/browse?path=`
 
 **Documents**

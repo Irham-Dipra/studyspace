@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronRight, Columns2, EyeOff, FileCode2, FileText, FileType2, Files, Folder, FolderOpen, History, Library, Pencil, Presentation, RefreshCw, Settings, Trash2, X } from "lucide-react";
+import { Check, ChevronRight, Columns2, EyeOff, FileCode2, FileText, FileType2, Files, Folder, FolderOpen, History, Library, Pencil, Presentation, RefreshCw, Settings, Star, Trash2, X } from "lucide-react";
 import { hasUnsavedChanges, isPaged, type Directory, type DocumentRecord, type ReadingProgress } from "../lib/types";
 import { Button, IconButton, KeyHint, Modal, cx } from "./ui";
 import { keyOf, matches, withKey } from "../lib/shortcuts";
@@ -62,18 +62,20 @@ interface Props {
   onHideFolder: (dirId: number, rel: string, name: string) => void;
   hiddenCount: number;
   onShowHidden: () => void;
+  /** Adds files to the favourites (on) or takes them out. */
+  onFavorite: (docs: DocumentRecord[], on: boolean) => void;
 }
 
-const docHref = (d: DocumentRecord) => `#/doc/${d.id}`;
+export const docHref = (d: DocumentRecord) => `#/doc/${d.id}`;
 
-const KIND_NOTE: Record<DocumentRecord["kind"], string> = {
+export const KIND_NOTE: Record<DocumentRecord["kind"], string> = {
   pdf: "",
   slides: "\nSlides: shown as pages, can't be edited",
   html: "\nHTML page (e.g. a Claude artifact): read, highlight and take notes; the file isn't changed",
   markdown: "\nMarkdown: read, highlight and take notes; the file isn't changed",
 };
 
-function KindIcon({ kind }: { kind: DocumentRecord["kind"] }) {
+export function KindIcon({ kind }: { kind: DocumentRecord["kind"] }) {
   if (kind === "slides") return <Presentation className="size-4 shrink-0 text-warn opacity-80" aria-label="Slides" />;
   if (kind === "html") return <FileCode2 className="size-4 shrink-0 text-sky-600 opacity-80 dark:text-sky-400" aria-label="HTML page" />;
   if (kind === "markdown") return <FileType2 className="size-4 shrink-0 text-emerald-600 opacity-80 dark:text-emerald-400" aria-label="Markdown" />;
@@ -251,6 +253,10 @@ export function LibraryPanel(p: Props) {
         const parent = folder ? folder.slice(0, folder.lastIndexOf("/")) : doc && folderKeys(doc).at(-1);
         rows.find((r) => r.dataset.folder === parent)?.focus();
       }
+    } else if (matches(n, "fileFavorite") && (selectedCount || doc)) {
+      // With files selected, all of them (out if they all are favourites already); otherwise the file you're on.
+      const files = selectedCount ? documents.filter((d) => selected.has(d.id)) : [doc!];
+      p.onFavorite(files, !files.every((d) => d.favorite !== null));
     } else if (matches(n, "fileHide") && !selectedCount && folder && !folder.endsWith(":files")) {
       const next = rows.slice(i + 1).find((r) => !r.dataset.folder?.startsWith(`${folder}/`)) ?? rows[i - 1];
       next?.focus();
@@ -413,6 +419,9 @@ export function LibraryPanel(p: Props) {
                   )}
                   {icon}
                   <span className="min-w-0 flex-1 truncate">{d.title}</span>
+                  {d.favorite !== null && (
+                    <Star className="size-3 shrink-0 fill-current text-amber-500 group-hover:hidden group-focus-visible:hidden [@media(hover:none)]:hidden" aria-label="Favourite" />
+                  )}
                   {hasUnsavedChanges(d) && (
                     <span
                       className="size-1.5 shrink-0 rounded-full bg-warn group-hover:hidden group-focus-visible:hidden"
@@ -421,6 +430,9 @@ export function LibraryPanel(p: Props) {
                   )}
                   <span className="hidden shrink-0 items-center group-hover:flex group-focus-visible:flex [@media(hover:none)]:flex">
                     {isPaged(d.kind) && rowAction(withKey("Open beside the open PDF", "fileBeside"), <Columns2 className="size-3.5" />, () => p.onOpenBeside(d))}
+                    {d.favorite !== null
+                      ? rowAction(withKey("Take it out of the favourites", "fileFavorite"), <Star className="size-3.5 fill-current text-amber-500" />, () => p.onFavorite([d], false))
+                      : rowAction(withKey("Add to the favourites", "fileFavorite"), <Star className="size-3.5" />, () => p.onFavorite([d], true))}
                     {rowAction(withKey("Hide from this list", "fileHide"), <EyeOff className="size-3.5" />, () => p.onHide([d]))}
                     {rowAction(withKey("Rename", "fileRename"), <Pencil className="size-3.5" />, () => setEditing(d.id))}
                     {rowAction(withKey("Delete (to the Trash)", "fileDelete"), <Trash2 className="size-3.5" />, () => setConfirmDelete(d))}
@@ -532,9 +544,10 @@ export function LibraryPanel(p: Props) {
       {selectedCount > 0 && (
         <div className="flex items-center gap-2 border-t border-line px-3 py-2 text-xs">
           <span className="whitespace-nowrap text-ink-2">{selectedCount} selected</span>
+          <SelectionStar docs={documents.filter((d) => selected.has(d.id))} onFavorite={p.onFavorite} />
           <Button
             size="sm"
-            className="ml-auto whitespace-nowrap"
+            className="whitespace-nowrap"
             onClick={() => p.onHide(documents.filter((d) => selected.has(d.id)))}
             title={withKey("Hide the selected files from this list (undo with Ctrl+Z)", "fileHide")}
           >
@@ -560,6 +573,20 @@ export function LibraryPanel(p: Props) {
         />
       )}
     </div>
+  );
+}
+
+/** The selection bar's star: adds the selected files to the favourites, or takes them out when they all are. */
+function SelectionStar({ docs, onFavorite }: { docs: DocumentRecord[]; onFavorite: (docs: DocumentRecord[], on: boolean) => void }) {
+  const all = docs.length > 0 && docs.every((d) => d.favorite !== null);
+  return (
+    <IconButton
+      className="ml-auto"
+      label={withKey(all ? "Take the selected files out of the favourites" : "Add the selected files to the favourites", "fileFavorite")}
+      onClick={() => onFavorite(docs, !all)}
+    >
+      <Star className={cx("size-4", all && "fill-current text-amber-500")} />
+    </IconButton>
   );
 }
 

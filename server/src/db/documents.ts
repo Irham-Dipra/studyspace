@@ -14,6 +14,7 @@ interface Row {
   page_count: number | null;
   missing: number;
   hidden: number;
+  favorite: number | null;
   annotations_dirty: number;
   bookmarks_dirty: number;
   outline_imported: number;
@@ -36,6 +37,7 @@ function map(r: Row): DocumentRecord {
     pageCount: r.page_count,
     missing: r.missing === 1,
     hidden: r.hidden === 1,
+    favorite: r.favorite,
     annotationsDirty: r.annotations_dirty === 1,
     bookmarksDirty: r.bookmarks_dirty === 1,
     outlineImported: r.outline_imported === 1,
@@ -150,6 +152,13 @@ export function setDocumentsHidden(db: DB, ids: string[], hidden: boolean): Docu
   const stmt = db.prepare(`UPDATE documents SET hidden = ?, updated_at = ${NOW} WHERE id = ?`);
   for (const id of ids) stmt.run(hidden ? 1 : 0, id);
   return ids.map((id) => getDocument(db, id)).filter((d): d is DocumentRecord => !!d);
+}
+
+/** Puts files in the favourites at the given places, or takes them out (null). Returns the ones that exist. */
+export function setDocumentsFavorite(db: DB, items: { id: string; favorite: number | null }[]): DocumentRecord[] {
+  const stmt = db.prepare(`UPDATE documents SET favorite = ?, updated_at = ${NOW} WHERE id = ?`);
+  for (const it of items) stmt.run(it.favorite, it.id);
+  return items.map((it) => getDocument(db, it.id)).filter((d): d is DocumentRecord => !!d);
 }
 
 export function setDocumentMissing(db: DB, id: string, missing: boolean): void {

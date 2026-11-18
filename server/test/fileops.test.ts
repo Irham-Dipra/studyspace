@@ -40,6 +40,39 @@ describe("hiding files", () => {
   });
 });
 
+describe("favourite files", () => {
+  it("keeps their places through a rescan, a rename and the Trash, and takes them out again", async () => {
+    const { app, doc } = await setup();
+    const docs = (await request(app).get("/api/library")).body.documents as { id: string; favorite: number | null }[];
+    expect(docs.every((d) => d.favorite === null)).toBe(true);
+    const other = docs.find((d) => d.id !== doc.id)!;
+
+    const r = await request(app)
+      .post("/api/library/favorites")
+      .send({ items: [{ id: doc.id, favorite: 2 }, { id: other.id, favorite: 1.5 }, { id: "no-such-id", favorite: 3 }] })
+      .expect(200);
+    expect(r.body.documents.map((d: { favorite: number }) => d.favorite)).toEqual([2, 1.5]);
+
+    const place = async (id: string) =>
+      ((await request(app).get("/api/library")).body.documents as { id: string; favorite: number | null }[]).find((d) => d.id === id)?.favorite;
+    await request(app).post("/api/library/scan").expect(200);
+    await request(app).post(`/api/documents/${doc.id}/rename`).send({ name: "Renamed" }).expect(200);
+    expect(await place(doc.id)).toBe(2);
+
+    // A file in the Trash keeps its place, so putting it back brings the favourite back.
+    const { trashName } = (await request(app).post(`/api/documents/${doc.id}/trash`).expect(200)).body as { trashName: string };
+    expect(await place(doc.id)).toBeUndefined();
+    await request(app).post(`/api/documents/${doc.id}/restore`).send({ trashName }).expect(200);
+    expect(await place(doc.id)).toBe(2);
+
+    await request(app).post("/api/library/favorites").send({ items: [{ id: doc.id, favorite: null }] }).expect(200);
+    expect(await place(doc.id)).toBeNull();
+    expect(await place(other.id)).toBe(1.5);
+    for (const body of [{ items: [] }, { items: [{ id: doc.id }] }, { items: [{ id: doc.id, favorite: "1" }] }])
+      expect((await request(app).post("/api/library/favorites").send(body)).status).toBe(400);
+  });
+});
+
 describe("renaming files", () => {
   it("renames in place, keeps the extension and the notes", async () => {
     const { app, root, doc } = await setup();

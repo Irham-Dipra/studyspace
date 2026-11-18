@@ -8,7 +8,7 @@ So I built a reader where every note belongs to a page. When I come back to a pa
 
 ## Features
 
-- **Library:** it finds the PDFs, slides (`.pptx`, `.ppt`), HTML pages and Markdown files in my folders, groups them by folder, and remembers where I stopped reading. I can rename, delete and hide files, and search everything with `Ctrl+K`.
+- **Library:** it finds the PDFs, slides (`.pptx`, `.ppt`), HTML pages and Markdown files in my folders, groups them by folder, and remembers where I stopped reading. I can rename, delete and hide files, star my favourites into a tab of their own, and search everything with `Ctrl+K`.
 - **Notes that follow the page:** each note belongs to a page, a page range or the whole file, and the notes panel always shows the ones for the page in view. Notes are Markdown with LaTeX math, tables and pictures. I keep five kinds: my own notes, summaries, previous-year questions, AI explanations and links.
 - **Marking up the PDF:** text and area highlights, a pen, an eraser, text boxes and note markers. *Save to PDF* writes them into the file as standard annotations, so other PDF readers show them too.
 - **Page tools:** insert, delete, replace, rotate and move pages, or extract, split and merge into new PDFs. The notes stay on the right pages through every edit.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpenText, Bookmark as BookmarkIcon, ChevronRight, ChevronsDown, ChevronsUp, Crop, CircleHelp, Library, Moon, PanelLeft, PanelRight, Settings, Sun, X, Image as ImageIcon } from "lucide-react";
+import { BookOpenText, Bookmark as BookmarkIcon, ChevronRight, ChevronsDown, ChevronsUp, Crop, CircleHelp, Library, Moon, PanelLeft, PanelRight, Settings, Star, Sun, X, Image as ImageIcon } from "lucide-react";
 import { api, ApiError, setMutationListener, uploadImage, type AnnotationInput, type AnnotationPatch, type BookmarkInput, type EditResult, type NoteMarkerInput, type ResourceInput } from "./lib/api";
 import { announceChange, classifyMutation, onRemoteChange, type TabChange } from "./lib/tabSync";
 import { useUndoHistory } from "./lib/undo";
@@ -29,6 +29,8 @@ import type { PDFDocumentProxy } from "./lib/pdf";
 import type { Anchor } from "./components/NoteAnnotations";
 import { LibraryPanel } from "./components/LibraryPanel";
 import { BookmarksPanel, type BookmarkPatch } from "./components/BookmarksPanel";
+import { FavoritesPanel } from "./components/FavoritesPanel";
+import { appendPlaces, type FavoriteChange } from "./lib/favorites";
 import { ResourcePanel, type EditorRequest } from "./components/ResourcePanel";
 import { PicturePanel } from "./components/PicturePanel";
 import { PicturePagesDialog } from "./components/PicturePagesDialog";
@@ -205,7 +207,7 @@ export default function App() {
   /** The PDF's own outline has been read (false while it is, or if reading it failed). */
   const [bookmarksReady, setBookmarksReady] = useState(false);
   const [bookmarksError, setBookmarksError] = useState<string | null>(null);
-  const [leftTab, setLeftTab] = usePersistentState<"files" | "bookmarks">("ss-left-tab", "files");
+  const [leftTab, setLeftTab] = usePersistentState<"files" | "favorites" | "bookmarks">("ss-left-tab", "files");
   const [bookmarkRename, setBookmarkRename] = useState<{ id: string; nonce: number } | null>(null);
   const [fileRename, setFileRename] = useState<{ id: string; nonce: number } | null>(null);
 
@@ -622,6 +624,43 @@ export default function App() {
     } catch (e) {
       toastError(e);
     }
+  };
+
+  /** Changes places in the favourites (null: out of them). Undo puts back the places they had. */
+  const changeFavorites = async (changes: FavoriteChange[], label: string, message?: string) => {
+    if (!changes.length) return;
+    const before = changes.map((c) => ({ id: c.id, favorite: documents.find((d) => d.id === c.id)?.favorite ?? null }));
+    // Shown at once, so quick Alt+↓ presses each start from the place the last one gave.
+    const apply = async (xs: FavoriteChange[]) => {
+      const placed = new Map(xs.map((x) => [x.id, x.favorite]));
+      setDocuments((ds) => ds.map((d) => (placed.has(d.id) ? { ...d, favorite: placed.get(d.id) ?? null } : d)));
+      try {
+        (await api.setFavorites(xs)).documents.forEach(applyDocRecord);
+      } catch (e) {
+        void refreshLibrary().catch(() => undefined);
+        throw e;
+      }
+    };
+    try {
+      await apply(changes);
+      history.push(docRef.current?.id ?? LIBRARY_UNDO, { label, undo: () => apply(before), redo: () => apply(changes) });
+      if (message) toast(message, "success");
+    } catch (e) {
+      toastError(e);
+    }
+  };
+
+  /** Adds files to the end of the favourites, or takes them out. */
+  const setFavorite = (ds: DocumentRecord[], on: boolean) => {
+    const files = ds.filter((d) => (d.favorite !== null) !== on);
+    if (!files.length) return;
+    const what = files.length === 1 ? `“${files[0].title}”` : `${files.length} files`;
+    const changes = on ? appendPlaces(documents, files.map((d) => d.id)) : files.map((d) => ({ id: d.id, favorite: null }));
+    void changeFavorites(
+      changes,
+      on ? `Add ${what} to the favourites` : `Take ${what} out of the favourites`,
+      on ? `Added ${what} to the favourites · ${keyOf("favorites")} shows them` : `Took ${what} out of the favourites · Ctrl+Z to undo`,
+    );
   };
 
   const deleteFile = async (d: DocumentRecord) => {
@@ -1600,6 +1639,7 @@ export default function App() {
     if (is("toggleLeft")) return run(() => (isDesktopRef.current ? setLeftOpen((o) => !o) : setMobilePanel((m) => (m === "left" ? null : "left"))));
     if (is("toggleRight")) return run(() => (isDesktopRef.current ? setRightOpen((o) => !o) : setMobilePanel((m) => (m === "right" ? null : "right"))));
     if (is("files")) return run(() => (setLeftTab("files"), openLeft()));
+    if (is("favorites")) return run(() => (setLeftTab("favorites"), openLeft()));
     if (is("filter"))
       return run(() => {
         openLeft();
@@ -1608,6 +1648,11 @@ export default function App() {
     if (is("undo")) return run(() => void history.undo());
     if (is("redo")) return run(() => void history.redo());
     if (!docRef.current) return;
+    if (is("favorite"))
+      return run(() => {
+        const d = documents.find((x) => x.id === docRef.current?.id);
+        if (d) setFavorite([d], d.favorite === null);
+      });
     // HTML and Markdown have no pages: page keys, page tools, Get text, pictures, new PDFs and
     // bookmarks are for PDFs. Their keys (arrows, Home, End…) then scroll the text as usual.
     if (!isPaged(docRef.current.kind) && PAGED_ONLY.some(is)) return;
@@ -1863,6 +1908,10 @@ export default function App() {
   );
   const pagedDocuments = useMemo(() => shownDocuments.filter((d) => isPaged(d.kind)), [shownDocuments]);
 
+  /** Whether the open file is a favourite (undefined: it isn't in the library list). */
+  const openFavoriteRaw = doc ? documents.find((d) => d.id === doc.id)?.favorite : undefined;
+  const openFavorite = openFavoriteRaw === undefined ? undefined : openFavoriteRaw !== null;
+
   const course = useMemo(() => {
     if (!doc) return null;
     const parts = doc.relPath.split("/");
@@ -1901,6 +1950,7 @@ export default function App() {
       onHideFolder={(dirId, rel, name) => void setFolderHidden(dirId, folderRule(rel), name, true)}
       hiddenCount={hiddenDocuments.length + hiddenFolders.length}
       onShowHidden={() => setHiddenOpen(true)}
+      onFavorite={setFavorite}
       onOpen={(d) => requestOpen(d)}
       onRename={(d, name) => void renameFile(d, name)}
       onDelete={(d) => void deleteFile(d)}
@@ -1915,31 +1965,47 @@ export default function App() {
     />
   );
 
-  const tab = (id: "files" | "bookmarks", label: string, icon: React.ReactNode, key: ShortcutId) => (
+  const favoritesPanel = (
+    <FavoritesPanel
+      directories={directories}
+      documents={shownDocuments}
+      activeId={doc?.id ?? null}
+      onOpen={(d) => requestOpen(d)}
+      onOpenBeside={openBeside}
+      onRemove={(d) => setFavorite([d], false)}
+      onMove={(changes, d) => void changeFavorites(changes, `Move “${d.title}” in the favourites`)}
+    />
+  );
+
+  // The left column: the library, the favourites, and (with a PDF open) that PDF's bookmarks.
+  const hasBookmarks = !!doc && isPaged(doc.kind);
+  const leftShown = leftTab === "bookmarks" && !hasBookmarks ? "files" : leftTab;
+  const tab = (id: typeof leftTab, label: string, icon: React.ReactNode, key: ShortcutId) => (
     <button
       role="tab"
-      aria-selected={leftTab === id}
+      aria-selected={leftShown === id}
       className={cx(
-        "-mb-px flex h-9 items-center gap-1.5 border-b-2 px-2.5 text-[13px] font-medium",
-        leftTab === id ? "border-accent text-ink" : "border-transparent text-ink-3 hover:text-ink",
+        "-mb-px flex h-9 min-w-0 items-center gap-1 border-b-2 px-1.5 text-[13px] font-medium",
+        leftShown === id ? "border-accent text-ink" : "border-transparent text-ink-3 hover:text-ink",
       )}
       onClick={() => setLeftTab(id)}
       title={withKey(label, key)}
     >
       {icon}
-      {label}
-      <KeyHint id={key} className="hidden lg:inline" />
+      {/* A narrow column shows only the open tab's name (the others say theirs on hover). */}
+      <span className={cx("truncate", leftShown !== id && "hidden @[17.5rem]:inline")}>{label}</span>
+      <KeyHint id={key} className="hidden @[24rem]:inline" />
     </button>
   );
-  // With a PDF open, the left column switches between the library and that PDF's bookmarks.
-  const library = doc && isPaged(doc.kind) ? (
-    <div className="flex h-full min-h-0 flex-col">
-      <div role="tablist" className="flex shrink-0 gap-1 border-b border-line px-2">
-        {tab("files", "Files", <Library className="size-4" />, "files")}
-        {tab("bookmarks", "Bookmarks", <BookmarkIcon className="size-4" />, "bookmarks")}
+  const library = (
+    <div className="@container flex h-full min-h-0 flex-col">
+      <div role="tablist" className="flex shrink-0 gap-0.5 border-b border-line px-1.5">
+        {tab("files", "Files", <Library className="size-4 shrink-0" />, "files")}
+        {tab("favorites", "Favourites", <Star className="size-4 shrink-0" />, "favorites")}
+        {hasBookmarks && tab("bookmarks", "Bookmarks", <BookmarkIcon className="size-4 shrink-0" />, "bookmarks")}
       </div>
       <div className="min-h-0 flex-1">
-        {leftTab === "bookmarks" ? (
+        {leftShown === "bookmarks" && doc ? (
           <BookmarksPanel
             key={doc.id}
             bookmarks={bookmarks}
@@ -1961,13 +2027,13 @@ export default function App() {
             onGetText={(id, method) => setTextRequest({ kind: "pages", preset: { mode: "bookmark", bookmarkId: id, method, auto: true } })}
             onSave={() => void saveToFile()}
           />
+        ) : leftShown === "favorites" ? (
+          favoritesPanel
         ) : (
           libraryPanel
         )}
       </div>
     </div>
-  ) : (
-    libraryPanel
   );
 
   const rightPanel = (
@@ -2127,6 +2193,15 @@ export default function App() {
               </>
             )}
             <span className="max-w-64 truncate text-ink-3" title={doc.relPath}>{doc.title}</span>
+            {openFavorite !== undefined && (
+              <IconButton
+                className="size-7 shrink-0"
+                label={withKey(openFavorite ? "Take this file out of the favourites" : "Add this file to the favourites", "favorite")}
+                onClick={() => setFavorite(documents.filter((d) => d.id === doc.id), !openFavorite)}
+              >
+                <Star className={cx("size-4", openFavorite && "fill-current text-amber-500")} />
+              </IconButton>
+            )}
           </div>
         )}
         <div className="mx-auto flex min-w-0 flex-1 justify-end px-2 sm:justify-center">
@@ -2181,6 +2256,7 @@ export default function App() {
             toolChip={doc && tool !== "select" && !(phoneQuick && phonePins.includes(tool)) ? { label: TOOL_CHIP[tool] ?? tool, color: tool === "eraser" || tool === "ocr" || tool === "marker" ? null : toolColor } : null}
             onToolOff={() => setTool("select")}
             onFiles={() => setMobilePanel("left")}
+            favorite={openFavorite === undefined || !doc ? null : { on: openFavorite, toggle: () => setFavorite(documents.filter((d) => d.id === doc.id), !openFavorite) }}
             onNotes={doc ? () => setMobilePanel("right") : null}
             onLandscape={() => {
               setPhoneMenu(false);

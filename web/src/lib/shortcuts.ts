@@ -26,6 +26,7 @@ export type ShortcutGroup =
   | "In the picture pages window"
   | "In the bookmarks list"
   | "In the files list"
+  | "In the favourites list"
   | "In the selected-files window"
   | "In the hidden-files window"
   | "In dialogs & editors";
@@ -54,11 +55,13 @@ export const SHORTCUTS = {
   hiddenFiles: s("General", "Hidden files: the list, to unhide them", "Shift+K"),
 
   // Panels
-  toggleLeft: s("Panels", "Show / hide the left panel (files, bookmarks)", "["),
+  toggleLeft: s("Panels", "Show / hide the left panel (files, favourites, bookmarks)", "["),
   toggleRight: s("Panels", "Show / hide the notes panel", "]"),
   files: s("Panels", "Show the library files", "L"),
+  favorites: s("Panels", "Show your favourite files", "*"),
+  favorite: s("Panels", "Add the open file to your favourites / take it out", "Ctrl+D"),
   bookmarks: s("Panels", "Show this PDF's bookmarks", "Shift+B"),
-  filter: s("Panels", "Filter the files / bookmarks list", "/"),
+  filter: s("Panels", "Filter the files / favourites / bookmarks list", "/"),
   renameFile: s("Panels", "Rename this PDF's file", "F2"),
 
   // Pages & zoom
@@ -221,11 +224,19 @@ export const SHORTCUTS = {
   fileBeside: s("In the files list", "Open the PDF beside the open one", "Shift+Enter"),
   fileDelete: s("In the files list", "Delete the file (to the Trash; asks first)", "Delete"),
   fileHide: s("In the files list", "Hide the file from the list (with files selected: all of them)", "H"),
+  fileFavorite: s("In the files list", "Add the file to your favourites / take it out (with files selected: all of them)", "F"),
   fileSelect: s("In the files list", "Select / unselect the file (on a folder: all its files)", " "),
   fileSelectMove: s("In the files list", "Select while moving up / down", "Shift+ArrowUp", "Shift+ArrowDown"),
   fileSelectRange: s("In the files list", "Select every file from the last one picked to this one", "Shift+Click"),
   fileSelectAll: s("In the files list", "Select all the files showing (the filter's matches)", "Ctrl+A"),
   fileUnselect: s("In the files list", "Unselect all", "Escape"),
+
+  // Favourites list (with a favourite focused)
+  favMoveFocus: s("In the favourites list", "Previous / next favourite (↓ from the filter box goes in)", "ArrowUp", "ArrowDown"),
+  favOpen: s("In the favourites list", "Open the file", "Enter"),
+  favBeside: s("In the favourites list", "Open the PDF beside the open one", "Shift+Enter"),
+  favRemove: s("In the favourites list", "Take it out of the favourites (Ctrl+Z puts it back)", "Delete", "F"),
+  favReorder: s("In the favourites list", "Move up / down (or drag it)", "Alt+ArrowUp", "Alt+ArrowDown"),
 
   // The selected-files window
   sfMove: s("In the selected-files window", "Previous / next file", "ArrowUp", "ArrowDown"),
@@ -334,6 +345,7 @@ export const GROUP_ORDER: ShortcutGroup[] = [
   "In the picture pages window",
   "In the bookmarks list",
   "In the files list",
+  "In the favourites list",
   "In the selected-files window",
   "In the hidden-files window",
   "In dialogs & editors",

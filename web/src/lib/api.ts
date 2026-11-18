@@ -189,6 +189,8 @@ export const api = {
   scan: () => req<ScanResult>("POST", "/library/scan"),
   /** Hides files from the library list, or shows them again. */
   setHidden: (ids: string[], hidden: boolean) => req<{ documents: DocumentRecord[] }>("POST", "/library/hidden", { ids, hidden }),
+  /** Each file's place in the favourites, or null to take it out. */
+  setFavorites: (items: { id: string; favorite: number | null }[]) => req<{ documents: DocumentRecord[] }>("POST", "/library/favorites", { items }),
   recent: () => req<(ReadingProgress & { title: string })[]>("GET", "/recent"),
   /** Renames the file in its folder; the extension is kept. */
   renameFile: (id: string, name: string) => req<DocumentRecord>("POST", `/documents/${id}/rename`, { name }),

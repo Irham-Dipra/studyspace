@@ -36,7 +36,7 @@ The first time you start, StudySpace adds the folder from your `.env` file (`/ho
 
 | Area | What it does |
 | --- | --- |
-| **Library** (left) | All PDFs in your study folders, grouped by course folder. With a PDF open, the **Bookmarks** tab shows that PDF's bookmarks (§4). |
+| **Library** (left) | Three tabs: **Files** (all PDFs in your study folders, grouped by course folder), **Favourites** (the files you starred, §3) and, with a PDF open, **Bookmarks** (that PDF's bookmarks, §4). |
 | **Viewer** (center) | The open PDF, scrolled continuously page after page. |
 | **Page Resources** (right) | Notes and resources for the page you are looking at, plus whole-document items. **`D`** swaps it for the page's pictures (§5). |
 | **Status bar** (bottom) | Current page, previous/next buttons, zoom controls. |
@@ -66,6 +66,12 @@ On a phone there are no bars at all. A **☰** button in the top right corner op
 
 - **Open a PDF:** click a course folder to expand it, then click a file. The file you have open is highlighted. Click a folder again to close it, even the one holding the open file.
 - **Hide files you don't want to see:** hover a file and click the crossed-eye button, or press **`H`** on it. With files selected (box, Space, Shift+click), **Hide** in the bar below the list (or **`H`**) hides all of them. Hidden files leave the list, the search and "Continue reading", but stay on disk with their notes, highlights and bookmarks. A small crossed-eye with a number appears at the top of the list: click it (or press **`Shift+K`**) to see the hidden files and **Unhide** them (**`U`**; **`Shift+U`** unhides all; **`O`** opens one without unhiding). **Ctrl+Z** undoes hiding. **Folders too:** hover a folder and click its crossed-eye button, or press **`H`** on it. The folder and everything in it (also files added later) leave the list. It appears in the same *Hidden files and folders* window, where **Unhide** brings it back. (Behind the scenes it is a rule on the library folder, e.g. `/CSE 301`, so it also shows in Settings → *Hide folders and files*.) (To hide by pattern, e.g. all `*.md`, use Settings → *Hide folders and files*.)
+- **Favourites:** star the files you use most, and they get a tab of their own, **Favourites**, beside *Files* and *Bookmarks* (press **`*`** to show it).
+  - **Star a file:** hover it in the files list and click ☆ (or press **`F`** on it). A starred file shows a small yellow ★ in the list. With files selected (box, Space, Shift+click), the ☆ in the bar below the list (or **`F`**) stars all of them; when they all are starred already, it takes them out.
+  - **The open file:** the ☆ beside its name in the title bar, or **`Ctrl+D`** (like bookmarking a page in the browser). On a phone: ☰ → **Favourite**.
+  - **The Favourites tab** lists them in your order, each with the folder it is in. Click one to open it (Ctrl+click: in a new tab). **Drag** one to another place, or press **`Alt+↑` / `Alt+↓`** on it. **★** (or **`Del`** / **`F`**) takes it out of the favourites; the file itself stays where it is. The two-columns button (or **`Shift+Enter`**) shows it beside the open PDF. *Filter favourites…* (**`/`**) narrows the list (moving waits until the filter is empty).
+  - New favourites go to the end. Everything here is undoable with **Ctrl+Z**.
+  - Favourites are kept in StudySpace's database, so the phone sees the same ones. A favourite keeps its star when you rename or move the file, or delete it and put it back. A hidden file (above) leaves the Favourites tab too, and comes back to its place when you unhide it.
 - **Files lying in the library folder itself** (not in a course folder) are grouped under one row at the bottom, *Files in 3-1*. It opens and closes like a folder (click, or **→ / ←**), starts closed, and opens by itself when the file you open is in it.
 - **Slides (PowerPoint):** `.pptx` and `.ppt` files are listed too, with an orange slides icon.
   - The first time you open one, StudySpace turns its slides into pages. That takes about half a minute to a minute; the viewer says so while it works. After that it opens at once, until the file changes.
@@ -716,7 +722,8 @@ Hover over ↶ / ↷ to see exactly what will be undone or redone, e.g. *"Undo: 
 - adding, editing or deleting a note or resource
 - adding, recolouring or erasing highlights and drawings (also highlights on HTML and Markdown files)
 - adding, renaming, moving or deleting bookmarks
-- renaming or deleting a file in the library (§3)
+- renaming, deleting or hiding a file in the library (§3)
+- starring a file, taking it out of the favourites, or moving it in the Favourites tab (§3)
 - adding an OCR text layer to pages
 - deleting, inserting (blank or from another PDF), replacing, turning and moving pages: the previous version of the file is restored exactly, and every note, range and highlight returns to its original page
 - **Save to PDF**
@@ -742,7 +749,7 @@ The server keeps a ready-made hook for connecting an AI model later (see the REA
 
 **Moving between text boxes:** in any dialog or form, **`↓`** jumps to the next *empty* text box (or the next one, when all are filled), and **`↑`** goes back to the previous one. Inside a multi-line box, `↑`/`↓` move between lines as usual.
 
-Every feature has a key. You see it **beside the feature**: on the right of each item in the 🔧 **Page tools** menu, on buttons (for example *Add note or resource* `N`, the *Files* `L` and *Bookmarks* `Shift+B` tabs) and in every button's tooltip. Press **`?`** in the app for this list, with a search box (type e.g. "split" or "Shift+R").
+Every feature has a key. You see it **beside the feature**: on the right of each item in the 🔧 **Page tools** menu, on buttons (for example *Add note or resource* `N`, the *Files* `L`, *Favourites* `*` and *Bookmarks* `Shift+B` tabs, when the left column is wide enough) and in every button's tooltip. Press **`?`** in the app for this list, with a search box (type e.g. "split" or "Shift+R").
 
 Shortcuts don't fire while you are typing in a text box. While a dialog is open, only that dialog's keys work. One-letter keys are case-insensitive; `Shift+…` keys need Shift.
 
@@ -761,16 +768,19 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `,` | Settings (study folders, note colours) |
 | `Shift+L` | Rescan the library folders |
 | `Shift+F` | Pictures, text & notes of the files selected in the files list… |
+| `Shift+K` | Hidden files: the list, to unhide them |
 
 **Panels**
 
 | Keys | Action |
 | --- | --- |
-| `[` | Show / hide the left panel (files, bookmarks) |
+| `[` | Show / hide the left panel (files, favourites, bookmarks) |
 | `]` | Show / hide the notes panel |
 | `L` | Show the library files |
+| `*` | Show your favourite files |
+| `Ctrl+D` | Add the open file to your favourites / take it out |
 | `Shift+B` | Show this PDF's bookmarks |
-| `/` | Filter the files / bookmarks list |
+| `/` | Filter the files / favourites / bookmarks list |
 | `F2` | Rename this PDF's file |
 
 **Pages & zoom**
@@ -980,11 +990,23 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `F2` | Rename the file |
 | `Shift+Enter` | Open the PDF beside the open one |
 | `Del` | Delete the file (to the Trash; asks first) |
+| `H` | Hide the file from the list (with files selected: all of them) |
+| `F` | Add the file to your favourites / take it out (with files selected: all of them) |
 | `Space` | Select / unselect the file (on a folder: all its files) |
 | `Shift+↑` / `Shift+↓` | Select while moving up / down |
 | `Shift+Click` | Select every file from the last one picked to this one |
 | `Ctrl+A` | Select all the files showing (the filter's matches) |
 | `Esc` | Unselect all |
+
+**In the favourites list**
+
+| Keys | Action |
+| --- | --- |
+| `↑` / `↓` | Previous / next favourite (↓ from the filter box goes in) |
+| `Enter` | Open the file |
+| `Shift+Enter` | Open the PDF beside the open one |
+| `Del` / `F` | Take it out of the favourites (Ctrl+Z puts it back) |
+| `Alt+↑` / `Alt+↓` | Move up / down (or drag it) |
 
 **In the selected-files window**
 
@@ -1000,6 +1022,15 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `M` | Text: Markdown ⇄ plain text |
 | `H` | Text: mark my highlights as ==text== on / off |
 | `I` | Text: include my notes on / off |
+
+**In the hidden-files window**
+
+| Keys | Action |
+| --- | --- |
+| `↑` / `↓` | Previous / next file |
+| `U` / `Enter` | Unhide the file |
+| `O` | Open the file (it stays hidden) |
+| `Shift+U` | Unhide all |
 
 **In dialogs & editors**
 
@@ -1077,7 +1108,7 @@ Your files stay on the computer. The phone opens StudySpace in its browser, like
 
 **Tip:** in Chrome's menu on the phone, choose *Add to Home screen* → *Install*. StudySpace then opens as its own full-screen app, without the browser's bars. Do this from the Tailscale address.
 
-**The phone layout:** the page gets the whole screen; the **☰** button in the top right corner opens files, notes, search, page and zoom controls and all the tools. Under ☰ sit small see-through quick buttons for the tools you switch between most (*Select*, *Area*, the highlight *Colour* and *Undo* at first); pick which ones are there, or switch them all off, at the bottom of the ☰ menu. The page fits the screen's width, also after turning the phone. Sideways, a wide page (slides) fills the screen; ☰ → **Sideways** does the same when auto-rotate is off.
+**The phone layout:** the page gets the whole screen; the **☰** button in the top right corner opens files, notes, search, page and zoom controls and all the tools. ☰ → **Favourite** stars the open file; the *Favourites* tab is at the top of ☰ → **Files**. Under ☰ sit small see-through quick buttons for the tools you switch between most (*Select*, *Area*, the highlight *Colour* and *Undo* at first); pick which ones are there, or switch them all off, at the bottom of the ☰ menu. The page fits the screen's width, also after turning the phone. Sideways, a wide page (slides) fills the screen; ☰ → **Sideways** does the same when auto-rotate is off.
 
 **On the phone you can** open files, read, write notes, highlight (long-press the text, drag the handles, then pick a colour in the bar below it), rename or delete files, and undo. Search is the 🔍 button. ⚙ Settings has *Log out of this device*.
 

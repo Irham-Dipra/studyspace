@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { CircleHelp, Library, Menu, Moon, Palette, RectangleHorizontal, Settings, StickyNote, Sun, Undo2, X } from "lucide-react";
+import { CircleHelp, Library, Menu, Moon, Palette, RectangleHorizontal, Settings, Star, StickyNote, Sun, Undo2, X } from "lucide-react";
 import { cx } from "./ui";
 import type { Tool } from "./viewer/geometry";
 
@@ -45,6 +45,8 @@ interface Props {
   canUndo: boolean;
   onUndo: () => void;
   onFiles: () => void;
+  /** The open file in the favourites (none on the start screen). */
+  favorite: { on: boolean; toggle: () => void } | null;
   onNotes: (() => void) | null;
   onLandscape: () => void;
   onTheme: () => void;
@@ -171,6 +173,7 @@ export function PhoneMenu(p: Props) {
         <div className="flex flex-wrap gap-1 px-1.5 pb-1.5">
           {action(<Library className={ic} />, "Files", p.onFiles)}
           {p.onNotes && action(<StickyNote className={ic} />, "Notes", p.onNotes)}
+          {p.favorite && action(<Star className={cx(ic, p.favorite.on && "fill-current text-amber-500")} />, "Favourite", p.favorite.toggle, p.favorite.on)}
           {action(<RectangleHorizontal className={ic} />, p.fullscreen ? "Upright" : "Sideways", p.onLandscape, p.fullscreen)}
           {action(p.dark ? <Sun className={ic} /> : <Moon className={ic} />, p.dark ? "Light" : "Dark", p.onTheme)}
           {action(<CircleHelp className={ic} />, "Help", p.onHelp)}

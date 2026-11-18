@@ -337,4 +337,13 @@ export const migrations: Migration[] = [
       ALTER TABLE documents ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    version: 13,
+    name: "documents_favorite",
+    up: `
+      -- Favourite files: their place in the Favourites list (smaller first); NULL = not a favourite.
+      -- REAL, so a file can be moved between two others without renumbering the rest.
+      ALTER TABLE documents ADD COLUMN favorite REAL;
+    `,
+  },
 ];

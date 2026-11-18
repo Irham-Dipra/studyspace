@@ -7,7 +7,7 @@ import { expandHome, type AppConfig } from "./config.js";
 import { transaction, type DB } from "./db/index.js";
 import type { AIProvider } from "./ai/index.js";
 import { deleteDirectory, insertDirectory, listDirectories, updateDirectory } from "./db/directories.js";
-import { getDocument, listDocuments, setDocumentsHidden, setPageCount } from "./db/documents.js";
+import { getDocument, listDocuments, setDocumentsFavorite, setDocumentsHidden, setPageCount } from "./db/documents.js";
 import {
   createResource,
   deleteResource,
@@ -368,6 +368,13 @@ export function createApp({ db, config, ai }: AppDeps): express.Express {
   api.post("/library/hidden", (req, res) => {
     const body = z.object({ ids: z.array(z.string()).min(1).max(5000), hidden: z.boolean() }).parse(req.body);
     res.json({ documents: transaction(db, () => setDocumentsHidden(db, body.ids, body.hidden)) });
+  });
+
+  /** Puts files in the favourites at the places given (the app works them out, so undo is exact), or takes them out (null). */
+  api.post("/library/favorites", (req, res) => {
+    const item = z.object({ id: z.string(), favorite: z.number().finite().nullable() });
+    const body = z.object({ items: z.array(item).min(1).max(5000) }).parse(req.body);
+    res.json({ documents: transaction(db, () => setDocumentsFavorite(db, body.items)) });
   });
 
   // ---- Rename / delete the file (deleting moves it to the desktop Trash; undo puts it back) ----

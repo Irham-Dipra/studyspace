@@ -34,6 +34,8 @@ export interface DocumentRecord {
   missing: boolean;
   /** Hidden from the library list by the user (still opens; listed under Hidden files). */
   hidden: boolean;
+  /** Its place in the Favourites list (smaller first); null when it isn't a favourite. */
+  favorite: number | null;
   annotationsDirty: boolean;
   /** Bookmarks were changed in StudySpace and not yet written into the PDF. */
   bookmarksDirty: boolean;
