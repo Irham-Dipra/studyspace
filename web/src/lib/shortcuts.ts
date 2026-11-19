@@ -14,6 +14,7 @@ export type ShortcutGroup =
   | "Side by side"
   | "Tools"
   | "Selected text & highlights"
+  | "While a phrase is shown"
   | "Notes & bookmarks"
   | "Pictures"
   | "Page tools"
@@ -88,8 +89,9 @@ export const SHORTCUTS = {
 
   // Tools
   select: s("Tools", "Select text", "V"),
-  highlight: s("Tools", "Highlight text (just select it)", "H"),
-  area: s("Tools", "Highlight an area: right-click two corners, or drag", "A"),
+  highlight: s("Tools", "Highlight text: click a word (the highlight runs to the next punctuation), or select the text", "H"),
+  area: s("Tools", "Highlight an area: right-click two corners, or drag (over text the box tidies to whole words); a click on a word highlights its phrase", "A"),
+  areaExact: s("Tools", "Area tool: hold while finishing a box to keep it exactly as drawn", "Alt"),
   pen: s("Tools", "Pen (draw freehand)", "P"),
   eraser: s("Tools", "Eraser (click or drag over marks)", "E"),
   ocr: s("Tools", "Get text from a region: right-click two corners, or drag", "O"),
@@ -114,6 +116,20 @@ export const SHORTCUTS = {
   styleColour: s("Selected text & highlights", "Recolour a clicked heading, label or ==mark== in a note (colour 1–9)", "1–9"),
   styleNone: s("Selected text & highlights", "…give it no colour", "0"),
   styleDefault: s("Selected text & highlights", "…give it back its default colour", "Delete"),
+
+  // While a phrase is shown (Highlight or Area tool: a click on a word shows it, up to the next stop)
+  phraseClick: s("While a phrase is shown", "Show the phrase from the clicked word to the next stop (a punctuation mark, or a cell's or paragraph's end)", "Click"),
+  phraseClickSave: s("While a phrase is shown", "Save it: click inside it (so a double-click on a word saves it at once)", "Double-click"),
+  phraseClickEnd: s("While a phrase is shown", "End it at a word and save: right-click (two-finger tap) or Shift+click that word", "Right-click", "Shift+Click"),
+  phraseEnd: s("While a phrase is shown", "End at the next / previous stop (also before “and”, “which”, “(”)", "ArrowRight", "ArrowLeft"),
+  phraseEndWord: s("While a phrase is shown", "End one word further / back", "Shift+ArrowRight", "Shift+ArrowLeft"),
+  phraseStart: s("While a phrase is shown", "Start back at the stop before (the whole clause) / after the next stop (drops a label)", "ArrowUp", "ArrowDown"),
+  phraseStartWord: s("While a phrase is shown", "Start one word earlier / later", "Shift+ArrowUp", "Shift+ArrowDown"),
+  phraseSave: s("While a phrase is shown", "Save the highlight (colour 1–5: in that colour)", "Enter", " "),
+  phraseNext: s("While a phrase is shown", "Save it and show the next phrase", "Tab"),
+  phraseNote: s("While a phrase is shown", "Quote it into a new note", "N"),
+  phraseCopy: s("While a phrase is shown", "Copy its text", "Ctrl+C"),
+  phraseCancel: s("While a phrase is shown", "Cancel", "Escape"),
 
   // Notes & bookmarks
   newNote: s("Notes & bookmarks", "New note for this page", "N"),
@@ -333,6 +349,7 @@ export const GROUP_ORDER: ShortcutGroup[] = [
   "Side by side",
   "Tools",
   "Selected text & highlights",
+  "While a phrase is shown",
   "Notes & bookmarks",
   "Pictures",
   "Page tools",

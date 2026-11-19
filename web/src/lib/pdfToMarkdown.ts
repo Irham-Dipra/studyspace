@@ -278,8 +278,11 @@ type Block =
   | { kind: "para"; text: string; size: number; x: number; lastY: number; lines: number }
   | { kind: "item"; marker: "bullet" | number; depth: number; text: string; size: number; x: number; lastY: number; lines: number };
 
+/** True when line `a` ends with a word that a hyphen split, and line `b` carries on with the rest of it. */
+export const splitsWord = (a: string, b: string) => /[A-Za-z]-$/.test(a) && /^[a-z]/.test(b);
+
 /** Appends a wrapped line, re-joining words split with a hyphen at the line end. */
-const joinLine = (a: string, b: string) => (/[A-Za-z]-$/.test(a) && /^[a-z]/.test(b) ? a.slice(0, -1) + b : `${a} ${b}`);
+const joinLine = (a: string, b: string) => (splitsWord(a, b) ? a.slice(0, -1) + b : `${a} ${b}`);
 
 function toBlocks(p: PageLines, headingLevel: (size: number) => number, ocr: boolean): Block[] {
   const blocks: Block[] = [];

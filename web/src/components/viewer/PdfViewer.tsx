@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type Ref } from "react";
-import { AArrowDown, AArrowUp, Highlighter, Loader2, MessageSquarePlus, Copy, Pencil, Trash2, StickyNote } from "lucide-react";
+import { AArrowDown, AArrowUp, ArrowRightToLine, Check, ChevronLeft, ChevronRight, Highlighter, Loader2, MessageSquarePlus, Minus, Plus, Copy, Pencil, Trash2, StickyNote } from "lucide-react";
 import { CSS_UNITS, openPdf, type PDFDocumentProxy } from "../../lib/pdf";
 import { resolveDest, type PdfPosition } from "../../lib/outline";
-import { keyOf, matches } from "../../lib/shortcuts";
+import { SHORTCUTS, formatCombo, isTyping, keyOf, matches } from "../../lib/shortcuts";
+import { movePhrase, nextPhrase, phraseText, startPhrase, wordIndexAt, type Phrase, type PhraseMove } from "../../lib/phrase";
 import { Kbd } from "../ui";
 import type { Annotation, DocumentRecord, NormPoint, NormRect } from "../../lib/types";
 import { api, type AnnotationInput, type AnnotationPatch } from "../../lib/api";
 import { copyText } from "../../lib/pageImage";
 import { belowSelection, useTouchSelection } from "../../lib/touchSelection";
-import { PdfPage } from "./PdfPage";
+import { PdfPage, type TextClick } from "./PdfPage";
+import { charAtPoint, onRects, phraseRects, readPageText, snapToWords, stillShown, type PageText } from "./phraseDom";
 import type { PageMarker } from "./NoteMarkers";
 import { HIGHLIGHT_COLORS, HIGHLIGHT_OPACITY, TEXT_SIZES, hitTest, mergeLineRects, type Tool } from "./geometry";
 
@@ -72,6 +74,11 @@ export const MAX_ZOOM = 5;
 
 type SelMenu = { x: number; y: number; items: { page: number; rects: AnnotationInput["rects"]; text: string }[] };
 type AnnMenu = { x: number; y: number; annotation: Annotation };
+/** A phrase shown but not saved yet: where it is in its page's text (`flowText`), its boxes and text. */
+type Shown = { page: number; p: Phrase; rects: NormRect[]; text: string; flowText: string };
+
+/** Clicks on these never start or change a phrase. */
+const NOT_TEXT = "a,button,input,textarea,[contenteditable],[data-floating-menu],[data-text-box],[data-note-marker]";
 
 export function PdfViewer(props: Props) {
   const { doc, zoom, onPageChange, onLoaded } = props;
@@ -85,6 +92,7 @@ export function PdfViewer(props: Props) {
   const [viewportWidth, setViewportWidth] = useState(800);
   const [selMenu, setSelMenu] = useState<SelMenu | null>(null);
   const [annMenu, setAnnMenu] = useState<AnnMenu | null>(null);
+  const [phrase, setPhrase] = useState<Shown | null>(null);
 
   const GAP = props.compact ? 6 : 14;
   const PAD = props.compact ? 4 : 16;
@@ -282,7 +290,11 @@ export function PdfViewer(props: Props) {
     let raf = 0;
     const onScroll = () => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(updateFromScroll);
+      raf = requestAnimationFrame(() => {
+        updateFromScroll();
+        // The phrase's bar is placed from the phrase on screen, so it moves with the page.
+        if (phraseRef.current) setScrolled((n) => n + 1);
+      });
       setSelMenu(null);
       setAnnMenu(null);
     };
@@ -717,12 +729,201 @@ export function PdfViewer(props: Props) {
     [props.onCreateAnnotation], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
+  // ---- Phrases: a click on a word shows a highlight up to the next stop (lib/phrase.ts) ----
+  const phraseRef = useRef(phrase);
+  phraseRef.current = phrase;
+  /** Sets the shown phrase; the ref at once too, so a click straight after sees it. */
+  const setShown = (v: Shown | null) => {
+    phraseRef.current = v;
+    setPhrase(v);
+  };
+  const [, setScrolled] = useState(0);
+  const pageElOf = useCallback((page: number) => scrollRef.current?.querySelector<HTMLElement>(`.ss-page[data-page="${page}"]`) ?? null, []);
+  const pageTextRef = useRef<{ page: number; pt: PageText } | null>(null);
+  /** The page's text as its layer has it now (read again once a zoom has drawn the layer anew). */
+  const pageText = (page: number): PageText | null => {
+    const el = pageElOf(page);
+    if (!el) return null;
+    const c = pageTextRef.current;
+    if (c && c.page === page && stillShown(c.pt)) return c.pt;
+    const pt = readPageText(el);
+    pageTextRef.current = pt ? { page, pt } : null;
+    return pt;
+  };
+  /** The shown phrase's page text, while it is still the text the phrase was found in. */
+  const shownText = (s: Shown) => {
+    const pt = pageText(s.page);
+    return pt && pt.flow.text === s.flowText ? pt : null;
+  };
+  const showPhrase = (page: number, pt: PageText, p: Phrase) => {
+    const el = pageElOf(page);
+    if (!el) return setShown(null);
+    setSelMenu(null);
+    setAnnMenu(null);
+    setShown({ page, p, rects: phraseRects(pt, el, p), text: phraseText(pt.flow, p), flowText: pt.flow.text });
+  };
+  const adjustPhrase = (move: PhraseMove) => {
+    const s = phraseRef.current;
+    const pt = s && shownText(s);
+    if (s && pt) showPhrase(s.page, pt, movePhrase(pt.flow, s.p, move));
+  };
+  const createPhrase = (page: number, rects: NormRect[], text: string, color: string) => {
+    if (rects.length) props.onCreateAnnotation({ page, kind: "highlight", color, opacity: HIGHLIGHT_OPACITY, rects, text });
+  };
+  /** Saves the shown phrase; with `next`, the phrase after it is shown (Tab). */
+  const savePhrase = (color = props.color, next = false) => {
+    const s = phraseRef.current;
+    if (!s) return;
+    createPhrase(s.page, s.rects, s.text, color);
+    const pt = next ? shownText(s) : null;
+    const n = pt ? nextPhrase(pt.flow, s.p) : null;
+    if (pt && n) showPhrase(s.page, pt, n);
+    else setShown(null);
+  };
+  /** True when a point (client px) is on the shown phrase. */
+  const onShown = (pageEl: HTMLElement, clientX: number, clientY: number) => {
+    const s = phraseRef.current;
+    if (!s || s.page !== Number(pageEl.dataset.page)) return false;
+    const box = pageEl.getBoundingClientRect();
+    return onRects(s.rects, (clientX - box.left) / box.width, (clientY - box.top) / box.height);
+  };
+  /**
+   * A click on a page with the Highlight or Area tool. "start": on the shown phrase it saves it, on a
+   * word it shows that word's phrase, elsewhere it drops the phrase. "end": the shown phrase ends at
+   * the clicked word (or starts there, if it is before) and is saved. Says what it did; null: nothing.
+   */
+  const phraseClick = (c: TextClick, mode: "start" | "end"): "saved" | "shown" | null => {
+    if (props.readOnly) return null;
+    const target = c.target as HTMLElement | null;
+    const pageEl = target?.closest?.<HTMLElement>(".ss-page");
+    if (!pageEl || target?.closest(NOT_TEXT)) return null;
+    const page = Number(pageEl.dataset.page);
+    const s = phraseRef.current;
+    if (mode === "end") {
+      const pt = s && s.page === page ? shownText(s) : null;
+      const at = pt ? charAtPoint(pt, pageEl, c.clientX, c.clientY) : null;
+      const w = pt && at !== null ? pt.flow.words[wordIndexAt(pt.flow, at)] : undefined;
+      if (!s || !pt || !w) return null;
+      const p = w[0] >= s.p.a ? { a: s.p.a, b: w[1] } : { a: w[0], b: s.p.b };
+      createPhrase(page, phraseRects(pt, pageEl, p), phraseText(pt.flow, p), props.color);
+      setShown(null);
+      return "saved";
+    }
+    if (onShown(pageEl, c.clientX, c.clientY)) {
+      savePhrase();
+      return "saved";
+    }
+    const pt = pageText(page);
+    const at = pt ? charAtPoint(pt, pageEl, c.clientX, c.clientY) : null;
+    const p = pt && at !== null ? startPhrase(pt.flow, at) : null;
+    if (!pt || !p) {
+      setShown(null);
+      return null;
+    }
+    showPhrase(page, pt, p);
+    return "shown";
+  };
+  // Stable callbacks for the pages (they are memoised).
+  const phraseClickRef = useRef(phraseClick);
+  phraseClickRef.current = phraseClick;
+  const onTextClick = useCallback((c: TextClick) => !!phraseClickRef.current(c, c.shiftKey ? "end" : "start"), []);
+  const onTextEnd = useCallback((c: TextClick) => !!phraseRef.current && !!phraseClickRef.current(c, "end"), []);
+  const snapBox = useCallback(
+    (page: number, rect: NormRect) => {
+      const el = pageElOf(page);
+      const pt = el ? readPageText(el) : null;
+      return el && pt ? snapToWords(pt, el, rect) : null;
+    },
+    [pageElOf],
+  );
+
+  useEffect(() => setShown(null), [props.tool]);
+
+  // Keys while a phrase is shown (they come before the app's, so ← / → don't turn the page).
+  const phraseKeysRef = useRef<(e: KeyboardEvent) => boolean>(() => false);
+  phraseKeysRef.current = (e: KeyboardEvent) => {
+    const s = phraseRef.current;
+    if (!s) return false;
+    const is = (id: Parameters<typeof matches>[1]) => matches(e, id);
+    if (is("phraseCancel")) setShown(null);
+    else if (is("phraseEnd")) adjustPhrase(e.key === "ArrowRight" ? "endNextStop" : "endPrevStop");
+    else if (is("phraseEndWord")) adjustPhrase(e.key === "ArrowRight" ? "endNextWord" : "endPrevWord");
+    else if (is("phraseStart")) adjustPhrase(e.key === "ArrowUp" ? "startPrevStop" : "startNextStop");
+    else if (is("phraseStartWord")) adjustPhrase(e.key === "ArrowUp" ? "startPrevWord" : "startNextWord");
+    else if (is("phraseSave")) savePhrase();
+    else if (is("phraseNext")) savePhrase(props.color, true);
+    else if (is("phraseNote")) {
+      props.onQuoteToNote(s.page, s.text);
+      setShown(null);
+    } else if (is("phraseCopy")) void copyText(s.text);
+    else {
+      const digit = !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && /^Digit[1-9]$/.test(e.code) ? Number(e.code.slice(5)) - 1 : -1;
+      if (digit < 0 || !HIGHLIGHT_COLORS[digit]) return false;
+      savePhrase(HIGHLIGHT_COLORS[digit]);
+    }
+    return true;
+  };
+  const phraseShown = !!phrase;
+  useEffect(() => {
+    if (!phraseShown) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (isTyping(e) || document.querySelector('[role="dialog"]')) return;
+      if (phraseKeysRef.current(e)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    // A click outside the pages (the notes, the toolbar) drops the phrase; clicks on pages are handled above.
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!scrollRef.current?.contains(t) && !t.closest("[data-floating-menu]")) setShown(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("mousedown", onDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("mousedown", onDown, true);
+    };
+  }, [phraseShown]);
+
+  /** A press the shown phrase used (saved, or ended it): its mouseup and context menu do nothing more. */
+  const phrasePress = useRef(false);
+  // Highlight tool: a press on the shown phrase saves it (no word gets selected by a double-click);
+  // a right-click or Shift+click on a word ends it there. In the Area tool the overlay sends these.
+  const onMouseDownCapture = (e: React.MouseEvent) => {
+    phrasePress.current = false;
+    if (props.tool !== "highlight" || props.readOnly) return;
+    const pageEl = (e.target as HTMLElement).closest<HTMLElement>(".ss-page");
+    if (!pageEl || (e.target as HTMLElement).closest(NOT_TEXT)) return;
+    // A double-click saves the phrase (see onMouseUp): the browser mustn't select a word or line.
+    if (e.button === 0 && e.detail >= 2) return e.preventDefault();
+    if (!phraseRef.current) return;
+    let used = false;
+    if (e.button === 2 || (e.button === 0 && e.shiftKey)) used = !!phraseClick(e, "end");
+    else if (e.button === 0 && onShown(pageEl, e.clientX, e.clientY)) {
+      savePhrase();
+      used = true;
+    }
+    if (used) {
+      e.preventDefault();
+      phrasePress.current = true;
+    }
+  };
+  const onContextMenu = (e: React.MouseEvent) => {
+    if (phrasePress.current) e.preventDefault();
+  };
+
   const onMouseUp = (e: React.MouseEvent) => {
     if (props.tool !== "select" && props.tool !== "highlight") return;
+    if (phrasePress.current) return;
+    const click: TextClick = { target: e.target, clientX: e.clientX, clientY: e.clientY, shiftKey: e.shiftKey };
+    const left = e.button === 0;
+    const clicks = e.detail;
     // Let the browser finalise the selection first.
     setTimeout(() => {
       const items = selectionToItems();
       if (items.length) {
+        setShown(null);
         if (props.tool === "highlight") createHighlights(items, props.color);
         else setSelMenu({ x: e.clientX, y: e.clientY, items });
         return;
@@ -735,6 +936,10 @@ export function PdfViewer(props: Props) {
       const box = pageEl.getBoundingClientRect();
       const hit = hitTest(annotationsByPage.get(page) ?? [], [(e.clientX - box.left) / box.width, (e.clientY - box.top) / box.height], box.height / box.width);
       setAnnMenu(hit ? { x: e.clientX, y: e.clientY, annotation: hit } : null);
+      if (hit) setShown(null);
+      // Highlight tool: a click on a word shows its phrase; the second of a double-click saves it
+      // (also when it came before the first one's phrase was shown).
+      else if (props.tool === "highlight" && left && clicks <= 2 && phraseClick(click, "start") === "shown" && clicks === 2) savePhrase();
     }, 0);
   };
 
@@ -784,6 +989,10 @@ export function PdfViewer(props: Props) {
             onMoveMarker={props.onMoveMarker}
             onDeleteMarker={props.onDeleteMarker}
             onPlaceMarker={props.onPlaceMarker}
+            phraseRects={phrase?.page === p ? phrase.rects : undefined}
+            onTextClick={onTextClick}
+            onTextEnd={onTextEnd}
+            snapBox={snapBox}
           />
         </div>,
       );
@@ -802,7 +1011,13 @@ export function PdfViewer(props: Props) {
 
   return (
     <div className={`relative h-full min-h-0 ${props.tool === "pen" || props.tool === "area" || props.tool === "eraser" ? "ss-tool-draw" : ""}`}>
-      <div ref={scrollRef} className="ss-scroll h-full touch-pan-x touch-pan-y overflow-auto bg-viewer" onMouseUp={onMouseUp}>
+      <div
+        ref={scrollRef}
+        className="ss-scroll h-full touch-pan-x touch-pan-y overflow-auto bg-viewer"
+        onMouseDownCapture={onMouseDownCapture}
+        onMouseUp={onMouseUp}
+        onContextMenu={onContextMenu}
+      >
         {loadError ? (
           <div className="grid h-full place-items-center p-6 text-center text-sm text-danger">
             <div>
@@ -831,6 +1046,21 @@ export function PdfViewer(props: Props) {
           </div>
         )}
       </div>
+
+      {phrase && <PhraseBar
+        shown={phrase}
+        pageEl={pageElOf(phrase.page)}
+        viewEl={scrollRef.current}
+        color={props.color}
+        onSave={(c) => savePhrase(c)}
+        onNext={() => savePhrase(props.color, true)}
+        onMove={adjustPhrase}
+        onNote={() => {
+          props.onQuoteToNote(phrase.page, phrase.text);
+          setShown(null);
+        }}
+        onCopy={() => void copyText(phrase.text)}
+      />}
 
       {selMenu && (
         <div
@@ -954,6 +1184,67 @@ function textInRange(range: Range, layer: Element): string {
     parts.push(t.slice(from, to));
   }
   return parts.join(" ");
+}
+
+/** The bar under a shown phrase: colours (save in that colour), shorter / longer, save, next, note, copy. */
+function PhraseBar(p: {
+  shown: Shown;
+  pageEl: HTMLElement | null;
+  viewEl: HTMLElement | null;
+  color: string;
+  onSave: (color: string) => void;
+  onNext: () => void;
+  onMove: (move: PhraseMove) => void;
+  onNote: () => void;
+  onCopy: () => void;
+}) {
+  // Docked at the edge of the view away from the phrase: at the bottom while it is in the top half,
+  // at the top once it is lower down. So it never covers the lines around it (the next click is there).
+  const box = p.pageEl?.getBoundingClientRect();
+  const view = p.viewEl?.getBoundingClientRect();
+  const last = p.shown.rects[p.shown.rects.length - 1];
+  const low = !!box && !!view && !!last && box.top + (last.y + last.h) * box.height > view.top + view.height / 2;
+  const icon = (label: string, combo: string, move: PhraseMove, children: React.ReactNode) => (
+    <button className="rounded-md p-1 text-ink-2 hover:bg-hover" title={`${label} (${formatCombo(combo)})`} aria-label={label} onClick={() => p.onMove(move)}>
+      {children}
+    </button>
+  );
+  const [right, back] = SHORTCUTS.phraseEnd.keys;
+  const [wordRight, wordBack] = SHORTCUTS.phraseEndWord.keys;
+  return (
+    <div
+      data-floating-menu
+      data-phrase={p.shown.text}
+      className={`absolute left-1/2 z-40 flex w-max max-w-[calc(100%-16px)] -translate-x-1/2 flex-col gap-0.5 rounded-lg border border-line bg-panel p-1 shadow-lg [@media(hover:none)]:[&_kbd]:hidden ${low ? "top-2" : "bottom-3"}`}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <div className="flex flex-wrap items-center gap-1">
+        <Highlighter className="mx-1 size-4 text-ink-3" />
+        {HIGHLIGHT_COLORS.map((c, i) => (
+          <button
+            key={c}
+            title={`Save in this colour (${i + 1})`}
+            className={`size-6 rounded-full border transition hover:scale-110 ${c === p.color ? "border-ink ring-2 ring-accent/40" : "border-black/10"}`}
+            style={{ background: c }}
+            onClick={() => p.onSave(c)}
+          />
+        ))}
+        <div className="mx-1 h-5 w-px bg-line" />
+        {icon("Shorter: end at the stop before", back, "endPrevStop", <ChevronLeft className="size-4" />)}
+        {icon("Longer: end at the next stop", right, "endNextStop", <ChevronRight className="size-4" />)}
+        {icon("One word less", wordBack, "endPrevWord", <Minus className="size-4" />)}
+        {icon("One word more", wordRight, "endNextWord", <Plus className="size-4" />)}
+        <div className="mx-1 h-5 w-px bg-line" />
+        <MenuButton icon={<Check className="size-4" />} label="Save" hint={keyOf("phraseSave")} onClick={() => p.onSave(p.color)} />
+        <MenuButton icon={<ArrowRightToLine className="size-4" />} label="Next" hint={keyOf("phraseNext")} onClick={p.onNext} />
+        <MenuButton icon={<MessageSquarePlus className="size-4" />} label="Note" hint={keyOf("phraseNote")} onClick={p.onNote} />
+        <MenuButton icon={<Copy className="size-4" />} label="Copy" hint={keyOf("phraseCopy")} onClick={p.onCopy} />
+      </div>
+      <p className="px-1 pb-0.5 text-[11px] text-ink-3 [@media(hover:none)]:hidden">
+        ← → end · ↑ ↓ start · Shift: one word · Enter saves · Tab saves and shows the next · Esc
+      </p>
+    </div>
+  );
 }
 
 function MenuButton({ icon, label, onClick, danger, hint }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean; hint?: string }) {

@@ -84,8 +84,8 @@ interface Props {
 
 export const TOOLS: { id: Tool; label: string; icon: typeof Highlighter }[] = [
   { id: "select", label: "Select text", icon: MousePointer2 },
-  { id: "highlight", label: "Highlight text", icon: Highlighter },
-  { id: "area", label: "Highlight area: right-click (two-finger tap) two corners, or drag", icon: SquareDashed },
+  { id: "highlight", label: "Highlight text: click a word (it runs to the next punctuation), or select text", icon: Highlighter },
+  { id: "area", label: "Highlight area: right-click (two-finger tap) two corners, or drag; click a word for its phrase", icon: SquareDashed },
   { id: "pen", label: "Draw", icon: PenLine },
   { id: "eraser", label: "Eraser", icon: Eraser },
   { id: "ocr", label: "Get text from a region: right-click (two-finger tap) two corners, or drag", icon: ScanText },

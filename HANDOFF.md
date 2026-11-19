@@ -171,6 +171,7 @@ docs/USER_GUIDE.md    detailed end-user instructions (sections 1–14)
   - The current page is the one with the largest visible area.
   - Text-selection highlight bar and annotation menu. Esc or an outside click closes them and clears the selection.
 - `PdfPage.tsx`: renders one page.
+- Phrase highlights (item 54): `lib/phrase.ts` has the rules (stops, words, moves; no DOM), `phraseDom.ts` reads the text layer, finds the clicked char and makes the line boxes; `PdfViewer.tsx` keeps the shown phrase, its keys and `PhraseBar`.
 - `AnnotationOverlay.tsx`: draws highlights and drawings on the page.
 - `geometry.ts`: shape maths and `HIGHLIGHT_COLORS`.
 - `ViewerToolbar.tsx`: undo/redo, delete page and the page-tools menu.
@@ -612,6 +613,46 @@ Last verification (2026-10-13): 74 server tests pass, typecheck and build pass, 
     - Keys: `favorites` `*`, `favorite` `Ctrl+D`, `fileFavorite` `F`, group "In the favourites list" (`favMoveFocus`, `favOpen`, `favBeside`, `favRemove`, `favReorder`).
     - Verified: typecheck, 116 tests (new: favourites through a rescan, rename, Trash and restore; bad bodies refused), build; Chromium on scratch 4399/5199 from the worktree, 45 checks (star button, `F`, selection, bar star, undo, `*`, order, `Alt+↓` ×3, drag both ways, filter, `Del`, opening, `Ctrl+D`, title star, Bookmarks tab only for PDFs, second tab follows, reload, hidden favourite, narrow and wide columns, help) and 4 in the iPhone profile (☰ → Favourite, drawer tab, buttons without hover). Not tested in Firefox (drag-and-drop there) or on the real phone.
 
+54. **Phrase highlights; tidy area boxes** (2026-11-20; user: "I highlight the pdfs very often … until any punctuation marks come. selecting the text by mousepad is tiresome, the same is for area highlighting … I'll select only the starting part and then I can control how much to highlight with keyboard or any gestures"). Planned from the user's own area boxes in `MHE_Study_Notes.pdf`: they highlight clause by clause, from just after a mark or label to the next `,` `;` `:` `.` or a table cell's end, and 36 phrases took 2–3 boxes only because a box can't wrap. The user chose: in both the Highlight and the Area tool; `Tab` saves and goes on; area boxes over text tidy themselves. Made in a worktree in the scratchpad (the user reads on 5173); copied into the main tree, committed and pushed the same day.
+    - **Rules (`web/src/lib/phrase.ts`, no DOM):**
+      - `buildFlow(pieces)` joins the text-layer spans, in their order, into one text per page. A space goes in only where the gap is wider than 0.15 × the text height, and `\n` between lines. A map leads back to span and offset.
+      - Stops:
+        - punctuation followed by a space, a line break or the end (closing brackets and quotes taken in). Not after abbreviations or between digits, and not the commas of short settings (`listOfSettings`: "CS = FFFFH, IP = 0000H");
+        - block ends: a line break where the next line isn't directly below, starts more than 2 × the text height left of the block (`leftRef`), or starts with a list marker;
+        - a gap wider than 1.5 × the text height on a line (table columns);
+        - the page's end.
+      - Breaks count for ←/→ steps only: before `and`, `which`, `while`, `with`… and before `(`, plus closing brackets (`endStops`). A comma inside brackets the phrase opened is not a stop when they close in the same block.
+      - Words: a word split by a hyphen at a line end is glued (`splitsWord`, now exported from `pdfToMarkdown.ts`).
+      - Functions: `startPhrase` (skips a list marker at a line start), `movePhrase` (8 moves), `nextPhrase` (Tab), `phraseText`, `phrasePieces`.
+    - **pdf.js order:** the text layer follows the content stream. In LuaTeX tables the pin, number and direction cells come before the description, whose wrapped lines stay together; two-column pages come column by column. So whether text carries on to the next line is judged by geometry, not by order alone.
+    - **DOM (`components/viewer/phraseDom.ts`):**
+      - `readPageText`: spans → pieces in page px; a `<br>` is a line break.
+      - `charAtPoint`: by geometry, not `caretPositionFromPoint`. The Area tool turns the text layer's pointer events off, and Firefox differs.
+      - `phraseRects`: `Range.getClientRects` → `mergeLineRects` → normalised. Also `onRects`.
+      - `snapToWords` (tidy boxes): words with ≥ 35% of their width and ≥ 40% of their height inside, kept only when they fill at least half of the drawn box.
+    - **Viewer:**
+      - `PdfViewer` keeps `phrase` (`Shown`: page, offsets, rects, text, and the page text it was found in). After a zoom the layer is read again, and keys wait until its text matches. `setShown` updates the ref at once, so a click straight after sees the phrase.
+      - Highlight tool:
+        - `onMouseUp` calls `phraseClick(…, "start")` when nothing was selected and no highlight was hit.
+        - `onMouseDownCapture`: a press on the phrase saves it; a right-click or Shift+click on a word ends it there (`"end"`); a second click (`detail` 2) is kept from selecting a word, and its mouseup saves.
+      - Area tool:
+        - `AnnotationOverlay` calls `onTextClick` for a click without a drag, and `onTextEnd` for a right-click, but only while a phrase is shown; otherwise it sets corners as before.
+        - `finishBox` runs `snapBox` unless Alt is held, and stores the words as `text`.
+      - Keys: a capture-phase listener while a phrase is shown (`phraseKeysRef`).
+      - `PhraseBar` is docked at the bottom of the view, or the top when the phrase is in the bottom 110 px. `data-phrase` holds the text (the tests read it), and the key hints are hidden on touch screens.
+      - `AnnotationOverlay` draws the preview (`phraseRects`): the colour at the saved opacity, with a dashed accent outline.
+    - **Keys:**
+      - Group "While a phrase is shown": `phraseClick`, `phraseClickSave` and `phraseClickEnd` (shown only), `phraseEnd`, `phraseEndWord`, `phraseStart`, `phraseStartWord`, `phraseSave`, `phraseNext`, `phraseNote`, `phraseCopy`, `phraseCancel`.
+      - `areaExact` (Alt), and new labels for `highlight` and `area`.
+    - **Tests:**
+      - `web/src/lib/phrase.test.ts`: 13 tests, synthetic text only. Vitest now runs in the web workspace too; `npm test` runs the server's tests, then the web's.
+      - A replay script in the scratchpad (not committed) runs `phrase.ts` on pdf.js's text of a copy of `MHE_Study_Notes.pdf`, against the user's 224 boxes, which make 179 phrases once line-break pairs are joined. 103 come out exactly right after one click, 143 within one key press, 164 within three. The rest are whole paragraphs and pin-diagram labels, where an area box fits better.
+    - Verified:
+      - Typecheck, tests and build.
+      - Chromium on scratch 4399/5199 from the worktree, 40 desktop checks: both tools, every key, double-click, right-click and Shift+click ends, the Tab chain, colours, copy, Esc and page turns after it, a wrapped and hyphenated phrase, a table cell, zoom, scroll, undo/redo, drag-select unchanged, and tidy box / Alt / a box over nothing / right-click corners.
+      - 5 checks in the iPhone profile: tap, the bar on screen, ▶ and −, Save.
+      - Not tested in Firefox (the user's browser) or on the real phone.
+
 ## 5. Problems already solved (don't repeat them)
 
 **Environment**
@@ -625,6 +666,8 @@ Last verification (2026-10-13): 74 server tests pass, typecheck and build pass, 
 - pdf.js 6 has no `convertToViewportRectangle`; use `convertToViewportPoint` twice.
 - Don't define components inside render functions; they remount every render.
 - Highlighted text from pdf.js spans needs a space when the spans are joined.
+- A phrase's bar placed under the phrase covered the next line, which is where the next click goes; it is docked at the bottom of the viewer instead.
+- Browser tests: Playwright's `page.mouse.click` has no `modifiers` option (hold Shift with `keyboard.down`), and `Esc` also switches the tool back to Select.
 
 **KaTeX**
 

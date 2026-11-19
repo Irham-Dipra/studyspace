@@ -439,8 +439,8 @@ The tools are at the top-left of the viewer. Each one also has a key.
 | Tool | Key | How to use |
 | --- | --- | --- |
 | **Select** | `V` | Select text with the mouse. A small menu appears: click a **colour** to highlight it, **Note** to start a note quoting it, or **Copy**. |
-| **Highlight text** | `H` | Every text selection is highlighted immediately in the chosen colour. |
-| **Highlight area** | `A` | **Drag** a box, or **right-click** (two-finger tap on a touchpad) the **top-left corner**, then right-click the **bottom-right corner**: the whole box is highlighted. After the first right-click the box follows the mouse; `Esc` or a left click cancels it. A plain left click makes nothing, so a stray click can't leave a box. Use it on anything: a figure, an equation, a scanned page. |
+| **Highlight text** | `H` | **Click a word**: the highlight runs from it to the next punctuation mark, ready to make longer or shorter; `Enter` saves it (see *Highlight a phrase with one click* below). Or select text: every selection is highlighted immediately in the chosen colour. |
+| **Highlight area** | `A` | **Drag** a box, or **right-click** (two-finger tap on a touchpad) the **top-left corner**, then right-click the **bottom-right corner**: the whole box is highlighted. After the first right-click the box follows the mouse; `Esc` or a left click cancels it. A plain left click makes no box: on a word it shows that word's phrase, as with the Highlight tool (nothing is saved until you press `Enter`). Use boxes on anything: a figure, an equation, a scanned page. Over text a box tidies itself to whole words (see *Tidy area boxes* below). |
 | **Pen** | `P` | Draw freehand. Choose a colour and thickness (fine / medium / bold) in the toolbar. |
 | **Eraser** | `E` | Click on a highlight, drawing or text box to delete it, or hold the mouse button and drag across several. |
 | **Text box** | `Y` | Click where the text should go and type (drag first to choose its width). See *Text boxes* below. |
@@ -452,6 +452,34 @@ The tools are at the top-left of the viewer. Each one also has a key.
 - **Change or delete one highlight:** with the Select tool, click it. A small menu offers colours, **Note** (turn the highlighted text into a note) and **Delete**.
 - **Highlights on this page:** the bottom of the notes panel lists the text you highlighted on the current page. Click **Note** beside one to quote it into a new note.
 - Highlights and drawings are saved **immediately** in StudySpace's database. Every action can be undone with **`Ctrl+Z`**.
+
+### Highlight a phrase with one click
+
+With the **Highlight text** (`H`) or **Highlight area** (`A`) tool, click the **first word** of what you want to highlight. A highlight with a dashed outline appears, from that word to the next **stop**: a punctuation mark (`,` `;` `:` `.` `?` `!`), or the end of a table cell or a paragraph. It follows the text over line breaks, and a word split by a hyphen at the end of a line counts as one word. Nothing is saved yet.
+
+| Do | What happens |
+| --- | --- |
+| `Enter` or `Space` | Save it in the current colour. `1`–`5` saves it in that colour. |
+| Click inside it | Save it. So a **double-click** on a word saves it up to the next stop at once. |
+| `→` / `←` | End at the next / previous stop. These steps also stop just before words like "and", "which", "while", "with", and before a "(". |
+| `Shift+→` / `Shift+←` | One word more / less at the end. |
+| `↑` / `↓` | Start back at the stop before (the whole clause) / start after the next stop (drops a label like "Advantage:"). |
+| `Shift+↑` / `Shift+↓` | Start one word earlier / later. |
+| Right-click (two-finger tap) or `Shift`+click a word | End the phrase at that word and save it. |
+| `Tab` | Save it and show the next phrase straight after it: `Tab`, `Tab`, `Tab` highlights a line clause by clause. |
+| `N` / `Ctrl+C` | Quote it into a new note / copy its text. |
+| `Esc`, or a click away from the text | Cancel. |
+
+- A click on a bullet (•) starts at the word after it.
+- A comma inside brackets the phrase opened doesn't stop it: "(IP, SP, BX, SI, DI …)" stays whole. Short settings like "CS = FFFFH, IP = 0000H" stay together too.
+- While a phrase is shown, the arrow keys change it instead of turning pages.
+- A bar at the bottom of the viewer (at the top when the phrase is down there) does the same with the mouse: colours, ‹ › (end at a stop), − + (a word), *Save*, *Next*, *Note*, *Copy*. It sits away from the text, so it never covers the next line, where you usually click next.
+- The result is a normal text highlight: one bar per line, with its text kept, so *Note* and Get text's `==marks==` work, and `Ctrl+Z` takes it back.
+- In the Highlight tool, dragging still highlights a selection at once, and clicking an existing highlight still opens its menu.
+
+### Tidy area boxes
+
+With the Area tool, a box drawn over text tidies itself: it covers the words it touches (about a third of a word or more inside the box), whole and at full line height. So a rough or thin box comes out clean, without half-cut words. A box over a picture or a diagram stays as drawn (the words must fill at least half of the box). Hold **`Alt`** while finishing a box to keep it exactly as drawn. A tidied box keeps its words, so its menu offers *Note*.
 
 ### Text boxes
 
@@ -816,8 +844,9 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | Keys | Action |
 | --- | --- |
 | `V` | Select text |
-| `H` | Highlight text (just select it) |
-| `A` | Highlight an area: right-click two corners, or drag |
+| `H` | Highlight text: click a word (the highlight runs to the next punctuation), or select the text |
+| `A` | Highlight an area: right-click two corners, or drag (over text the box tidies to whole words); a click on a word highlights its phrase |
+| `Alt` | Area tool: hold while finishing a box to keep it exactly as drawn |
 | `P` | Pen (draw freehand) |
 | `E` | Eraser (click or drag over marks) |
 | `O` | Get text from a region: right-click two corners, or drag |
@@ -845,6 +874,23 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | `1–9` | Recolour a clicked heading, label or ==mark== in a note (colour 1–9) |
 | `0` | …give it no colour |
 | `Del` | …give it back its default colour |
+
+**While a phrase is shown**
+
+| Keys | Action |
+| --- | --- |
+| `Click` | Show the phrase from the clicked word to the next stop (a punctuation mark, or a cell's or paragraph's end) |
+| `Double-click` | Save it: click inside it (so a double-click on a word saves it at once) |
+| `Right-click` / `Shift+Click` | End it at a word and save: right-click (two-finger tap) or Shift+click that word |
+| `→` / `←` | End at the next / previous stop (also before “and”, “which”, “(”) |
+| `Shift+→` / `Shift+←` | End one word further / back |
+| `↑` / `↓` | Start back at the stop before (the whole clause) / after the next stop (drops a label) |
+| `Shift+↑` / `Shift+↓` | Start one word earlier / later |
+| `Enter` / `Space` | Save the highlight (colour 1–5: in that colour) |
+| `Tab` | Save it and show the next phrase |
+| `N` | Quote it into a new note |
+| `Ctrl+C` | Copy its text |
+| `Esc` | Cancel |
 
 **Notes & bookmarks**
 
@@ -1110,7 +1156,7 @@ Your files stay on the computer. The phone opens StudySpace in its browser, like
 
 **The phone layout:** the page gets the whole screen; the **☰** button in the top right corner opens files, notes, search, page and zoom controls and all the tools. ☰ → **Favourite** stars the open file; the *Favourites* tab is at the top of ☰ → **Files**. Under ☰ sit small see-through quick buttons for the tools you switch between most (*Select*, *Area*, the highlight *Colour* and *Undo* at first); pick which ones are there, or switch them all off, at the bottom of the ☰ menu. The page fits the screen's width, also after turning the phone. Sideways, a wide page (slides) fills the screen; ☰ → **Sideways** does the same when auto-rotate is off.
 
-**On the phone you can** open files, read, write notes, highlight (long-press the text, drag the handles, then pick a colour in the bar below it), rename or delete files, and undo. Search is the 🔍 button. ⚙ Settings has *Log out of this device*.
+**On the phone you can** open files, read, write notes, highlight (long-press the text, drag the handles, then pick a colour in the bar below it; or, with the Highlight tool, tap the first word: the highlight runs to the next punctuation mark, ‹ › and − + in the bar at the bottom change where it ends, and *Save* keeps it), rename or delete files, and undo. Search is the 🔍 button. ⚙ Settings has *Log out of this device*.
 
 **Only on the computer:** adding or changing study folders (for safety). Zoom by pinching; double tap fits the page again.
 

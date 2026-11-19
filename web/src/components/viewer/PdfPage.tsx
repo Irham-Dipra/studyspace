@@ -16,6 +16,14 @@ interface LinkBox {
   dest?: unknown;
 }
 
+/** A click on a page that may be on its text (phrase highlights). */
+export interface TextClick {
+  target: EventTarget | null;
+  clientX: number;
+  clientY: number;
+  shiftKey: boolean;
+}
+
 interface Props {
   pdf: PDFDocumentProxy;
   pageNumber: number;
@@ -46,6 +54,11 @@ interface Props {
   onMoveMarker?: (id: string, at: NormPoint) => void;
   onDeleteMarker?: (id: string) => void;
   onPlaceMarker?: (page: number, at: NormPoint) => void;
+  /** Phrase highlights: the shown phrase's boxes on this page; Area-tool clicks; tidying area boxes. */
+  phraseRects?: NormRect[];
+  onTextClick?: (c: TextClick) => boolean;
+  onTextEnd?: (c: TextClick) => boolean;
+  snapBox?: (page: number, rect: NormRect) => { rect: NormRect; text: string } | null;
 }
 
 /** Max canvas pixels per page; keeps memory bounded at high zoom on HiDPI screens. */
@@ -181,6 +194,10 @@ function PdfPageImpl(props: Props) {
         onCreate={props.onCreateAnnotation}
         onErase={props.onEraseAnnotation}
         onRegion={props.onRegion}
+        phraseRects={props.phraseRects}
+        onTextClick={props.onTextClick}
+        onTextEnd={props.onTextEnd}
+        snapBox={props.snapBox}
       />
       <div ref={textRef} className="textLayer" style={{ pointerEvents: textInteractive ? undefined : "none" }} />
       <TextBoxes

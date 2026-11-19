@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Annotation, NormPoint, NormRect } from "../../lib/types";
 import type { AnnotationInput } from "../../lib/api";
 import { HIGHLIGHT_OPACITY, hitTest, simplifyPath, type Tool } from "./geometry";
+import type { TextClick } from "./PdfPage";
 
 interface Props {
   page: number;
@@ -16,13 +17,22 @@ interface Props {
   onErase: (id: string) => void;
   /** The "OCR a region" tool: a box was drawn on this page (normalised coordinates). */
   onRegion?: (page: number, rect: NormRect) => void;
+  /** A phrase shown but not saved yet (phrase highlights), drawn with a dashed outline. */
+  phraseRects?: NormRect[];
+  /** Area tool: a click (no drag) that may be on a word; true when it was used. */
+  onTextClick?: (c: TextClick) => boolean;
+  /** Area tool: a right-click that may end the shown phrase at a word; true when it was used. */
+  onTextEnd?: (c: TextClick) => boolean;
+  /** Area tool: tidies a box drawn over text to whole words (null: keep it as drawn). */
+  snapBox?: (page: number, rect: NormRect) => { rect: NormRect; text: string } | null;
 }
 
 /**
  * SVG layer drawing a page's annotations and capturing pen / area / eraser input.
  * Coordinates are stored normalised to the page (0..1) so they survive zoom changes.
  */
-export function AnnotationOverlay({ page, width, height, annotations, tool, color, penWidth, selectedId, onCreate, onErase, onRegion }: Props) {
+export function AnnotationOverlay(props: Props) {
+  const { page, width, height, annotations, tool, color, penWidth, selectedId, onCreate, onErase, onRegion } = props;
   const svgRef = useRef<SVGSVGElement>(null);
   /**
    * A box (area highlight or OCR region) is made by dragging, or by right-clicking its two corners (a
@@ -73,7 +83,8 @@ export function AnnotationOverlay({ page, width, height, annotations, tool, colo
     if (!boxTool) return;
     e.preventDefault();
     const p = toNorm(e);
-    if (draft?.kind === "area" && draft.armed) finishBox(draft.start, p); // the second corner
+    if (draft?.kind === "area" && draft.armed) finishBox(draft.start, p, e.altKey); // the second corner
+    else if (tool === "area" && props.onTextEnd?.(e)) setDraft(null); // ended the shown phrase at a word
     else setDraft({ kind: "area", start: p, end: p, armed: true });
   };
 
@@ -102,22 +113,28 @@ export function AnnotationOverlay({ page, width, height, annotations, tool, colo
 
   const bigEnough = (a: NormPoint, b: NormPoint) => Math.abs(b[0] - a[0]) > 0.005 && Math.abs(b[1] - a[1]) > 0.003;
 
-  const finishBox = (a: NormPoint, b: NormPoint) => {
+  /** `exact` (Alt held): an area box over text is kept as drawn, not tidied to whole words. */
+  const finishBox = (a: NormPoint, b: NormPoint, exact = false) => {
     setDraft(null);
     if (!bigEnough(a, b)) return;
     const rect = { x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(b[0] - a[0]), h: Math.abs(b[1] - a[1]) };
-    if (tool === "ocr") onRegion?.(page, rect);
-    else onCreate({ page, kind: "area", color, opacity: HIGHLIGHT_OPACITY, rects: [rect] });
+    if (tool === "ocr") return onRegion?.(page, rect);
+    const tidy = exact ? null : props.snapBox?.(page, rect);
+    onCreate({ page, kind: "area", color, opacity: HIGHLIGHT_OPACITY, rects: [tidy?.rect ?? rect], text: tidy?.text });
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
     if (!draft) return;
     if (draft.kind === "ink") {
       onCreate({ page, kind: "ink", color, opacity: 1, paths: [simplifyPath(draft.points)], strokeWidth: penWidth });
       setDraft(null);
     } else if (!draft.armed) {
-      // A drag makes the box; a plain left click makes nothing (corners are right-clicks).
-      finishBox(draft.start, draft.end);
+      // A drag makes the box. A plain left click makes none (corners are right-clicks): on a word it
+      // shows that word's phrase (or saves the shown phrase, when it is on it).
+      if (tool === "area" && !bigEnough(draft.start, draft.end)) {
+        setDraft(null);
+        props.onTextClick?.(e);
+      } else finishBox(draft.start, draft.end, e.altKey);
     }
   };
 
@@ -179,6 +196,22 @@ export function AnnotationOverlay({ page, width, height, annotations, tool, colo
           </g>
         ),
       )}
+      {props.phraseRects?.map((r, i) => (
+        <rect
+          key={`phrase${i}`}
+          pointerEvents="none"
+          x={r.x * width}
+          y={r.y * height}
+          width={r.w * width}
+          height={r.h * height}
+          fill={color}
+          fillOpacity={HIGHLIGHT_OPACITY}
+          stroke="var(--ss-accent)"
+          strokeWidth={1.25}
+          strokeDasharray="4 3"
+          rx={2}
+        />
+      ))}
       {draft?.kind === "ink" && (
         <path d={pathD(draft.points)} fill="none" stroke={color} strokeWidth={Math.max(1, penWidth * width)} strokeLinecap="round" strokeLinejoin="round" />
       )}
