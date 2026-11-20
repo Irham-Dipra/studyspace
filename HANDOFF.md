@@ -404,7 +404,7 @@ docs/USER_GUIDE.md    detailed end-user instructions (sections 1–14)
 26. **Clean AI answers on paste** (2026-10-18; user: "is there a way where I can simply paste the gemini response, but this unnecessary conversation will be cut off… also… [cite:13]. I want to remove those too").
     - `lib/pasteClean.ts` `cleanPasted`: drops everything before the first `@@START@@` (`START_MARK`) and the mark's line when only markup (`**`, `` ` ``, `#`…) is left on it; text after the mark on the same line is kept. Later marks are just removed. Removes `[cite…]` tags (`[cite: n, m]`, `[cite_start]`, `[cite_end]`) with the spaces before them.
     - `ResourceEditor.tsx` `onPaste` on the content box: when the text changes, it sets the clean text through React state and puts the caret after it. A grey line under the box says what was cleaned. Native undo can't see a React-set value, so `onContentKey` handles one Ctrl+Z right after the paste (back to the text before it); any other key ends that.
-    - **Don't use `execCommand("insertText")` for this.** The first version pasted the raw text with it and then swapped in the clean text; it worked in Chromium, but in the user's Firefox (snap) the raw text stayed. Playwright has no Firefox build for Ubuntu 26.04, so Firefox can't be tested here.
+    - **Don't use `execCommand("insertText")` for this.** The first version pasted the raw text with it and then swapped in the clean text; it worked in Chromium, but in the user's Firefox (snap) the raw text stayed. Playwright has no Firefox build for Ubuntu 26.04. (Since 2026-11-20 Firefox *can* be tested: puppeteer-core drives the snap Firefox over WebDriver BiDi; see "Environment".)
     - Verified in Chromium on a scratch copy (4399/5199): paste after existing text gave the clean text, the note line showed, Ctrl+Z → text before the paste, paste + typing lands after the paste, saved note is clean. Real PDFs unchanged.
     - First "it is not working": I guessed they used **4317**, which serves the built `web/dist` (still from 2026-10-14), not the Vite dev UI. Fixed by `npm run build`. `submit` also runs `cleanPasted` now, so text that arrives without a paste event, or an old note opened and saved, is cleaned too. Verified on the built app on 4399: typed raw text was saved clean. They were in fact on 5173 in Firefox; the real cause was the `execCommand` above.
 27. **Plain bullet labels coloured** (2026-10-18; user: "bullet points are supposed to get highlighted… it is not working for… `* Superblock: Checks…`").
@@ -651,7 +651,12 @@ Last verification (2026-10-13): 74 server tests pass, typecheck and build pass, 
       - Typecheck, tests and build.
       - Chromium on scratch 4399/5199 from the worktree, 40 desktop checks: both tools, every key, double-click, right-click and Shift+click ends, the Tab chain, colours, copy, Esc and page turns after it, a wrapped and hyphenated phrase, a table cell, zoom, scroll, undo/redo, drag-select unchanged, and tidy box / Alt / a box over nothing / right-click corners.
       - 5 checks in the iPhone profile: tap, the bar on screen, ▶ and −, Save.
-      - Not tested in Firefox (the user's browser) or on the real phone.
+      - Not tested on the real phone. (Firefox: see the follow-up below.)
+    - **Follow-up, 2026-11-20: saving by touchpad made visible** (user: "there should be a way to save the highlighting using mousepad. I can't go to keyboard to type enter everytime"). The mouse ways already worked (a click on the shown phrase, a double-click, a right-click / two-finger tap on the last word), but the bar listed only keys.
+      - `PhraseBar`: a first hint line, "**Click it again to save** · double-click a word: saved at once · right-click (two-finger tap) a word: ends there and saves"; on touch screens "**Tap it again to save**"; the keys line below.
+      - `PdfViewer`: `overPhrase` / `hoverAt` give the hand cursor over the shown phrase (`.ss-over-phrase` in `index.css`, `!important` so it beats the text layer's and the Area tool's cursors). Also set when a click shows the phrase, since a touchpad tap doesn't move the pointer.
+      - The `phraseClickSave` label now says "click it again".
+      - Verified: typecheck, tests, build. **Firefox 159** (the user's snap Firefox, headless, driven by puppeteer-core over WebDriver BiDi; see "Environment" below): the 40 desktop checks of item 54 (clipboard read swapped for a check that the phrase stays), 13 mouse checks in both tools (second click, click on the last word, double-click, right-click end) and 9 cursor checks. Chromium: the 40 checks again, the bar's text, and a tap then a second tap in the iPhone profile. Not tested on the real phone or with a real touchpad.
 
 ## 5. Problems already solved (don't repeat them)
 
@@ -660,6 +665,7 @@ Last verification (2026-10-13): 74 server tests pass, typecheck and build pass, 
 - `better-sqlite3` needs gcc, which isn't available, so the server uses `node:sqlite`.
 - npm install scripts are blocked; `allowScripts` in the root package.json approves esbuild.
 - nvm must be sourced in each Bash command, because shell state doesn't persist.
+- **Testing in Firefox** (the user's browser): Playwright has no Firefox for Ubuntu 26.04, but puppeteer-core (25.18.1, installed in the scratchpad, not in the repo) drives the snap Firefox over WebDriver BiDi: `puppeteer.launch({ browser: "firefox", executablePath: "/snap/bin/firefox", headless: true, userDataDir: ~/snap/firefox/common/ss-test-profile, args: ["--no-remote"] })`. The profile must be under `~/snap/firefox/common`, because the snap can't see `/tmp`; it is a separate profile, so the user's own Firefox and its profile are untouched. Headless Firefox matches `(hover: none)`, so touch-only UI shows there. Puppeteer has no `Control+z` combos in `press`: hold the modifier with `keyboard.down`. Reading the clipboard doesn't work through BiDi.
 
 **PDF.js and React**
 

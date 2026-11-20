@@ -119,7 +119,7 @@ export const SHORTCUTS = {
 
   // While a phrase is shown (Highlight or Area tool: a click on a word shows it, up to the next stop)
   phraseClick: s("While a phrase is shown", "Show the phrase from the clicked word to the next stop (a punctuation mark, or a cell's or paragraph's end)", "Click"),
-  phraseClickSave: s("While a phrase is shown", "Save it: click inside it (so a double-click on a word saves it at once)", "Double-click"),
+  phraseClickSave: s("While a phrase is shown", "Save it: click it again (so a double-click on a word saves it at once)", "Double-click"),
   phraseClickEnd: s("While a phrase is shown", "End it at a word and save: right-click (two-finger tap) or Shift+click that word", "Right-click", "Shift+Click"),
   phraseEnd: s("While a phrase is shown", "End at the next / previous stop (also before “and”, “which”, “(”)", "ArrowRight", "ArrowLeft"),
   phraseEndWord: s("While a phrase is shown", "End one word further / back", "Shift+ArrowRight", "Shift+ArrowLeft"),

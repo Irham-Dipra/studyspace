@@ -10,7 +10,7 @@ So I built a reader where every note belongs to a page. When I come back to a pa
 
 - **Library:** it finds the PDFs, slides (`.pptx`, `.ppt`), HTML pages and Markdown files in my folders, groups them by folder, and remembers where I stopped reading. I can rename, delete and hide files, star my favourites into a tab of their own, and search everything with `Ctrl+K`.
 - **Notes that follow the page:** each note belongs to a page, a page range or the whole file, and the notes panel always shows the ones for the page in view. Notes are Markdown with LaTeX math, tables and pictures. I keep five kinds: my own notes, summaries, previous-year questions, AI explanations and links.
-- **Marking up the PDF:** text and area highlights, a pen, an eraser, text boxes and note markers. A click on a word highlights up to the next punctuation mark; the arrow keys make it longer or shorter and Enter saves it. Area boxes drawn over text tidy themselves to whole words. *Save to PDF* writes them into the file as standard annotations, so other PDF readers show them too.
+- **Marking up the PDF:** text and area highlights, a pen, an eraser, text boxes and note markers. A click on a word highlights up to the next punctuation mark; a second click saves it (or the arrow keys make it longer or shorter first, and Enter saves). Area boxes drawn over text tidy themselves to whole words. *Save to PDF* writes them into the file as standard annotations, so other PDF readers show them too.
 - **Page tools:** insert, delete, replace, rotate and move pages, or extract, split and merge into new PDFs. The notes stay on the right pages through every edit.
 - **Bookmarks:** the PDF's own outline is read in; I can edit it and save it back into the file.
 - **Get text and OCR:** pages, a bookmark's section or a drawn region become Markdown or plain text, with my highlights and notes included if I want. Scanned pages can be OCRed.
@@ -89,7 +89,7 @@ StudySpace recognises a file by its content, not its path, so notes, highlights 
 | Tool | Key | What it does |
 | --- | --- | --- |
 | Select | `V` | Select text to copy it, highlight it or quote it into a note. Click a highlight to recolour or delete it. |
-| Highlight | `H` | Click a word: the highlight runs to the next punctuation mark (`←` `→` change it, `Enter` saves, `Tab` saves and goes on). Or select text: it becomes a highlight at once. |
+| Highlight | `H` | Click a word: the highlight runs to the next punctuation mark; click it again to save (or `←` `→` change it, `Enter` saves, `Tab` saves and goes on). Or select text: it becomes a highlight at once. |
 | Highlight area | `A` | Drag a box over a figure, a table or scanned text; over text it tidies to whole words. A click on a word works as in Highlight. |
 | Pen | `P` | Draw freehand, in three widths. |
 | Eraser | `E` | Click or drag over highlights and drawings to remove them. |

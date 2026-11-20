@@ -439,8 +439,8 @@ The tools are at the top-left of the viewer. Each one also has a key.
 | Tool | Key | How to use |
 | --- | --- | --- |
 | **Select** | `V` | Select text with the mouse. A small menu appears: click a **colour** to highlight it, **Note** to start a note quoting it, or **Copy**. |
-| **Highlight text** | `H` | **Click a word**: the highlight runs from it to the next punctuation mark, ready to make longer or shorter; `Enter` saves it (see *Highlight a phrase with one click* below). Or select text: every selection is highlighted immediately in the chosen colour. |
-| **Highlight area** | `A` | **Drag** a box, or **right-click** (two-finger tap on a touchpad) the **top-left corner**, then right-click the **bottom-right corner**: the whole box is highlighted. After the first right-click the box follows the mouse; `Esc` or a left click cancels it. A plain left click makes no box: on a word it shows that word's phrase, as with the Highlight tool (nothing is saved until you press `Enter`). Use boxes on anything: a figure, an equation, a scanned page. Over text a box tidies itself to whole words (see *Tidy area boxes* below). |
+| **Highlight text** | `H` | **Click a word**: the highlight runs from it to the next punctuation mark, ready to make longer or shorter; **click it again** (or press `Enter`) to save it (see *Highlight a phrase with one click* below). Or select text: every selection is highlighted immediately in the chosen colour. |
+| **Highlight area** | `A` | **Drag** a box, or **right-click** (two-finger tap on a touchpad) the **top-left corner**, then right-click the **bottom-right corner**: the whole box is highlighted. After the first right-click the box follows the mouse; `Esc` or a left click cancels it. A plain left click makes no box: on a word it shows that word's phrase, as with the Highlight tool (nothing is saved until you click it again or press `Enter`). Use boxes on anything: a figure, an equation, a scanned page. Over text a box tidies itself to whole words (see *Tidy area boxes* below). |
 | **Pen** | `P` | Draw freehand. Choose a colour and thickness (fine / medium / bold) in the toolbar. |
 | **Eraser** | `E` | Click on a highlight, drawing or text box to delete it, or hold the mouse button and drag across several. |
 | **Text box** | `Y` | Click where the text should go and type (drag first to choose its width). See *Text boxes* below. |
@@ -455,12 +455,14 @@ The tools are at the top-left of the viewer. Each one also has a key.
 
 ### Highlight a phrase with one click
 
-With the **Highlight text** (`H`) or **Highlight area** (`A`) tool, click the **first word** of what you want to highlight. A highlight with a dashed outline appears, from that word to the next **stop**: a punctuation mark (`,` `;` `:` `.` `?` `!`), or the end of a table cell or a paragraph. It follows the text over line breaks, and a word split by a hyphen at the end of a line counts as one word. Nothing is saved yet.
+With the **Highlight text** (`H`) or **Highlight area** (`A`) tool, click the **first word** of what you want to highlight. A highlight with a dashed outline appears, from that word to the next **stop**: a punctuation mark (`,` `;` `:` `.` `?` `!`), or the end of a table cell or a paragraph. It follows the text over line breaks, and a word split by a hyphen at the end of a line counts as one word. Nothing is saved yet: **click it again to save it**. Over the shown phrase the pointer turns into a hand, as a reminder.
+
+So the touchpad alone is enough: tap a word, then tap it again (or double-tap the word); when it should end somewhere else, two-finger tap the last word you want instead.
 
 | Do | What happens |
 | --- | --- |
+| Click it again | Save it. So a **double-click** on a word saves it up to the next stop at once. |
 | `Enter` or `Space` | Save it in the current colour. `1`–`5` saves it in that colour. |
-| Click inside it | Save it. So a **double-click** on a word saves it up to the next stop at once. |
 | `→` / `←` | End at the next / previous stop. These steps also stop just before words like "and", "which", "while", "with", and before a "(". |
 | `Shift+→` / `Shift+←` | One word more / less at the end. |
 | `↑` / `↓` | Start back at the stop before (the whole clause) / start after the next stop (drops a label like "Advantage:"). |
@@ -473,7 +475,7 @@ With the **Highlight text** (`H`) or **Highlight area** (`A`) tool, click the **
 - A click on a bullet (•) starts at the word after it.
 - A comma inside brackets the phrase opened doesn't stop it: "(IP, SP, BX, SI, DI …)" stays whole. Short settings like "CS = FFFFH, IP = 0000H" stay together too.
 - While a phrase is shown, the arrow keys change it instead of turning pages.
-- A bar at the bottom of the viewer (at the top when the phrase is down there) does the same with the mouse: colours, ‹ › (end at a stop), − + (a word), *Save*, *Next*, *Note*, *Copy*. It sits away from the text, so it never covers the next line, where you usually click next.
+- A bar at the bottom of the viewer (at the top when the phrase is down there) does the same with the mouse: colours, ‹ › (end at a stop), − + (a word), *Save*, *Next*, *Note*, *Copy*. It sits away from the text, so it never covers the next line, where you usually click next. Its first line reminds you of the mouse ways to save, its second of the keys.
 - The result is a normal text highlight: one bar per line, with its text kept, so *Note* and Get text's `==marks==` work, and `Ctrl+Z` takes it back.
 - In the Highlight tool, dragging still highlights a selection at once, and clicking an existing highlight still opens its menu.
 
@@ -880,7 +882,7 @@ Shortcuts don't fire while you are typing in a text box. While a dialog is open,
 | Keys | Action |
 | --- | --- |
 | `Click` | Show the phrase from the clicked word to the next stop (a punctuation mark, or a cell's or paragraph's end) |
-| `Double-click` | Save it: click inside it (so a double-click on a word saves it at once) |
+| `Double-click` | Save it: click it again (so a double-click on a word saves it at once) |
 | `Right-click` / `Shift+Click` | End it at a word and save: right-click (two-finger tap) or Shift+click that word |
 | `→` / `←` | End at the next / previous stop (also before “and”, “which”, “(”) |
 | `Shift+→` / `Shift+←` | End one word further / back |

@@ -105,6 +105,11 @@ body {
 .ss-tool-draw .ss-page .textLayer {
   pointer-events: none;
 }
+/* Over a shown phrase (PdfViewer): a click there saves it, so the hand says it can be clicked. */
+.ss-over-phrase,
+.ss-over-phrase * {
+  cursor: pointer !important;
+}
 .dark .ss-page canvas {
   /* Keep pages paper-white but slightly dimmed in dark mode. */
   filter: brightness(0.92);

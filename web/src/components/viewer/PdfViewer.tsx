@@ -787,6 +787,14 @@ export function PdfViewer(props: Props) {
     const box = pageEl.getBoundingClientRect();
     return onRects(s.rects, (clientX - box.left) / box.width, (clientY - box.top) / box.height);
   };
+  // The hand cursor over the shown phrase (a click there saves it). Set on mouse moves, and when a
+  // click shows a phrase, since a touchpad tap leaves the pointer where it was.
+  const [overPhrase, setOverPhrase] = useState(false);
+  const hoverAt = (target: EventTarget | null, clientX: number, clientY: number) => {
+    const t = target as HTMLElement | null;
+    const pageEl = phraseRef.current ? t?.closest?.<HTMLElement>(".ss-page") : null;
+    setOverPhrase(!!pageEl && !t?.closest(NOT_TEXT) && onShown(pageEl, clientX, clientY));
+  };
   /**
    * A click on a page with the Highlight or Area tool. "start": on the shown phrase it saves it, on a
    * word it shows that word's phrase, elsewhere it drops the phrase. "end": the shown phrase ends at
@@ -821,6 +829,7 @@ export function PdfViewer(props: Props) {
       return null;
     }
     showPhrase(page, pt, p);
+    hoverAt(c.target, c.clientX, c.clientY);
     return "shown";
   };
   // Stable callbacks for the pages (they are memoised).
@@ -1013,7 +1022,8 @@ export function PdfViewer(props: Props) {
     <div className={`relative h-full min-h-0 ${props.tool === "pen" || props.tool === "area" || props.tool === "eraser" ? "ss-tool-draw" : ""}`}>
       <div
         ref={scrollRef}
-        className="ss-scroll h-full touch-pan-x touch-pan-y overflow-auto bg-viewer"
+        className={`ss-scroll h-full touch-pan-x touch-pan-y overflow-auto bg-viewer ${phrase && overPhrase ? "ss-over-phrase" : ""}`}
+        onMouseMove={phrase ? (e) => hoverAt(e.target, e.clientX, e.clientY) : undefined}
         onMouseDownCapture={onMouseDownCapture}
         onMouseUp={onMouseUp}
         onContextMenu={onContextMenu}
@@ -1240,8 +1250,15 @@ function PhraseBar(p: {
         <MenuButton icon={<MessageSquarePlus className="size-4" />} label="Note" hint={keyOf("phraseNote")} onClick={p.onNote} />
         <MenuButton icon={<Copy className="size-4" />} label="Copy" hint={keyOf("phraseCopy")} onClick={p.onCopy} />
       </div>
+      {/* The mouse and touchpad ways first: saving needn't take a hand to the keyboard. */}
+      <p className="px-1 text-[11px] text-ink-2 [@media(hover:none)]:hidden">
+        <b className="font-semibold">Click it again to save</b> · double-click a word: saved at once · right-click (two-finger tap) a word: ends there and saves
+      </p>
+      <p className="hidden px-1 pb-0.5 text-[11px] text-ink-2 [@media(hover:none)]:block">
+        <b className="font-semibold">Tap it again to save</b>
+      </p>
       <p className="px-1 pb-0.5 text-[11px] text-ink-3 [@media(hover:none)]:hidden">
-        ← → end · ↑ ↓ start · Shift: one word · Enter saves · Tab saves and shows the next · Esc
+        Keys: ← → end · ↑ ↓ start · Shift: one word · Enter saves · Tab saves and shows the next · Esc
       </p>
     </div>
   );
